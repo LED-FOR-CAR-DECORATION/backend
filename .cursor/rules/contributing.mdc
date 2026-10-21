@@ -1,0 +1,17 @@
+---
+description: Mandatory backend architecture, API contracts, failure handling, and review conventions
+alwaysApply: true
+---
+
+# Backend contributing rules
+
+- Read `README.md` and `AGENTS.md` before modifying this repository. Their detailed rules apply to all backend features, tests, migrations, and configuration.
+- Keep features self-contained with API, application, domain, and infrastructure layers; use constructor injection and feature interfaces rather than cross-feature repositories.
+- Controllers call one use case and return DTOs; no business logic, provider calls, persistence, or cache access in controllers.
+- Success bodies use `{ data }`; errors use `{ code, message, status, timestamp, traceId, details }`. Keep `details` an array, timestamps UTC, and body/HTTP statuses consistent; `204` has no body.
+- Do not swallow failures or turn outages into valid business results. Preserve causes and use one global exception handler.
+- Use versioned migrations, short use-case transactions, database constraints, and rollback tests.
+- Define cache TTL/invalidation/outage behavior and provider timeout/retry/idempotency policies.
+- Enforce permissions and resource ownership server-side; keep secrets and sensitive data out of source code, logs, errors, and unprotected caches.
+- Follow README's trace-aware, static-prefix/structured-context logging and dependency health/metrics conventions.
+- Apply the testing/PR checklist in README; document project-owner-approved architecture exceptions when needed.
