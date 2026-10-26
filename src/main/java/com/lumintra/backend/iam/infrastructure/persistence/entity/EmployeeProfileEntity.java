@@ -4,24 +4,23 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import java.time.Instant;
-import java.util.Set;
 
 @Entity
-@Table(name = "users")
+@Table(name = "employee_profile")
 @Getter
 @Setter
-public class UserEntity {
+public class EmployeeProfileEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long userId;
+    private Long employeeId;
 
-    private String username;
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id", nullable = false, unique = true)
+    private UserAccountEntity account;
 
-    @Column(unique = true, nullable = false)
-    private String email;
-
-    @Column(name = "password_hash")
-    private String passwordHash;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "role_id", nullable = false)
+    private RoleEntity role;
 
     @Column(name = "full_name")
     private String fullName;
@@ -31,20 +30,9 @@ public class UserEntity {
     @Column(name = "avatar_url")
     private String avatarUrl;
 
-    private String status;
-
     @Column(name = "created_at", updatable = false)
     private Instant createdAt = Instant.now();
 
     @Column(name = "updated_at")
     private Instant updatedAt;
-
-    // The User-Role Junction
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-            name = "user_roles",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
-    private Set<RoleEntity> roles;
 }

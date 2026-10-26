@@ -1,11 +1,8 @@
 package com.lumintra.backend.iam.infrastructure.bootstrap;
 
-import com.lumintra.backend.iam.infrastructure.persistence.entity.PermissionEntity;
-import com.lumintra.backend.iam.infrastructure.persistence.entity.RoleEntity;
-import com.lumintra.backend.iam.infrastructure.persistence.entity.UserEntity;
-import com.lumintra.backend.iam.infrastructure.persistence.repository.PermissionRepository;
-import com.lumintra.backend.iam.infrastructure.persistence.repository.RoleRepository;
-import com.lumintra.backend.iam.infrastructure.persistence.repository.UserRepository;
+import com.lumintra.backend.iam.domain.model.AccountType;
+import com.lumintra.backend.iam.infrastructure.persistence.entity.*;
+import com.lumintra.backend.iam.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,16 +25,28 @@ public class IamDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(IamDataSeeder.class);
 
-    private final UserRepository userRepository;
+    private final UserAccountRepository userAccountRepository;
+    private final EmployeeProfileRepository employeeProfileRepository;
+    private final CustomerProfileRepository customerProfileRepository;
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.seed.admin-email}")
-    private String adminEmail;
 
-    @Value("${app.seed.admin-password}")
-    private String adminPassword;
+    @Value("${app.seed.admin-email}") private String adminEmail;
+    @Value("${app.seed.admin-password}") private String adminPassword;
+
+    @Value("${app.seed.test-manager-email}") private String managerEmail;
+    @Value("${app.seed.test-manager-password}") private String managerPassword;
+
+    @Value("${app.seed.test-customer-email}") private String customerEmail;
+    @Value("${app.seed.test-customer-password}") private String customerPassword;
+
+    @Value("${app.seed.test-staff-email}") private String staffEmail;
+    @Value("${app.seed.test-staff-password}") private String staffPassword;
+
+    @Value("${app.seed.test-designer-email}") private String designerEmail;
+    @Value("${app.seed.test-designer-password}") private String designerPassword;
 
     // Helper record to bind permissions to their descriptions and default roles
     private record PermissionDef(String name, String description, Set<String> roles) {}
@@ -52,6 +61,7 @@ public class IamDataSeeder implements ApplicationRunner {
 
         RoleEntity adminRole = seedSystemRoles(definitions, savedPermissions);
         seedSuperAdmin(adminRole);
+        seedTestAccounts();
 
         log.info("IAM seed data verification complete.");
     }
@@ -116,22 +126,86 @@ public class IamDataSeeder implements ApplicationRunner {
 
     private void seedSuperAdmin(RoleEntity adminRole) {
         if (adminEmail == null || adminEmail.isBlank() || adminPassword == null || adminPassword.isBlank()) {
-            log.warn("Admin seed credentials not provided in environment properties. Skipping Super Admin creation.");
             return;
         }
 
-        userRepository.findByEmail(adminEmail).orElseGet(() -> {
-            UserEntity admin = new UserEntity();
-            admin.setEmail(adminEmail);
-            admin.setPasswordHash(passwordEncoder.encode(adminPassword));
-            admin.setUsername("SuperAdmin");
-            admin.setFullName("System Administrator");
-            admin.setStatus("ACTIVE");
-            admin.setRoles(Set.of(adminRole));
-            admin.setCreatedAt(Instant.now());
+        userAccountRepository.findByEmail(adminEmail).orElseGet(() -> {
+            // Create Base Account
+            UserAccountEntity account = new UserAccountEntity();
+            account.setEmail(adminEmail);
+            account.setPasswordHash(passwordEncoder.encode(adminPassword));
+            account.setAccountType(AccountType.EMPLOYEE);
+            account.setStatus("ACTIVE");
+            account.setCreatedAt(Instant.now());
+            UserAccountEntity savedAccount = userAccountRepository.save(account);
+
+            // Create Employee Profile linked to the Admin Role
+            EmployeeProfileEntity profile = new EmployeeProfileEntity();
+            profile.setAccount(savedAccount);
+            profile.setRole(adminRole);
+            profile.setFullName("System Administrator");
+            profile.setCreatedAt(Instant.now());
+            employeeProfileRepository.save(profile);
 
             log.info("Seeding default Super Admin account [email={}]", adminEmail);
-            return userRepository.save(admin);
+            return savedAccount;
+        });
+    }
+
+    private void seedTestAccounts() {
+        seedCustomerAccount(customerEmail, customerPassword, "Test Customer");
+        seedEmployeeAccount(managerEmail, managerPassword, "MANAGER", "Test Manager");
+        seedEmployeeAccount(staffEmail, staffPassword, "STAFF", "Test Staff");
+        seedEmployeeAccount(designerEmail, designerPassword, "DESIGNER", "Test Designer");
+    }
+
+    private void seedEmployeeAccount(String email, String password, String roleName, String fullName) {
+        if (email == null || email.isBlank() || password == null || password.isBlank()) return;
+
+        userAccountRepository.findByEmail(email).orElseGet(() -> {
+            RoleEntity role = roleRepository.findByRoleName(roleName)
+                    .orElseThrow(() -> new IllegalStateException("Role not found: " + roleName));
+
+            UserAccountEntity account = new UserAccountEntity();
+            account.setEmail(email);
+            account.setPasswordHash(passwordEncoder.encode(password));
+            account.setAccountType(AccountType.EMPLOYEE);
+            account.setStatus("ACTIVE");
+            account.setCreatedAt(Instant.now());
+            UserAccountEntity savedAccount = userAccountRepository.save(account);
+
+            EmployeeProfileEntity profile = new EmployeeProfileEntity();
+            profile.setAccount(savedAccount);
+            profile.setRole(role);
+            profile.setFullName(fullName);
+            profile.setCreatedAt(Instant.now());
+            employeeProfileRepository.save(profile);
+
+            log.info("Seeding test employee account [email={}] [role={}]", email, roleName);
+            return savedAccount;
+        });
+    }
+
+    private void seedCustomerAccount(String email, String password, String fullName) {
+        if (email == null || email.isBlank() || password == null || password.isBlank()) return;
+
+        userAccountRepository.findByEmail(email).orElseGet(() -> {
+            UserAccountEntity account = new UserAccountEntity();
+            account.setEmail(email);
+            account.setPasswordHash(passwordEncoder.encode(password));
+            account.setAccountType(AccountType.CUSTOMER);
+            account.setStatus("ACTIVE");
+            account.setCreatedAt(Instant.now());
+            UserAccountEntity savedAccount = userAccountRepository.save(account);
+
+            CustomerProfileEntity profile = new CustomerProfileEntity();
+            profile.setAccount(savedAccount);
+            profile.setFullName(fullName);
+            profile.setCreatedAt(Instant.now());
+            customerProfileRepository.save(profile);
+
+            log.info("Seeding test customer account [email={}]", email);
+            return savedAccount;
         });
     }
 

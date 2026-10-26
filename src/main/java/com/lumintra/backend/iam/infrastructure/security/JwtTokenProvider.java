@@ -2,7 +2,7 @@ package com.lumintra.backend.iam.infrastructure.security;
 
 import com.lumintra.backend.iam.infrastructure.persistence.entity.PermissionEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.RoleEntity;
-import com.lumintra.backend.iam.infrastructure.persistence.entity.UserEntity;
+import com.lumintra.backend.iam.infrastructure.persistence.entity.UserAccountEntity;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -56,26 +56,13 @@ public class JwtTokenProvider {
         }
     } // 4. Added the missing closing brace here!
 
-    public String createAccessToken(UserEntity user) {
+    public String createAccessToken(Long accountId, String email, List<String> roles, Set<String> permissions) {
         Instant now = Instant.now();
-        Instant validity = now.plus(15, ChronoUnit.MINUTES); // AC01: 15-minute token
+        Instant validity = now.plus(15, ChronoUnit.MINUTES);
 
-        // Extract Roles
-        List<String> roles = user.getRoles().stream()
-                .map(RoleEntity::getRoleName)
-                .map(role -> "ROLE_" + role.toUpperCase())
-                .toList();
-
-        // Flatten Permissions from all assigned roles
-        Set<String> permissions = user.getRoles().stream()
-                .flatMap(role -> role.getPermissions().stream())
-                .map(PermissionEntity::getPermissionName)
-                .collect(Collectors.toSet());
-
-        // 5. Removed deprecated SignatureAlgorithm enum; JJWT now auto-detects the algorithm from the SecretKey
         return Jwts.builder()
-                .subject(user.getUserId().toString())
-                .claim("email", user.getEmail())
+                .subject(accountId.toString())
+                .claim("email", email)
                 .claim("roles", roles)
                 .claim("permissions", permissions)
                 .issuedAt(Date.from(now))
@@ -84,12 +71,12 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    public String createRefreshToken(UserEntity user) {
+    public String createRefreshToken(Long accountId) {
         Instant now = Instant.now();
         Instant validity = now.plus(30, ChronoUnit.DAYS);
 
         return Jwts.builder()
-                .subject(user.getUserId().toString())
+                .subject(accountId.toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(validity))
                 .signWith(key)
