@@ -29,9 +29,9 @@ public class TokenSessionService {
         if (account.getLockoutUntil() != null && account.getLockoutUntil().isAfter(Instant.now())) {
             throw new com.lumintra.backend.shared.exception.iam.AccountLockedException("Account is locked for 15 minutes.");
         }
-        if (!"ACTIVE".equals(account.getStatus())) throw new AuthFlowException("ACCOUNT_DISABLED", "Tài khoản không hoạt động.");
+        if (!"ACTIVE".equals(account.getStatus())) throw new AuthFlowException("ACCOUNT_DISABLED", "The account is inactive.");
         if (management && account.getAccountType() != AccountType.EMPLOYEE) {
-            throw new AuthFlowException("MANAGEMENT_ACCESS_DENIED", "Tài khoản không có quyền truy cập ứng dụng quản lý.");
+            throw new AuthFlowException("MANAGEMENT_ACCESS_DENIED", "The account cannot access the management application.");
         }
     }
 
@@ -104,5 +104,5 @@ public class TokenSessionService {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
         catch (NoSuchAlgorithmException ex) { throw new IllegalStateException("SHA-256 unavailable", ex); }
     }
-    private static AuthFlowException invalidToken() { return new AuthFlowException("INVALID_TOKEN", "Token không hợp lệ, đã hết hạn hoặc đã bị thu hồi."); }
+    private static AuthFlowException invalidToken() { return new AuthFlowException("INVALID_TOKEN", "The token is invalid, expired or revoked."); }
 }

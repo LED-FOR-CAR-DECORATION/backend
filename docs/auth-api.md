@@ -1,22 +1,22 @@
-# Authentication APIs — IAM-01 đến IAM-05
+# Authentication APIs - IAM-01 through IAM-05
 
-Thử API qua `/swagger-ui/index.html`; OpenAPI JSON tại `/v3/api-docs`. Response thành công có `{ "data": ... }`; lỗi dùng `{ code, message, status, timestamp, traceId, details }`.
+Try the APIs through `/swagger-ui/index.html`; the OpenAPI JSON is available at `/v3/api-docs`. Successful response bodies use `{ "data": ... }`. Errors use `{ code, message, status, timestamp, traceId, details }`.
 
 ## Endpoints
 
-| Method | Endpoint | JSON request | Kết quả |
+| Method | Endpoint | JSON request | Result |
 | --- | --- | --- | --- |
-| POST | `/api/auth/register` | `fullName`, `email`, `password`, `confirmPassword` | 201, tạo Customer và hồ sơ |
-| POST | `/api/auth/login` | `email`, `password` | 200, cặp JWT |
-| POST | `/api/management/auth/login` | `email`, `password` | 200, cặp JWT; chỉ Employee đang hoạt động |
-| POST | `/api/auth/google` | `idToken`, `password` khi cần xác nhận liên kết | 200, cặp JWT; liên kết hoặc tạo Customer |
-| POST | `/api/management/auth/google` | `idToken`, `password` khi cần xác nhận liên kết | 200, cặp JWT; Employee phải có sẵn |
-| POST | `/api/auth/refresh` | `refreshToken` | 200, cặp JWT mới; token cũ mất hiệu lực |
-| POST | `/api/auth/logout` | Không có body; `Authorization: Bearer <accessToken>` | 204, thu hồi mọi phiên trên mọi thiết bị |
+| POST | `/api/auth/register` | `fullName`, `email`, `password`, `confirmPassword` | 201, creates a Customer and profile |
+| POST | `/api/auth/login` | `email`, `password` | 200, JWT token pair |
+| POST | `/api/management/auth/login` | `email`, `password` | 200, JWT token pair; active Employees only |
+| POST | `/api/auth/google` | `idToken`, optional linking `password` | 200, JWT token pair; links an account or creates a Customer |
+| POST | `/api/management/auth/google` | `idToken`, optional linking `password` | 200, JWT token pair; the Employee account must already exist |
+| POST | `/api/auth/refresh` | `refreshToken` | 200, new JWT token pair; invalidates the previous refresh token |
+| POST | `/api/auth/logout` | No body; `Authorization: Bearer <accessToken>` | 204, revokes all sessions on all devices |
 
-Login công khai vẫn hỗ trợ Employee để tương thích client hiện tại. Route management luôn kiểm tra account type tại backend; không tự tạo tài khoản nội bộ.
+Public email login also accepts Employees for compatibility with the current client. Management routes always check the account type on the backend and never create internal accounts automatically.
 
-## Token và phiên
+## Tokens and sessions
 
 ```json
 {
@@ -29,68 +29,68 @@ Login công khai vẫn hỗ trợ Employee để tương thích client hiện t�
 }
 ```
 
-Access token sống 15 phút; phiên refresh sống tuyệt đối 30 ngày từ lần đăng nhập đầu tiên. Rotation không gia hạn mốc này. Token có `jti` riêng, `sid` phiên và `type` là `access` hoặc `refresh`. Refresh token không dùng được làm Bearer; access token không dùng được để refresh. Account không hoạt động hoặc đang lockout không được cấp token mới.
+Access tokens last 15 minutes. Refresh sessions have an absolute lifetime of 30 days from initial login. Rotation does not extend that deadline. Tokens contain a unique `jti`, a session `sid`, and a `type` of `access` or `refresh`. Refresh tokens cannot be used as Bearer access tokens, and access tokens cannot be used for refresh. Inactive or locked accounts cannot receive new tokens.
 
-`auth_sessions` chỉ lưu SHA-256 của refresh token. Issue/refresh/logout khóa cùng bản ghi tài khoản; refresh xác minh phiên/hash/thời hạn rồi thay hash trong cùng transaction. Hai request dùng cùng refresh token chỉ có tối đa một request thành công. Client cần lưu cặp token mới và gộp request refresh đồng thời; không tự retry sau timeout vì token cũ có thể đã được tiêu thụ.
+`auth_sessions` stores only the SHA-256 hash of each refresh token. Issue, refresh and logout operations lock the same account row. Refresh validates the session, hash and expiry, then replaces the hash in one transaction. At most one of two concurrent requests using the same refresh token can succeed. Clients must store the new pair and coalesce concurrent refresh requests. Do not automatically retry a timed-out refresh: the previous token may already have been consumed.
 
-API protected kiểm tra phiên trong database trên từng request. Logout thu hồi mọi phiên trong database trước, rồi ghi key Redis `auth:blacklist:<jti>` với TTL bằng thời gian access token còn lại. Redis gián đoạn không làm mất hiệu lực logout vì database vẫn kiểm tra phiên bị thu hồi. Lỗi database không được coi là xác thực thành công. Đăng nhập lại tạo phiên mới.
+Protected APIs check database session state on every request. Logout first revokes every account session in the database, then writes `auth:blacklist:<jti>` to Redis with the access token's remaining lifetime as its TTL. Database checks enforce revocation during Redis outages. A database failure never counts as successful authentication. Signing in again creates a new session.
 
-## Lockout và audit
+## Lockout and audit
 
-Sai mật khẩu 5 lần khóa tài khoản 15 phút. Lần sai thứ 5 trả 401; request tiếp theo trong thời gian khóa trả 423. Đăng nhập thành công reset bộ đếm và thời gian khóa. Khi khóa hết hạn, lần thất bại mới bắt đầu lại từ 1. Bộ đếm nằm trong database với transaction riêng và pessimistic lock, không bị mất khi Redis phục hồi hoặc khi request đăng nhập thất bại rollback.
+Five failed password attempts lock the account for 15 minutes. The fifth failure returns 401; subsequent requests during lockout return 423. Successful login resets the attempt counter and lockout timestamp. After lockout expires, a new failure starts the counter at one. Attempts are stored in the database using a separate transaction and a pessimistic lock, so they survive a failed login rollback and Redis recovery.
 
-Employee đăng nhập thành công phát `StaffLoginSuccessEvent`; đạt ngưỡng khóa phát `StaffAccountLockedEvent`. Listener ghi audit log theo user ID/role, không ghi password/token/email. Audit hiện ở application log; chưa có bảng audit riêng.
+Successful Employee login publishes `StaffLoginSuccessEvent`; reaching the lockout threshold publishes `StaffAccountLockedEvent`. The listener writes audit logs containing user ID and role, without passwords, tokens or email addresses. Audit records currently live in application logs; there is no separate audit table.
 
-## Google ID token
+## Google ID tokens
 
-Đặt `GOOGLE_CLIENT_ID` là OAuth client ID của ứng dụng. Chưa cấu hình thì Google login trả 503 `GOOGLE_UNAVAILABLE`, các API email/password vẫn hoạt động.
+Set `GOOGLE_CLIENT_ID` to the application's OAuth client ID. Without it, Google login returns 503 `GOOGLE_UNAVAILABLE`; email/password APIs remain available.
 
-Client gửi Google **ID token** nhận từ Google Identity Services, không gửi Google access token:
+The client sends the Google **ID token** returned by Google Identity Services, not a Google access token:
 
 ```json
 { "idToken": "<google-id-token>" }
 ```
 
-Nimbus JWT decoder xác minh chữ ký RSA bằng JWKS cố định của Google; kiểm tra issuer, audience, expiry, subject và `email_verified`. HTTP lấy public key có connect/read timeout 3 giây, tối đa một retry với backoff 100 ms khi lỗi provider; không retry token bị từ chối. Xác minh bên ngoài kết thúc trước khi mở transaction database.
+The Nimbus JWT decoder verifies the RSA signature against Google's fixed JWKS endpoint and checks issuer, audience, expiry, subject and `email_verified`. Public-key requests have three-second connection/read timeouts and at most one provider-failure retry with a 100 ms backoff. Rejected tokens are not retried. External verification finishes before a database transaction begins.
 
-Liên kết được lưu bằng Google `sub` ổn định trong `google_identities`. Nếu email đã có tài khoản thì liên kết với tài khoản đó. Email mà Google không quản lý (không phải Gmail/Workspace) phải xác nhận mật khẩu tài khoản hiện có để liên kết:
+Account links use the stable Google `sub` in `google_identities`. An existing email is linked to its account. When Google is not authoritative for that email (outside Gmail/Workspace), the existing account password is required before linking:
 
 ```json
 { "idToken": "<google-id-token>", "password": "<existing-account-password>" }
 ```
 
-Nếu email chưa tồn tại, chỉ API công khai được tạo Customer. API management từ chối email chưa có Employee, không tạo tài khoản nội bộ. Các lần sau dùng liên kết `sub` đã lưu.
+If the email is unknown, only the public API may create a Customer. Management Google login rejects emails without an existing Employee account and never creates internal accounts. Later logins use the stored `sub` link.
 
-Tham chiếu: [Google: xác minh ID token phía server](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
+Reference: [Google: verify ID tokens on the server](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
 
-## Mã lỗi
+## Error codes
 
-| HTTP | Code | Trường hợp |
+| HTTP | Code | Condition |
 | --- | --- | --- |
-| 400 | `VALIDATION_FAILED`, `INVALID_REQUEST` | Dữ liệu hoặc JSON không hợp lệ |
-| 401 | `INVALID_CREDENTIALS` | Sai thông tin đăng nhập |
-| 401 | `INVALID_TOKEN`, `UNAUTHENTICATED` | Token sai loại, hết hạn, bị thu hồi, refresh cũ hoặc thiếu xác thực |
-| 401 | `INVALID_GOOGLE_TOKEN` | Google token sai hoặc email chưa xác minh |
-| 403 | `MANAGEMENT_ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCESS_DENIED` | Không có quyền hoặc account không hoạt động |
-| 403 | `GOOGLE_LINK_REQUIRED` | Cần mật khẩu để liên kết email ngoài Gmail/Workspace |
-| 409 | `EMAIL_ALREADY_REGISTERED`, `DATA_CONFLICT` | Email/identity trùng hoặc liên kết đồng thời xung đột |
-| 423 | `ACCOUNT_LOCKED` | Đang khóa đăng nhập |
-| 503 | `GOOGLE_UNAVAILABLE`, `AUTH_UNAVAILABLE` | Lỗi provider hoặc không thể kiểm tra phiên |
+| 400 | `VALIDATION_FAILED`, `INVALID_REQUEST` | Invalid fields or JSON payload |
+| 401 | `INVALID_CREDENTIALS` | Incorrect credentials |
+| 401 | `INVALID_TOKEN`, `UNAUTHENTICATED` | Wrong token type, expiry, revocation, refresh replay or missing authentication |
+| 401 | `INVALID_GOOGLE_TOKEN` | Invalid Google token or unverified email |
+| 403 | `MANAGEMENT_ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCESS_DENIED` | Insufficient access or an inactive account |
+| 403 | `GOOGLE_LINK_REQUIRED` | Password confirmation required to link a non-Gmail/Workspace email |
+| 409 | `EMAIL_ALREADY_REGISTERED`, `DATA_CONFLICT` | Duplicate email/identity or a concurrent linking conflict |
+| 423 | `ACCOUNT_LOCKED` | Temporary account lockout |
+| 503 | `GOOGLE_UNAVAILABLE`, `AUTH_UNAVAILABLE` | Provider failure or session verification unavailable |
 
-## Database migration
+## Database migrations
 
-Flyway dùng `V1__iam_baseline.sql`, `V2__auth_sessions.sql` và `V3__google_identities.sql`. Hibernate dùng `validate`, thay cấu hình dev cũ `create`, để giữ dữ liệu qua các lần khởi động.
+Flyway uses `V1__iam_baseline.sql`, `V2__auth_sessions.sql` and `V3__google_identities.sql`. Hibernate uses `validate` instead of the former development setting `create`, preserving data across application restarts. Migration filenames and SQL contents remain unchanged by the English documentation update.
 
-- Database mới: giữ `FLYWAY_BASELINE_ON_MIGRATE=false` (mặc định); chạy V1, V2 và V3.
-- Database IAM cũ chưa có Flyway history: kiểm tra schema khớp V1, sao lưu database, đặt `FLYWAY_BASELINE_ON_MIGRATE=true` cho lần khởi động chuyển đổi đầu tiên. Flyway ghi baseline V1 và chạy V2 và V3. Sau đó bỏ biến này hoặc đặt về `false`.
-- Database đã có history: giữ `false`; chỉ chạy migration chưa áp dụng.
+- New database: keep `FLYWAY_BASELINE_ON_MIGRATE=false` (the default); run V1, V2 and V3.
+- Existing IAM database without Flyway history: verify that the schema matches V1, back up the database, and set `FLYWAY_BASELINE_ON_MIGRATE=true` for the initial transition. Flyway records a V1 baseline and applies V2 and V3. Remove the variable or set it back to `false` afterwards.
+- Database with migration history: keep `false`; only pending migrations are applied.
 
-Phiên làm việc này không chạy migration lên database phát triển/triển khai. Token cũ thiếu `type`/`sid` phải đăng nhập lại sau khi cập nhật. Không xóa bảng tự động khi rollback ứng dụng; cần đánh giá tương thích phiên/token trước khi rollback. Các bản ghi phiên hết hạn hiện được giữ lại; có thể bổ sung job dọn theo chính sách lưu trữ.
+No migrations were run against development or deployed databases during this implementation. Tokens without `type`/`sid` require a new login after deployment. Application rollback does not automatically delete tables; assess session and token compatibility before rolling back. Expired session records are currently retained; a cleanup job can follow the project's retention policy.
 
-## Kiểm thử và phạm vi client
+## Tests and client integration
 
-Chạy `./mvnw test`. Test dùng H2 ở PostgreSQL mode và migration thật, không kết nối database phát triển. Bao gồm đăng ký/rollback, login management, thời hạn/loại token, rotation đồng thời, logout mọi thiết bị, Redis outage, lockout/reset/audit, Google liên kết/tạo tài khoản và chữ ký RSA thật. Test khởi động Spring Boot kiểm tra các endpoint trong OpenAPI.
+Run `./mvnw test`. Tests use H2 in PostgreSQL mode with actual migrations and do not connect to the development database. Coverage includes registration/rollback, management login, token lifetime/type, concurrent rotation, logout across devices, Redis outages, lockout/reset/audit, Google account linking/creation and real RSA signature verification. The Spring Boot startup test checks the OpenAPI endpoints.
 
-Google test dùng key RSA test và mock provider khi kiểm thử luồng tài khoản; chưa đăng nhập bằng tài khoản Google thật. Migration đã test trên H2, chưa áp dụng lên PostgreSQL triển khai.
+Google tests use test RSA keys and mock the provider for account workflows; no real Google account login was performed. Migrations were tested on H2 and have not been applied to deployed PostgreSQL.
 
-Frontend hiện đã nối login/register. Các API Google, refresh và logout server đã sẵn sàng để client tích hợp; frontend hiện tại chưa gọi các API mới này.
+The frontend currently integrates login and registration. Google, refresh and server logout APIs are available for client integration; the current frontend does not call those new endpoints yet.

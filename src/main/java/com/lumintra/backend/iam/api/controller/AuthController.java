@@ -26,51 +26,51 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication", description = "Đăng ký tài khoản Customer và đăng nhập bằng email/mật khẩu.")
+@Tag(name = "Authentication", description = "Customer registration and login with email and password.")
 public class AuthController {
 
     private final LoginUseCase loginUseCase;
     private final RegisterUseCase registerUseCase;
 
     @PostMapping("/register")
-    @Operation(summary = "Đăng ký tài khoản Customer", description = "API công khai. Tạo tài khoản ACTIVE và hồ sơ trong một transaction. "
-            + "Không cho phép tự chọn role, không tự đăng nhập và chưa gửi email xác minh.")
+    @Operation(summary = "Register a customer account", description = "Public API. Creates an ACTIVE account and a customer profile in one transaction. "
+            + "The role cannot be selected by the caller. Registration does not sign the user in or send a verification email.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Tạo tài khoản thành công", useReturnTypeSchema = true,
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Account created successfully", useReturnTypeSchema = true,
                     content = @Content(mediaType = "application/json", examples = @ExampleObject(value = """
-                            {"data":{"userId":123,"email":"customer@example.com","fullName":"Nguyễn Văn A"}}
+                            {"data":{"userId":123,"email":"customer@example.com","fullName":"John Doe"}}
                             """))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validate thất bại hoặc JSON không hợp lệ",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed or the JSON payload is invalid",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class), examples = {
                             @ExampleObject(name = "Validation", value = """
-                                    {"code":"VALIDATION_FAILED","message":"Vui lòng kiểm tra thông tin đã nhập.","status":400,"timestamp":"2026-10-27T00:00:00Z","traceId":"example-trace-id","details":[{"field":"confirmPassword","message":"Mật khẩu xác nhận không khớp."}]}
+                                    {"code":"VALIDATION_FAILED","message":"Please check the submitted fields.","status":400,"timestamp":"2026-10-27T00:00:00Z","traceId":"example-trace-id","details":[{"field":"confirmPassword","message":"The password confirmation does not match."}]}
                                     """),
                             @ExampleObject(name = "InvalidJson", value = """
-                                    {"code":"INVALID_REQUEST","message":"Dữ liệu yêu cầu không hợp lệ.","status":400,"timestamp":"2026-10-27T00:00:00Z","traceId":"example-trace-id","details":[]}
+                                    {"code":"INVALID_REQUEST","message":"The request payload is invalid.","status":400,"timestamp":"2026-10-27T00:00:00Z","traceId":"example-trace-id","details":[]}
                                     """) })),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Email đã đăng ký hoặc xung đột ràng buộc dữ liệu",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Email already registered or a database constraint conflict",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class), examples = {
                             @ExampleObject(name = "DuplicateEmail", value = """
-                                    {"code":"EMAIL_ALREADY_REGISTERED","message":"Email này đã được đăng ký.","status":409,"timestamp":"2026-10-27T00:00:00Z","traceId":"example-trace-id","details":[{"field":"email","message":"Email này đã được đăng ký."}]}
+                                    {"code":"EMAIL_ALREADY_REGISTERED","message":"This email address is already registered.","status":409,"timestamp":"2026-10-27T00:00:00Z","traceId":"example-trace-id","details":[{"field":"email","message":"This email address is already registered."}]}
                                     """),
                             @ExampleObject(name = "ConcurrentConflict", value = """
-                                    {"code":"DATA_CONFLICT","message":"Dữ liệu đã tồn tại hoặc không còn hợp lệ. Vui lòng kiểm tra lại.","status":409,"timestamp":"2026-10-27T00:00:00Z","traceId":"example-trace-id","details":[]}
+                                    {"code":"DATA_CONFLICT","message":"The data already exists or is no longer valid. Please check your request.","status":409,"timestamp":"2026-10-27T00:00:00Z","traceId":"example-trace-id","details":[]}
                                     """) })),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Lỗi hệ thống", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ApiResponse<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(registerUseCase.execute(request)));
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Đăng nhập", description = "API công khai. Trả access token có thời hạn 900 giây và refresh token. "
-            + "Sai mật khẩu 5 lần sẽ khóa đăng nhập 15 phút.")
+    @Operation(summary = "Log in", description = "Public API. Returns an access token valid for 900 seconds and a refresh token. "
+            + "Five failed password attempts lock the account for 15 minutes.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Đăng nhập thành công", useReturnTypeSchema = true),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "VALIDATION_FAILED hoặc INVALID_REQUEST", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "INVALID_CREDENTIALS: email hoặc mật khẩu không đúng", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "423", description = "ACCOUNT_LOCKED: tài khoản đang bị khóa đăng nhập", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Lỗi hệ thống", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful", useReturnTypeSchema = true),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "VALIDATION_FAILED or INVALID_REQUEST", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "INVALID_CREDENTIALS: incorrect email or password", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "423", description = "ACCOUNT_LOCKED: the account is temporarily locked", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = loginUseCase.execute(request);

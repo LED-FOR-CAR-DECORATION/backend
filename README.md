@@ -1,8 +1,8 @@
 # Contributing Guide
 
-## Authentication APIs — IAM-01 đến IAM-05
+## Authentication APIs - IAM-01 through IAM-05
 
-Backend đã bổ sung management login, Google login (public/management), refresh token rotation và logout mọi thiết bị. Xem [hợp đồng API, cấu hình Google, migration và kiểm thử](docs/auth-api.md). Với database IAM cũ chưa có Flyway history, cần baseline V1 theo hướng dẫn trước khi khởi động bản mới.
+The backend supports management login, public/management Google login, refresh token rotation and logout from all devices. See the [API contracts, Google configuration, migrations and tests](docs/auth-api.md). Existing IAM databases without Flyway history require an explicit V1 baseline before starting this version.
 
 ## Customer registration API
 

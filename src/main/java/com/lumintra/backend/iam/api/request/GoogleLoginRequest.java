@@ -5,11 +5,11 @@ import jakarta.validation.constraints.*;
 
 public record GoogleLoginRequest(
         @NotBlank @Size(max = 16384)
-        @Schema(description = "Google ID token nhận từ Google Identity Services; không phải access token.", requiredMode = Schema.RequiredMode.REQUIRED, format = "password") String idToken,
+        @Schema(description = "Google ID token returned by Google Identity Services, not a Google access token.", requiredMode = Schema.RequiredMode.REQUIRED, format = "password") String idToken,
         @Size(max = 72)
-        @Schema(description = "Chỉ cần khi liên kết tài khoản hiện có qua email mà Google không quản lý (không phải Gmail/Workspace).", format = "password", accessMode = Schema.AccessMode.WRITE_ONLY) String password
+        @Schema(description = "Required only when linking an existing account whose email is not managed by Google (not Gmail/Workspace).", format = "password", accessMode = Schema.AccessMode.WRITE_ONLY) String password
 ) {
-    @AssertTrue(message = "Mật khẩu không được vượt quá 72 byte UTF-8.")
+    @AssertTrue(message = "The password must not exceed 72 UTF-8 bytes.")
     @Schema(hidden = true)
     public boolean isPasswordWithinLimit() {
         return password == null || password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 72;
