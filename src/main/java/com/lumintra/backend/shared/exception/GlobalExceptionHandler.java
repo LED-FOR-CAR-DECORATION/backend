@@ -45,18 +45,18 @@ public class GlobalExceptionHandler {
                             default -> error.getField();
                         })
                         .message(error.getDefaultMessage()).build()).toList();
-        return buildErrorResponse("VALIDATION_FAILED", "Vui lòng kiểm tra thông tin đã nhập.", HttpStatus.BAD_REQUEST, details);
+        return buildErrorResponse("VALIDATION_FAILED", "Please check the submitted fields.", HttpStatus.BAD_REQUEST, details);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableRequest(HttpMessageNotReadableException ex) {
-        return buildErrorResponse("INVALID_REQUEST", "Dữ liệu yêu cầu không hợp lệ.", HttpStatus.BAD_REQUEST);
+        return buildErrorResponse("INVALID_REQUEST", "The request payload is invalid.", HttpStatus.BAD_REQUEST);
     }
 
     // The database remains authoritative when concurrent registrations pass the pre-check.
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataConflict(DataIntegrityViolationException ex) {
-        return buildErrorResponse("DATA_CONFLICT", "Dữ liệu đã tồn tại hoặc không còn hợp lệ. Vui lòng kiểm tra lại.", HttpStatus.CONFLICT);
+        return buildErrorResponse("DATA_CONFLICT", "The data already exists or is no longer valid. Please check your request.", HttpStatus.CONFLICT);
     }
 
     // IAM
