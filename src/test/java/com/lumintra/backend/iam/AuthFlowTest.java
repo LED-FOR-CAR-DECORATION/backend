@@ -39,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @RecordApplicationEvents
 class AuthFlowTest {
     @Configuration @EnableWebMvc @EnableWebSecurity
-    @Import({AuthController.class, ManagementAuthController.class,
+    @Import({AuthController.class, SessionAuthController.class, ManagementAuthController.class,
             SecurityConfig.class, JwtAuthenticationFilter.class})
     static class WebConfig {
         @Bean GlobalExceptionHandler exceptionHandler() { return new GlobalExceptionHandler(mock(Tracer.class)); }
@@ -102,6 +102,28 @@ class AuthFlowTest {
         assertThat(tokens.getAuthentication(pair.getAccessToken()).getAuthorities()).extracting("authority").contains("ROLE_ADMIN");
         assertThat(sessionRecords.findAll().getFirst().getRefreshHash()).hasSize(64).isNotEqualTo(pair.getRefreshToken());
         assertThatThrownBy(() -> tokens.parseAccessToken(pair.getRefreshToken())).isInstanceOf(AuthFlowException.class);
+        assertThatThrownBy(() -> sessions.refresh(pair.getAccessToken())).isInstanceOf(AuthFlowException.class);
+    }
+
+    @Test void refreshRotatesAndRejectsReplayEvenForConcurrentRequests() throws Exception {
+        customer("customer@example.com"); var pair = login.execute(credentials("customer@example.com"));
+        var start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Callable<Boolean> rotate = () -> { start.await(); try { sessions.refresh(pair.getRefreshToken()); return true; } catch (AuthFlowException ex) { return false; } };
+            var first = executor.submit(rotate); var second = executor.submit(rotate); start.countDown();
+            assertThat(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS))).containsExactlyInAnyOrder(true, false);
+        }
+        mvc.perform(post("/api/auth/refresh").contentType("application/json").content("{\"refreshToken\":\"" + pair.getRefreshToken() + "\"}"))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
+    }
+
+    @Test void refreshEndpointIgnoresExpiredAccessHeaderAndValidatesPayload() throws Exception {
+        customer("customer@example.com"); var pair = login.execute(credentials("customer@example.com"));
+        mvc.perform(post("/api/auth/refresh").header("Authorization", "Bearer expired")
+                        .contentType("application/json").content("{\"refreshToken\":\"" + pair.getRefreshToken() + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.accessToken").isString());
+        mvc.perform(post("/api/auth/refresh").contentType("application/json").content("{\"refreshToken\":\"\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test void lockoutAfterFiveFailuresResetsAfterExpiryAndAuditsStaff() throws Exception {
@@ -118,10 +140,11 @@ class AuthFlowTest {
         assertThat(resetAccount.getFailedAttempts()).isZero(); assertThat(resetAccount.getLockoutUntil()).isNull();
     }
 
-    @Test void disabledAccountCannotLogin() throws Exception {
+    @Test void disabledAccountCannotLoginOrRefresh() throws Exception {
         var account = customer("customer@example.com"); var pair = login.execute(credentials(account.getEmail()));
         account.setStatus("INACTIVE"); accounts.saveAndFlush(account);
         mvc.perform(post("/api/auth/login").contentType("application/json").content(loginBody(account.getEmail(), "Secure123!")))
                 .andExpect(status().isForbidden());
+        assertThatThrownBy(() -> sessions.refresh(pair.getRefreshToken())).isInstanceOf(AuthFlowException.class);
     }
 }

@@ -33,6 +33,7 @@ class BackendApplicationTests {
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/auth/register'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/login'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/auth/refresh'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/management/auth/login'].post").exists())
                 .andExpect(jsonPath("$.components.schemas.RegisterRequest.properties.passwordsMatch").doesNotExist())
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"));

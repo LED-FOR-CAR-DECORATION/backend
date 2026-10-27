@@ -56,7 +56,7 @@ public class SecurityConfig {
                                 new com.lumintra.backend.shared.exception.iam.AuthFlowException("ACCESS_DENIED", "Không có quyền truy cập."))))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/auth/register",
+                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/refresh",
                                 "/api/management/auth/login").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",

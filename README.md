@@ -2,7 +2,7 @@
 
 ## Authentication implementation
 
-Login/session follow-up: see docs/issues/issue-2.md. Management login is Employee-only. Flyway migrations V1/V2 manage IAM and session tables. Existing IAM databases need an explicit V1 baseline (FLYWAY_BASELINE_ON_MIGRATE=true once); Hibernate now validates instead of recreating tables.
+Refresh API: POST /api/auth/refresh. See docs/issues/issue-5.md. Refresh tokens rotate atomically and expire 30 days after initial login.
 
 This guide defines mandatory engineering rules for the single backend application. The backend serves the web applications, owns the database and cache, and integrates with approved external providers.
 

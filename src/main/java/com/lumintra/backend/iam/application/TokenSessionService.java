@@ -49,6 +49,23 @@ public class TokenSessionService {
         return response;
     }
 
+    @Transactional
+    public LoginResponse refresh(String refreshToken) {
+        var claims = tokens.parseRefreshToken(refreshToken);
+        // All issue/refresh/logout operations serialize on the account, in the same lock order.
+        var account = accounts.lockById(Long.valueOf(claims.getSubject())).orElseThrow(TokenSessionService::invalidToken);
+        var session = sessions.findById(claims.get("sid", String.class)).orElseThrow(TokenSessionService::invalidToken);
+        if (!session.getAccount().getAccountId().equals(account.getAccountId()) || session.isRevoked()
+                || !session.getExpiresAt().isAfter(Instant.now())
+                || !MessageDigest.isEqual(session.getRefreshHash().getBytes(StandardCharsets.US_ASCII), hash(refreshToken).getBytes(StandardCharsets.US_ASCII))) {
+            throw invalidToken();
+        }
+        checkAccount(account, session.isManagement());
+        var response = rotateTokens(account, session);
+        sessions.saveAndFlush(session);
+        return response;
+    }
+
     private LoginResponse rotateTokens(UserAccountEntity account, AuthSessionEntity session) {
         List<String> roles = List.of("ROLE_CUSTOMER");
         Set<String> permissions = Set.of();

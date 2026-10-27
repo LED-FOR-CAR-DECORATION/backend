@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public class LoginResponse {
     @Schema(description = "JWT dùng làm Bearer token cho API được bảo vệ.")
     private String accessToken;
-    @Schema(description = "Refresh token có thời hạn 30 ngày.")
+    @Schema(description = "Refresh token 30 ngày, được rotation qua POST /api/auth/refresh; token cũ mất hiệu lực sau rotation.")
     private String refreshToken;
     @Schema(example = "Bearer")
     private String tokenType;

@@ -1,0 +1,40 @@
+package com.lumintra.backend.iam.api.controller;
+
+import com.lumintra.backend.iam.api.request.*;
+import com.lumintra.backend.iam.api.response.LoginResponse;
+import com.lumintra.backend.iam.application.*;
+import com.lumintra.backend.shared.response.ApiResponse;
+import com.lumintra.backend.shared.exception.ErrorResponse;
+import io.swagger.v3.oas.annotations.*;
+import io.swagger.v3.oas.annotations.media.*;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.*;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
+@Tag(name = "Authentication")
+@ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "VALIDATION_FAILED / INVALID_REQUEST", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "INVALID_TOKEN / INVALID_GOOGLE_TOKEN", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "ACCOUNT_DISABLED / GOOGLE_LINK_REQUIRED", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "DATA_CONFLICT: request đồng thời xung đột email hoặc Google identity; thử đăng nhập lại", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "423", description = "ACCOUNT_LOCKED: tài khoản bị khóa đăng nhập", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "GOOGLE_UNAVAILABLE / AUTH_UNAVAILABLE", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+})
+public class SessionAuthController {
+    private final TokenSessionService sessions;
+
+    @PostMapping("/refresh")
+    @Operation(summary = "Làm mới cặp token", description = "Không cần access token. Refresh token phải còn hạn, chưa bị thu hồi và là token mới nhất của phiên. Rotation không gia hạn mốc 30 ngày ban đầu; token cũ bị vô hiệu ngay.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Cặp JWT mới", useReturnTypeSchema = true)
+    public ResponseEntity<ApiResponse<LoginResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(sessions.refresh(request.refreshToken())));
+    }
+
+}
