@@ -5,5 +5,5 @@ import jakarta.validation.constraints.*;
 
 public record RefreshTokenRequest(
         @NotBlank @Size(max = 16384)
-        @Schema(description = "Refresh token hiện tại; chỉ sử dụng thành công một lần khi rotation.", requiredMode = Schema.RequiredMode.REQUIRED, format = "password") String refreshToken
+        @Schema(description = "The current refresh token. Each token can be successfully rotated only once.", requiredMode = Schema.RequiredMode.REQUIRED, format = "password") String refreshToken
 ) {}

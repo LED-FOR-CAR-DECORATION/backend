@@ -30,7 +30,7 @@ public class JwtTokenProvider {
             Long.parseLong(claims.getSubject());
             return claims;
         } catch (JwtException | IllegalArgumentException ex) {
-            throw new AuthFlowException("INVALID_TOKEN", "Token không hợp lệ hoặc đã hết hạn.", ex);
+            throw new AuthFlowException("INVALID_TOKEN", "The token is invalid or expired.", ex);
         }
     }
     public Claims parseAccessToken(String token) { return parse(token, "access"); }
