@@ -54,16 +54,18 @@ class AuthFlowTest {
     @Autowired AuthSessionRepository sessionRecords;
     @Autowired CustomerProfileRepository customers;
     @Autowired EmployeeProfileRepository employees;
+    @Autowired GoogleIdentityRepository identities;
     @Autowired RoleRepository roles;
     @Autowired PasswordEncoder encoder;
     @Autowired LoginAttemptService attempts;
     @Autowired SafeCacheService cache;
+    @Autowired GoogleIdentityVerifier verifier;
     @Autowired ApplicationEvents events;
     MockMvc mvc;
 
     @BeforeEach void setup() {
-        reset(cache);
-        sessionRecords.deleteAll(); employees.deleteAll(); customers.deleteAll(); accounts.deleteAll();
+        reset(cache, verifier);
+        identities.deleteAll(); sessionRecords.deleteAll(); employees.deleteAll(); customers.deleteAll(); accounts.deleteAll();
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
     }
     UserAccountEntity customer(String email) {
@@ -138,6 +140,47 @@ class AuthFlowTest {
         login.execute(credentials(employee.getEmail()), true);
         var resetAccount = accounts.findById(employee.getAccountId()).orElseThrow();
         assertThat(resetAccount.getFailedAttempts()).isZero(); assertThat(resetAccount.getLockoutUntil()).isNull();
+    }
+
+    @Test void googleCreatesCustomerAndLinksExistingVerifiedEmail() throws Exception {
+        when(verifier.verify("google-token")).thenReturn(new GoogleIdentityVerifier.GoogleIdentity("google-1", "new@gmail.com", "Google Customer", true));
+        mvc.perform(post("/api/auth/google").contentType("application/json").content("{\"idToken\":\"google-token\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.accessToken").isString());
+        assertThat(accounts.findByEmail("new@gmail.com").orElseThrow().getAccountType()).isEqualTo(AccountType.CUSTOMER);
+        assertThat(identities.count()).isEqualTo(1);
+        mvc.perform(post("/api/auth/google").contentType("application/json").content("{\"idToken\":\"google-token\"}"))
+                .andExpect(status().isOk());
+        assertThat(accounts.count()).isEqualTo(1);
+    }
+
+    @Test void googleManagementRejectsUnknownEmailAndCustomers() throws Exception {
+        when(verifier.verify("unknown")).thenReturn(new GoogleIdentityVerifier.GoogleIdentity("unknown", "unknown@gmail.com", "Unknown", true));
+        mvc.perform(post("/api/management/auth/google").contentType("application/json").content("{\"idToken\":\"unknown\"}"))
+                .andExpect(status().isForbidden());
+        assertThat(accounts.count()).isZero();
+        customer("customer@gmail.com");
+        when(verifier.verify("customer")).thenReturn(new GoogleIdentityVerifier.GoogleIdentity("customer", "customer@gmail.com", "Customer", true));
+        mvc.perform(post("/api/management/auth/google").contentType("application/json").content("{\"idToken\":\"customer\"}"))
+                .andExpect(status().isForbidden());
+        var staff = employee();
+        when(verifier.verify("staff")).thenReturn(new GoogleIdentityVerifier.GoogleIdentity("staff", staff.getEmail(), "Staff", true));
+        mvc.perform(post("/api/management/auth/google").contentType("application/json").content("{\"idToken\":\"staff\"}"))
+                .andExpect(status().isOk());
+        assertThat(events.stream(StaffLoginSuccessEvent.class).count()).isEqualTo(1);
+    }
+
+    @Test void untrustedGoogleEmailNeedsPasswordToLinkExistingAccount() throws Exception {
+        customer("customer@example.com");
+        when(verifier.verify("third-party")).thenReturn(new GoogleIdentityVerifier.GoogleIdentity("third-party", "customer@example.com", "Customer", false));
+        mvc.perform(post("/api/auth/google").contentType("application/json").content("{\"idToken\":\"third-party\"}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("GOOGLE_LINK_REQUIRED"));
+        assertThat(identities.count()).isZero();
+        mvc.perform(post("/api/auth/google").contentType("application/json").content("{\"idToken\":\"third-party\",\"password\":\"wrong\"}"))
+                .andExpect(status().isUnauthorized());
+        assertThat(accounts.findByEmail("customer@example.com").orElseThrow().getFailedAttempts()).isEqualTo(1);
+        mvc.perform(post("/api/auth/google").contentType("application/json").content("{\"idToken\":\"third-party\",\"password\":\"Secure123!\"}"))
+                .andExpect(status().isOk());
+        assertThat(identities.count()).isEqualTo(1);
     }
 
     @Test void disabledAccountCannotLoginOrRefresh() throws Exception {

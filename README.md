@@ -2,7 +2,7 @@
 
 ## Authentication implementation
 
-Refresh API: POST /api/auth/refresh. See docs/issues/issue-5.md. Refresh tokens rotate atomically and expire 30 days after initial login.
+Google login: POST /api/auth/google and /api/management/auth/google. See docs/issues/issue-4.md. Configure GOOGLE_CLIENT_ID. Flyway V3 adds Google identities.
 
 This guide defines mandatory engineering rules for the single backend application. The backend serves the web applications, owns the database and cache, and integrates with approved external providers.
 

@@ -28,7 +28,15 @@ import org.springframework.web.bind.annotation.*;
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "GOOGLE_UNAVAILABLE / AUTH_UNAVAILABLE", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
 public class SessionAuthController {
+    private final GoogleLoginUseCase google;
     private final TokenSessionService sessions;
+
+    @PostMapping("/google")
+    @Operation(summary = "Đăng nhập Google", description = "Xác minh Google ID token. Liên kết email đã có hoặc tạo Customer mới. Email ngoài Gmail/Workspace cần mật khẩu tài khoản hiện có để liên kết.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Cặp JWT hệ thống", useReturnTypeSchema = true)
+    public ResponseEntity<ApiResponse<LoginResponse>> google(@Valid @RequestBody GoogleLoginRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(google.execute(request, false)));
+    }
 
     @PostMapping("/refresh")
     @Operation(summary = "Làm mới cặp token", description = "Không cần access token. Refresh token phải còn hạn, chưa bị thu hồi và là token mới nhất của phiên. Rotation không gia hạn mốc 30 ngày ban đầu; token cũ bị vô hiệu ngay.")

@@ -46,6 +46,7 @@ class RegistrationTest {
     @EnableTransactionManagement
     @EnableJpaRepositories(basePackageClasses = UserAccountRepository.class)
     @Import({RegisterUseCase.class, LoginUseCase.class, com.lumintra.backend.iam.application.TokenSessionService.class,
+            com.lumintra.backend.iam.application.GoogleAccountService.class, com.lumintra.backend.iam.application.GoogleLoginUseCase.class,
             com.lumintra.backend.iam.infrastructure.security.HybridLoginAttemptService.class})
     static class Config {
         @Bean DataSource dataSource() {
@@ -65,6 +66,7 @@ class RegistrationTest {
             return new JpaTransactionManager(factory);
         }
         @Bean PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
+        @Bean com.lumintra.backend.iam.domain.service.GoogleIdentityVerifier googleVerifier() { return mock(com.lumintra.backend.iam.domain.service.GoogleIdentityVerifier.class); }
         @Bean com.lumintra.backend.shared.caching.SafeCacheService cacheService() { return mock(com.lumintra.backend.shared.caching.SafeCacheService.class); }
         @Bean JwtTokenProvider tokenProvider() { return new JwtTokenProvider("test-only-secret-at-least-thirty-two-bytes-long"); }
     }
@@ -76,10 +78,12 @@ class RegistrationTest {
     @Autowired PasswordEncoder encoder;
     @Autowired JwtTokenProvider tokens;
     @Autowired AuthSessionRepository sessions;
+    @Autowired GoogleIdentityRepository googleIdentities;
     @Autowired EmployeeProfileRepository employees;
     MockMvc mvc;
 
     @BeforeEach void setup() {
+        googleIdentities.deleteAll();
         sessions.deleteAll();
         employees.deleteAll();
         profiles.deleteAll();
