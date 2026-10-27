@@ -35,4 +35,10 @@ public class UserAccountEntity {
 
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    @Column(name = "failed_attempts", nullable = false)
+    private int failedAttempts = 0;
+
+    @Column(name = "lockout_until")
+    private Instant lockoutUntil;
 }
