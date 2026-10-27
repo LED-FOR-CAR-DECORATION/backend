@@ -26,7 +26,7 @@ public class JwtTokenProvider {
 
     private final SecretKey key;
 
-    public JwtTokenProvider(@Value("${jwt.secret}") String secret) {
+    public JwtTokenProvider(@Value("${app.jwt.secret}") String secret) {
         // In production, this must be a strong 256-bit + key from the environment
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }

@@ -1,5 +1,9 @@
 # Contributing Guide
 
+## Authentication implementation
+
+Register API: POST /api/auth/register. See docs/issues/issue-3.md. Validation, BCrypt and default CUSTOMER are implemented.
+
 This guide defines mandatory engineering rules for the single backend application. The backend serves the web applications, owns the database and cache, and integrates with approved external providers.
 
 ## 1. Understand the Architecture

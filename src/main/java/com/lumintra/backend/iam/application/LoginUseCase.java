@@ -47,7 +47,7 @@ public class LoginUseCase {
             throw new AccountLockedException("Account is locked for 15 minutes.");
         }
 
-        UserAccountEntity account = userAccountRepository.findByEmail(request.email()).orElse(null);
+        UserAccountEntity account = userAccountRepository.findByEmailIgnoreCase(request.email()).orElse(null);
 
         if (account == null || !passwordEncoder.matches(request.password(), account.getPasswordHash())) {
             handleFailedLogin(request.email(), account);
