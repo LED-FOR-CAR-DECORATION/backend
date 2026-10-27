@@ -91,6 +91,15 @@ public class TokenSessionService {
         return tokens.getAuthentication(accessToken);
     }
 
+    @Transactional
+    public void revokeAll(String accessToken) {
+        var claims = tokens.parseAccessToken(accessToken);
+        Long accountId = Long.valueOf(claims.getSubject());
+        accounts.lockById(accountId).orElseThrow(TokenSessionService::invalidToken);
+        if (!sessions.existsByIdAndAccount_AccountIdAndRevokedFalseAndExpiresAtAfter(claims.get("sid", String.class), accountId, Instant.now())) throw invalidToken();
+        sessions.revokeAll(accountId);
+    }
+
     private static String hash(String value) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
         catch (NoSuchAlgorithmException ex) { throw new IllegalStateException("SHA-256 unavailable", ex); }

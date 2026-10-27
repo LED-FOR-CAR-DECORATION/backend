@@ -35,6 +35,7 @@ class BackendApplicationTests {
                 .andExpect(jsonPath("$.paths['/api/auth/login'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/google'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/refresh'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/auth/logout'].post.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/management/auth/login'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/management/auth/google'].post").exists())
                 .andExpect(jsonPath("$.components.schemas.RegisterRequest.properties.passwordsMatch").doesNotExist())

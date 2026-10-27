@@ -19,10 +19,11 @@ import java.util.Set;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final TokenSessionService sessions;
     private final JwtTokenProvider tokens;
+    private final SafeCacheService cache;
     private final HandlerExceptionResolver errors;
-    public JwtAuthenticationFilter(TokenSessionService sessions, JwtTokenProvider tokens,
+    public JwtAuthenticationFilter(TokenSessionService sessions, JwtTokenProvider tokens, SafeCacheService cache,
                                    @Qualifier("handlerExceptionResolver") HandlerExceptionResolver errors) {
-        this.sessions = sessions; this.tokens = tokens; this.errors = errors;
+        this.sessions = sessions; this.tokens = tokens; this.cache = cache; this.errors = errors;
     }
     @Override protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI().substring(request.getContextPath().length());
@@ -36,6 +37,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             if (!authorization.startsWith("Bearer ") || authorization.length() <= 7) throw new AuthFlowException("INVALID_TOKEN", "Authorization không hợp lệ.");
             String token = authorization.substring(7);
+            var claims = tokens.parseAccessToken(token);
+            try {
+                if (cache.hasKey("auth:blacklist:" + claims.getId())) throw new AuthFlowException("INVALID_TOKEN", "Token đã bị thu hồi.");
+            } catch (CacheUnavailableException ex) { /* Database session check below remains authoritative. */ }
             SecurityContextHolder.getContext().setAuthentication(sessions.authenticate(token));
         } catch (DataAccessException ex) {
             reject(request, response, new AuthFlowException("AUTH_UNAVAILABLE", "Không thể kiểm tra phiên đăng nhập. Vui lòng thử lại.", ex)); return;

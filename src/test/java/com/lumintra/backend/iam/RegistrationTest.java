@@ -47,7 +47,7 @@ class RegistrationTest {
     @EnableJpaRepositories(basePackageClasses = UserAccountRepository.class)
     @Import({RegisterUseCase.class, LoginUseCase.class, com.lumintra.backend.iam.application.TokenSessionService.class,
             com.lumintra.backend.iam.application.GoogleAccountService.class, com.lumintra.backend.iam.application.GoogleLoginUseCase.class,
-            com.lumintra.backend.iam.infrastructure.security.HybridLoginAttemptService.class})
+            com.lumintra.backend.iam.application.LogoutUseCase.class, com.lumintra.backend.iam.infrastructure.security.HybridLoginAttemptService.class})
     static class Config {
         @Bean DataSource dataSource() {
             return new DriverManagerDataSource("jdbc:h2:mem:registration;MODE=PostgreSQL;DB_CLOSE_DELAY=-1", "sa", "");

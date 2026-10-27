@@ -1,8 +1,18 @@
 # Contributing Guide
 
-## Authentication implementation
+## Authentication APIs — IAM-01 đến IAM-05
 
-Google login: POST /api/auth/google and /api/management/auth/google. See docs/issues/issue-4.md. Configure GOOGLE_CLIENT_ID. Flyway V3 adds Google identities.
+Backend đã bổ sung management login, Google login (public/management), refresh token rotation và logout mọi thiết bị. Xem [hợp đồng API, cấu hình Google, migration và kiểm thử](docs/auth-api.md). Với database IAM cũ chưa có Flyway history, cần baseline V1 theo hướng dẫn trước khi khởi động bản mới.
+
+## Customer registration API
+
+Swagger UI: `http://localhost:8080/swagger-ui/index.html`; OpenAPI JSON: `http://localhost:8080/v3/api-docs` (adjust host/port to your server). The Authentication group documents login and registration with field constraints, examples and success/error schemas. Both endpoints are public. The Authorize dialog accepts an access token using the `bearerAuth` HTTP Bearer scheme; protected operations should declare `@SecurityRequirement(name = "bearerAuth")` when added.
+
+`POST /api/auth/register` is public. Send `fullName`, `email`, `password`, and `confirmPassword` as JSON. The response is HTTP 201 with `{ "data": { "userId": 123, "email": "user@example.com", "fullName": "User Name" } }`. Registration creates an active Customer account and a customer profile atomically, stores a BCrypt password hash, and does not automatically log in or send verification email. Use `/api/auth/login` after registration.
+
+Names must contain 2–100 characters after trimming, without control/format characters. Emails are trimmed, lowercased, validated, limited to 254 characters, and checked for duplicates ignoring case. Passwords require 8–72 characters, at most 72 UTF-8 bytes, uppercase and lowercase ASCII letters, a digit and a special character, no whitespace, plus matching confirmation. Passwords are never trimmed. Validation errors return HTTP 400 with `VALIDATION_FAILED` and field details; known duplicate emails return HTTP 409 with `EMAIL_ALREADY_REGISTERED`. Database constraint conflicts, including a concurrent duplicate insert, return HTTP 409 with `DATA_CONFLICT`. The existing unique email constraint is retained; no database schema change is required.
+
+Run `./mvnw test -Dtest=RegistrationTest` for isolated H2 tests covering persistence, login after registration, validation, duplicate constraints and rollback. These tests do not connect to the configured development database.
 
 This guide defines mandatory engineering rules for the single backend application. The backend serves the web applications, owns the database and cache, and integrates with approved external providers.
 

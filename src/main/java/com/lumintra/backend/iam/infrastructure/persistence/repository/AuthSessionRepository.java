@@ -8,4 +8,7 @@ import java.time.Instant;
 public interface AuthSessionRepository extends JpaRepository<AuthSessionEntity, String> {
     boolean existsByIdAndAccount_AccountIdAndRevokedFalseAndExpiresAtAfter(String id, Long accountId, Instant now);
 
+    @Modifying
+    @Query("update AuthSessionEntity s set s.revoked = true where s.account.accountId = :accountId")
+    int revokeAll(@Param("accountId") Long accountId);
 }

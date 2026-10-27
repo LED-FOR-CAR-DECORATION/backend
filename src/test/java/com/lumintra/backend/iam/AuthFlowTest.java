@@ -49,6 +49,7 @@ class AuthFlowTest {
     @Autowired RegisterUseCase register;
     @Autowired LoginUseCase login;
     @Autowired TokenSessionService sessions;
+    @Autowired LogoutUseCase logout;
     @Autowired JwtTokenProvider tokens;
     @Autowired UserAccountRepository accounts;
     @Autowired AuthSessionRepository sessionRecords;
@@ -126,6 +127,31 @@ class AuthFlowTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.accessToken").isString());
         mvc.perform(post("/api/auth/refresh").contentType("application/json").content("{\"refreshToken\":\"\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test void logoutRevokesAllDevicesAndBlacklistsCurrentAccess() throws Exception {
+        customer("customer@example.com"); var first = login.execute(credentials("customer@example.com")); var second = login.execute(credentials("customer@example.com"));
+        mvc.perform(post("/api/auth/logout").header("Authorization", "Bearer " + first.getAccessToken())).andExpect(status().isNoContent()).andExpect(content().string(""));
+        assertThat(sessionRecords.findAll()).allMatch(AuthSessionEntity::isRevoked);
+        assertThatThrownBy(() -> sessions.refresh(second.getRefreshToken())).isInstanceOf(AuthFlowException.class);
+        mvc.perform(post("/api/auth/logout").header("Authorization", "Bearer " + second.getAccessToken()))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
+        verify(cache).set(eq("auth:blacklist:" + tokens.parseAccessToken(first.getAccessToken()).getId()), eq(true), argThat(ttl -> ttl.toSeconds() > 0 && ttl.toSeconds() <= 900));
+    }
+
+    @Test void redisFailureDoesNotAllowRevokedSessions() throws Exception {
+        customer("customer@example.com"); var pair = login.execute(credentials("customer@example.com"));
+        when(cache.hasKey(anyString())).thenThrow(new CacheUnavailableException("test outage", null));
+        doThrow(new CacheUnavailableException("test outage", null)).when(cache).set(anyString(), any(), any());
+        mvc.perform(post("/api/auth/logout").header("Authorization", "Bearer " + pair.getAccessToken())).andExpect(status().isNoContent());
+        mvc.perform(post("/api/auth/logout").header("Authorization", "Bearer " + pair.getAccessToken())).andExpect(status().isUnauthorized());
+    }
+
+    @Test void missingMalformedAndRefreshBearerTokensAreRejected() throws Exception {
+        mvc.perform(post("/api/auth/logout")).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        mvc.perform(post("/api/auth/logout").header("Authorization", "Bearer malformed")).andExpect(status().isUnauthorized());
+        customer("customer@example.com"); var pair = login.execute(credentials("customer@example.com"));
+        mvc.perform(post("/api/auth/logout").header("Authorization", "Bearer " + pair.getRefreshToken())).andExpect(status().isUnauthorized());
     }
 
     @Test void lockoutAfterFiveFailuresResetsAfterExpiryAndAuditsStaff() throws Exception {

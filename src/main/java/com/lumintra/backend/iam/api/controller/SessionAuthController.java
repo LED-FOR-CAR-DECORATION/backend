@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 public class SessionAuthController {
     private final GoogleLoginUseCase google;
     private final TokenSessionService sessions;
+    private final LogoutUseCase logout;
 
     @PostMapping("/google")
     @Operation(summary = "Đăng nhập Google", description = "Xác minh Google ID token. Liên kết email đã có hoặc tạo Customer mới. Email ngoài Gmail/Workspace cần mật khẩu tài khoản hiện có để liên kết.")
@@ -45,4 +46,12 @@ public class SessionAuthController {
         return ResponseEntity.ok(ApiResponse.success(sessions.refresh(request.refreshToken())));
     }
 
+    @PostMapping("/logout")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Đăng xuất mọi thiết bị", description = "Thu hồi tất cả phiên/refresh token trong database; blacklist access token hiện tại trên Redis đến lúc hết hạn. Database bảo đảm thu hồi ngay cả khi Redis gián đoạn.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Đã thu hồi mọi phiên", content = @Content)
+    public ResponseEntity<Void> logout(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
+        logout.execute(authorization.substring(7));
+        return ResponseEntity.noContent().build();
+    }
 }
