@@ -34,11 +34,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String authorization = request.getHeader("Authorization");
         if (authorization == null) { chain.doFilter(request, response); return; }
         try {
-            if (!authorization.startsWith("Bearer ") || authorization.length() <= 7) throw new AuthFlowException("INVALID_TOKEN", "Authorization không hợp lệ.");
+            if (!authorization.startsWith("Bearer ") || authorization.length() <= 7) throw new AuthFlowException("INVALID_TOKEN", "The Authorization header is invalid.");
             String token = authorization.substring(7);
             SecurityContextHolder.getContext().setAuthentication(sessions.authenticate(token));
         } catch (DataAccessException ex) {
-            reject(request, response, new AuthFlowException("AUTH_UNAVAILABLE", "Không thể kiểm tra phiên đăng nhập. Vui lòng thử lại.", ex)); return;
+            reject(request, response, new AuthFlowException("AUTH_UNAVAILABLE", "Unable to verify the session. Please try again.", ex)); return;
         } catch (RuntimeException ex) {
             SecurityContextHolder.clearContext(); reject(request, response, ex); return;
         }

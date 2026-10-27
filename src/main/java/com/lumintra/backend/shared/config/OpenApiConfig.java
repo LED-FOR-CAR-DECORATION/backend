@@ -13,10 +13,10 @@ public class OpenApiConfig {
     public OpenAPI openAPI() {
         return new OpenAPI()
                 .info(new Info().title("Lumintra Backend API").version("v1")
-                        .description("API Lumintra. Đăng ký và đăng nhập không yêu cầu access token. "
-                                + "Dùng accessToken nhận từ đăng nhập trong Authorize để thử API được bảo vệ."))
+                        .description("Lumintra API. Registration and login do not require an access token. "
+                                + "Use the accessToken returned by login in Authorize to test protected APIs."))
                 .components(new Components().addSecuritySchemes("bearerAuth", new SecurityScheme()
                         .type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")
-                        .description("Nhập accessToken, không thêm tiền tố Bearer.")));
+                        .description("Enter the accessToken without the Bearer prefix.")));
     }
 }
