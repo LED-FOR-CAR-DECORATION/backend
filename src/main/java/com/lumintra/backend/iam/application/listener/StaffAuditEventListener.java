@@ -15,14 +15,14 @@ public class StaffAuditEventListener {
     @EventListener
     public void onStaffLoginSuccess(StaffLoginSuccessEvent event) {
         //TODO Write audit events to database asynchronously
-        log.info("Audit: Staff login successful [userId={}] [email={}] [role={}]",
-                event.userId(), event.email(), event.role());
+        log.info("Audit: Staff login successful [userId={}] [role={}]",
+                event.userId(), event.role());
     }
 
     @EventListener
     public void onStaffAccountLocked(StaffAccountLockedEvent event) {
         //TODO Write audit events to database asynchronously
-        log.warn("Audit: Staff account locked [userId={}] [email={}] [role={}] [duration=15m]",
-                event.userId(), event.email(), event.role());
+        log.warn("Audit: Staff account locked [userId={}] [role={}] [duration=15m]",
+                event.userId(), event.role());
     }
 }

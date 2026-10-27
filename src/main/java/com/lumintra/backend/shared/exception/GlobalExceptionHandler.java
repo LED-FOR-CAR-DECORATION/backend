@@ -29,6 +29,16 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final Tracer tracer;
 
+    @ExceptionHandler(com.lumintra.backend.shared.exception.iam.AuthFlowException.class)
+    public ResponseEntity<ErrorResponse> handleAuthFlow(com.lumintra.backend.shared.exception.iam.AuthFlowException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "ACCOUNT_DISABLED", "MANAGEMENT_ACCESS_DENIED", "GOOGLE_LINK_REQUIRED", "ACCESS_DENIED" -> HttpStatus.FORBIDDEN;
+            case "GOOGLE_UNAVAILABLE", "AUTH_UNAVAILABLE" -> HttpStatus.SERVICE_UNAVAILABLE;
+            default -> HttpStatus.UNAUTHORIZED;
+        };
+        return buildErrorResponse(ex.getCode(), ex.getMessage(), status);
+    }
+
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     public ResponseEntity<ErrorResponse> handleEmailAlreadyRegistered(EmailAlreadyRegisteredException ex) {
         return buildErrorResponse("EMAIL_ALREADY_REGISTERED", ex.getMessage(), HttpStatus.CONFLICT,

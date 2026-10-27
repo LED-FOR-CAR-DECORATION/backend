@@ -45,24 +45,27 @@ class RegistrationTest {
     @Configuration
     @EnableTransactionManagement
     @EnableJpaRepositories(basePackageClasses = UserAccountRepository.class)
-    @Import({RegisterUseCase.class, LoginUseCase.class})
+    @Import({RegisterUseCase.class, LoginUseCase.class, com.lumintra.backend.iam.application.TokenSessionService.class,
+            com.lumintra.backend.iam.infrastructure.security.HybridLoginAttemptService.class})
     static class Config {
         @Bean DataSource dataSource() {
             return new DriverManagerDataSource("jdbc:h2:mem:registration;MODE=PostgreSQL;DB_CLOSE_DELAY=-1", "sa", "");
         }
         @Bean LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
+            org.flywaydb.core.Flyway.configure().dataSource(dataSource).load().migrate();
             var factory = new LocalContainerEntityManagerFactoryBean();
             factory.setDataSource(dataSource);
             factory.setPackagesToScan("com.lumintra.backend.iam.infrastructure.persistence.entity");
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
-            factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop"));
+            factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "validate",
+                    "hibernate.physical_naming_strategy", "org.hibernate.boot.model.naming.PhysicalNamingStrategySnakeCaseImpl"));
             return factory;
         }
         @Bean PlatformTransactionManager transactionManager(EntityManagerFactory factory) {
             return new JpaTransactionManager(factory);
         }
         @Bean PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
-        @Bean LoginAttemptService loginAttemptService() { return mock(LoginAttemptService.class); }
+        @Bean com.lumintra.backend.shared.caching.SafeCacheService cacheService() { return mock(com.lumintra.backend.shared.caching.SafeCacheService.class); }
         @Bean JwtTokenProvider tokenProvider() { return new JwtTokenProvider("test-only-secret-at-least-thirty-two-bytes-long"); }
     }
 
@@ -72,9 +75,13 @@ class RegistrationTest {
     @MockitoSpyBean CustomerProfileRepository profiles;
     @Autowired PasswordEncoder encoder;
     @Autowired JwtTokenProvider tokens;
+    @Autowired AuthSessionRepository sessions;
+    @Autowired EmployeeProfileRepository employees;
     MockMvc mvc;
 
     @BeforeEach void setup() {
+        sessions.deleteAll();
+        employees.deleteAll();
         profiles.deleteAll();
         accounts.deleteAll();
         mvc = MockMvcBuilders.standaloneSetup(new AuthController(login, register))

@@ -1,43 +1,51 @@
 package com.lumintra.backend.shared.security;
 
+import com.lumintra.backend.iam.application.TokenSessionService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
+import com.lumintra.backend.shared.caching.*;
+import com.lumintra.backend.shared.exception.iam.AuthFlowException;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
-
+import org.springframework.web.servlet.HandlerExceptionResolver;
 import java.io.IOException;
+import java.util.Set;
 
 @Component
-@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
-    private final JwtTokenProvider tokenProvider;
-
-    @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
-        String token = resolveToken(request);
-
-        if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
-            Authentication auth = tokenProvider.getAuthentication(token);
-            SecurityContextHolder.getContext().setAuthentication(auth);
-        }
-
-        filterChain.doFilter(request, response);
+    private final TokenSessionService sessions;
+    private final JwtTokenProvider tokens;
+    private final HandlerExceptionResolver errors;
+    public JwtAuthenticationFilter(TokenSessionService sessions, JwtTokenProvider tokens,
+                                   @Qualifier("handlerExceptionResolver") HandlerExceptionResolver errors) {
+        this.sessions = sessions; this.tokens = tokens; this.errors = errors;
     }
-
-    private String resolveToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader("Authorization");
-        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
+    @Override protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        return "OPTIONS".equals(request.getMethod()) || Set.of("/api/auth/login", "/api/auth/register",
+                "/api/management/auth/login").contains(path)
+                || path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs") || path.startsWith("/actuator/health") || path.equals("/actuator/info");
+    }
+    @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
+        String authorization = request.getHeader("Authorization");
+        if (authorization == null) { chain.doFilter(request, response); return; }
+        try {
+            if (!authorization.startsWith("Bearer ") || authorization.length() <= 7) throw new AuthFlowException("INVALID_TOKEN", "Authorization không hợp lệ.");
+            String token = authorization.substring(7);
+            SecurityContextHolder.getContext().setAuthentication(sessions.authenticate(token));
+        } catch (DataAccessException ex) {
+            reject(request, response, new AuthFlowException("AUTH_UNAVAILABLE", "Không thể kiểm tra phiên đăng nhập. Vui lòng thử lại.", ex)); return;
+        } catch (RuntimeException ex) {
+            SecurityContextHolder.clearContext(); reject(request, response, ex); return;
         }
-        return null;
+        chain.doFilter(request, response);
+    }
+    public void reject(HttpServletRequest request, HttpServletResponse response, Exception exception) {
+        SecurityContextHolder.clearContext();
+        errors.resolveException(request, response, null, exception);
     }
 }

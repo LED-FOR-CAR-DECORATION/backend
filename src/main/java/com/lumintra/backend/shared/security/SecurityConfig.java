@@ -26,6 +26,13 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
 
+    @Bean
+    public org.springframework.boot.web.servlet.FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration() {
+        var registration = new org.springframework.boot.web.servlet.FilterRegistrationBean<>(jwtAuthFilter);
+        registration.setEnabled(false); // Run only inside the Spring Security chain.
+        return registration;
+    }
+
     @Value("${app.cors.allowed-origins:}")
     private String allowedOrigins;
 
@@ -41,9 +48,16 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.STATELESS))
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint((request, response, exception) -> jwtAuthFilter.reject(request, response,
+                                new com.lumintra.backend.shared.exception.iam.AuthFlowException("UNAUTHENTICATED", "Vui lòng đăng nhập.")))
+                        .accessDeniedHandler((request, response, exception) -> jwtAuthFilter.reject(request, response,
+                                new com.lumintra.backend.shared.exception.iam.AuthFlowException("ACCESS_DENIED", "Không có quyền truy cập."))))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register",
+                                "/api/management/auth/login").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
