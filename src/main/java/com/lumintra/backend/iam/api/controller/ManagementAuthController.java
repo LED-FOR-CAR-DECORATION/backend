@@ -17,27 +17,27 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/management/auth")
 @RequiredArgsConstructor
-@Tag(name = "Management Authentication", description = "Chỉ tài khoản Employee có sẵn được đăng nhập; không tự tạo tài khoản nội bộ.")
+@Tag(name = "Management Authentication", description = "Only existing Employee accounts can sign in. Internal accounts are never created automatically.")
 @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Cặp token cho tài khoản nội bộ", useReturnTypeSchema = true),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Dữ liệu không hợp lệ", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Sai thông tin đăng nhập hoặc Google token", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không phải Employee hoặc tài khoản không hoạt động", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "DATA_CONFLICT: liên kết Google đồng thời bị xung đột", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "423", description = "Khóa tài khoản 15 phút sau 5 lần sai", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Không thể xác minh Google", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Token pair for an internal account", useReturnTypeSchema = true),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid credentials or Google token", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "The account is not an Employee or is inactive", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "DATA_CONFLICT: concurrent Google account linking conflict", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "423", description = "Account locked for 15 minutes after five failed attempts", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Google token verification is unavailable", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
 public class ManagementAuthController {
     private final LoginUseCase login;
     private final GoogleLoginUseCase google;
 
     @PostMapping("/login")
-    @Operation(summary = "Đăng nhập email cho ứng dụng quản lý", description = "Cấp access token 15 phút và refresh token 30 ngày. Có lockout, reset bộ đếm và audit cho nhân viên.")
+    @Operation(summary = "Email login for the management application", description = "Issues a 15-minute access token and a 30-day refresh token. Includes lockout, failed-attempt reset and employee audit events.")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(ApiResponse.success(login.execute(request, true)));
     }
     @PostMapping("/google")
-    @Operation(summary = "Google login cho ứng dụng quản lý", description = "Email phải có tài khoản Employee đang hoạt động; không tự tạo tài khoản nếu chưa tồn tại.")
+    @Operation(summary = "Google login for the management application", description = "The email must belong to an existing active Employee account. Unknown accounts are not created.")
     public ResponseEntity<ApiResponse<LoginResponse>> google(@Valid @RequestBody GoogleLoginRequest request) {
         return ResponseEntity.ok(ApiResponse.success(google.execute(request, true)));
     }

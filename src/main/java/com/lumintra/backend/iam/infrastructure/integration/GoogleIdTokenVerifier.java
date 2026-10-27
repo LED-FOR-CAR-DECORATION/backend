@@ -31,7 +31,7 @@ public class GoogleIdTokenVerifier implements GoogleIdentityVerifier {
 
     @Override
     public GoogleIdentity verify(String idToken) {
-        if (clientId == null || clientId.isBlank()) throw new AuthFlowException("GOOGLE_UNAVAILABLE", "Đăng nhập Google chưa được cấu hình.");
+        if (clientId == null || clientId.isBlank()) throw new AuthFlowException("GOOGLE_UNAVAILABLE", "Google login has not been configured.");
         try {
             Jwt jwt = decodeWithRetry(idToken);
             String issuer = jwt.getClaimAsString("iss");
@@ -46,9 +46,9 @@ public class GoogleIdTokenVerifier implements GoogleIdentityVerifier {
             boolean authoritative = email.endsWith("@gmail.com") || (hostedDomain != null && !hostedDomain.isBlank());
             return new GoogleIdentity(jwt.getSubject(), email, jwt.getClaimAsString("name"), authoritative);
         } catch (BadJwtException ex) {
-            throw new AuthFlowException("INVALID_GOOGLE_TOKEN", "Google ID token không hợp lệ hoặc đã hết hạn.", ex);
+            throw new AuthFlowException("INVALID_GOOGLE_TOKEN", "The Google ID token is invalid or expired.", ex);
         } catch (JwtException ex) {
-            throw new AuthFlowException("GOOGLE_UNAVAILABLE", "Không thể xác minh với Google. Vui lòng thử lại.", ex);
+            throw new AuthFlowException("GOOGLE_UNAVAILABLE", "Unable to verify the token with Google. Please try again.", ex);
         }
     }
     private Jwt decodeWithRetry(String idToken) {
@@ -61,5 +61,5 @@ public class GoogleIdTokenVerifier implements GoogleIdentityVerifier {
             return decoder.decode(idToken);
         }
     }
-    private static AuthFlowException invalid() { return new AuthFlowException("INVALID_GOOGLE_TOKEN", "Google ID token không hợp lệ hoặc email chưa được xác minh."); }
+    private static AuthFlowException invalid() { return new AuthFlowException("INVALID_GOOGLE_TOKEN", "The Google ID token is invalid or the email address is unverified."); }
 }

@@ -34,12 +34,12 @@ public class GoogleAccountService {
             TokenSessionService.checkAccount(account, management);
             // Google is not authoritative for third-party email ownership: require the local password to link.
             if (!identity.authoritativeEmail() && (password == null || account.getPasswordHash() == null)) {
-                throw new AuthFlowException("GOOGLE_LINK_REQUIRED", "Cần mật khẩu tài khoản hiện có để liên kết email này với Google.");
+                throw new AuthFlowException("GOOGLE_LINK_REQUIRED", "The existing account password is required to link this email address to Google.");
             }
             if (!identity.authoritativeEmail() && !encoder.matches(password, account.getPasswordHash())) throw new InvalidCredentialsException("Invalid email or password");
-            if (identities.existsByAccount_AccountId(account.getAccountId())) throw new InvalidCredentialsException("Tài khoản đã liên kết với Google identity khác.");
+            if (identities.existsByAccount_AccountId(account.getAccountId())) throw new InvalidCredentialsException("The account is already linked to another Google identity.");
         } else {
-            if (management) throw new AuthFlowException("MANAGEMENT_ACCESS_DENIED", "Email chưa có tài khoản nội bộ.");
+            if (management) throw new AuthFlowException("MANAGEMENT_ACCESS_DENIED", "No internal account exists for this email address.");
             account = new UserAccountEntity();
             account.setEmail(identity.email());
             account.setAccountType(AccountType.CUSTOMER);

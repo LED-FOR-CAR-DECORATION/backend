@@ -23,8 +23,8 @@ import org.springframework.web.bind.annotation.*;
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "VALIDATION_FAILED / INVALID_REQUEST", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "INVALID_TOKEN / INVALID_GOOGLE_TOKEN", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "ACCOUNT_DISABLED / GOOGLE_LINK_REQUIRED", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "DATA_CONFLICT: request đồng thời xung đột email hoặc Google identity; thử đăng nhập lại", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "423", description = "ACCOUNT_LOCKED: tài khoản bị khóa đăng nhập", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "DATA_CONFLICT: concurrent email or Google identity conflict; retry login", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "423", description = "ACCOUNT_LOCKED: the account is temporarily locked", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "GOOGLE_UNAVAILABLE / AUTH_UNAVAILABLE", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
 public class SessionAuthController {
@@ -32,15 +32,15 @@ public class SessionAuthController {
     private final TokenSessionService sessions;
 
     @PostMapping("/google")
-    @Operation(summary = "Đăng nhập Google", description = "Xác minh Google ID token. Liên kết email đã có hoặc tạo Customer mới. Email ngoài Gmail/Workspace cần mật khẩu tài khoản hiện có để liên kết.")
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Cặp JWT hệ thống", useReturnTypeSchema = true)
+    @Operation(summary = "Google login", description = "Verifies a Google ID token, links an existing email or creates a Customer. Linking a non-Gmail/Workspace email requires the existing account password.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "System JWT token pair", useReturnTypeSchema = true)
     public ResponseEntity<ApiResponse<LoginResponse>> google(@Valid @RequestBody GoogleLoginRequest request) {
         return ResponseEntity.ok(ApiResponse.success(google.execute(request, false)));
     }
 
     @PostMapping("/refresh")
-    @Operation(summary = "Làm mới cặp token", description = "Không cần access token. Refresh token phải còn hạn, chưa bị thu hồi và là token mới nhất của phiên. Rotation không gia hạn mốc 30 ngày ban đầu; token cũ bị vô hiệu ngay.")
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Cặp JWT mới", useReturnTypeSchema = true)
+    @Operation(summary = "Refresh the token pair", description = "No access token is required. The refresh token must be unexpired, unrevoked and the latest token for its session. Rotation does not extend the original 30-day deadline; the previous token is invalidated immediately.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "New JWT token pair", useReturnTypeSchema = true)
     public ResponseEntity<ApiResponse<LoginResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return ResponseEntity.ok(ApiResponse.success(sessions.refresh(request.refreshToken())));
     }
