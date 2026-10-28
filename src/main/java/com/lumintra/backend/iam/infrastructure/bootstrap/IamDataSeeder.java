@@ -258,15 +258,12 @@ public class IamDataSeeder implements ApplicationRunner {
                 new PermissionDef("READ_ENTITLEMENT", "View customer digital ownership records and gift code status.", Set.of("ADMIN", "MANAGER", "STAFF")),
 
                 // 5. Custom Art Commissions & Customer Chat
-                new PermissionDef("READ_ALL_COMMISSION", "View all customer commission requests and status.", Set.of("ADMIN", "MANAGER", "STAFF")),
-                new PermissionDef("READ_ASSIGNED_COMMISSION", "View only commission tickets assigned to the authenticated designer.", Set.of("DESIGNER")),
-                new PermissionDef("QUOTE_COMMISSION", "Review customer requirements and issue price quotes.", Set.of("MANAGER", "STAFF")),
-                new PermissionDef("ASSIGN_COMMISSION", "Assign or reassign paid commission tickets to internal designers.", Set.of("MANAGER", "STAFF")),
-                new PermissionDef("SUBMIT_DRAFT_COMMISSION", "Upload artwork draft versions and attachments for assigned commissions.", Set.of("DESIGNER")),
-                new PermissionDef("REVIEW_DRAFT_COMMISSION", "Inspect designer drafts, record decisions, post deliverables.", Set.of("MANAGER", "STAFF")),
+                new PermissionDef("READ_ALL_COMMISSION", "View all customer commission requests, status, and chat logs.", Set.of("ADMIN", "MANAGER", "STAFF")),
+                new PermissionDef("MANAGE_COMMISSION_STAFF", "Process commissions: quote, assign, reject, review drafts, and send chat messages/cards.", Set.of("MANAGER", "STAFF")),
+                new PermissionDef("READ_ASSIGNED_COMMISSION", "View requirements and briefs for assigned commission tickets.", Set.of("DESIGNER")),
+                new PermissionDef("PROCESS_ASSIGNED_COMMISSION", "Process assigned tickets: input time estimates and upload artwork drafts.", Set.of("DESIGNER")),
                 new PermissionDef("MANAGE_COMMISSION_PRICING", "Configure base commission pricing rules and selectable options.", Set.of("MANAGER")),
-                new PermissionDef("READ_CONVERSATION", "View customer support/commission chat rooms and message history.", Set.of("MANAGER", "STAFF")),
-                new PermissionDef("MESSAGE_CONVERSATION", "Send, edit, or delete messages and attachments in chat rooms.", Set.of("MANAGER", "STAFF")),
+                new PermissionDef("FORCE_RESOLVE_COMMISSION", "Override commission states, authorize manual refunds, or force-reassign disputed tickets.", Set.of("ADMIN", "MANAGER"))
 
                 // 6. Dashboard, Analytics & System Monitoring
                 new PermissionDef("READ_DASHBOARD", "View operational KPIs, revenue charts, and daily summaries.", Set.of("ADMIN", "MANAGER")),
