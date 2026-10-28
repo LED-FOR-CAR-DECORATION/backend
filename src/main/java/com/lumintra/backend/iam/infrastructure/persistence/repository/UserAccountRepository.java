@@ -7,6 +7,9 @@ import java.util.Optional;
 
 @Repository
 public interface UserAccountRepository extends JpaRepository<UserAccountEntity, Long> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select a from UserAccountEntity a where lower(a.email) = lower(:email)")
+    Optional<UserAccountEntity> lockByEmail(@org.springframework.data.repository.query.Param("email") String email);
     Optional<UserAccountEntity> findByEmail(String email);
     Optional<UserAccountEntity> findByEmailIgnoreCase(String email);
     boolean existsByEmailIgnoreCase(String email);

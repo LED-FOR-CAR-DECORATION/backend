@@ -2,6 +2,8 @@
 
 ## Authentication implementation
 
+Registration now requires email confirmation. See [registration-verification.md](docs/registration-verification.md) for the OTP flow and [schema-reference.md](docs/schema-reference.md) for the latest Drive ERD. The request no longer includes `fullName`.
+
 Register API: POST /api/auth/register. See docs/issues/issue-3.md. Validation, BCrypt and default CUSTOMER are implemented.
 
 This guide defines mandatory engineering rules for the single backend application. The backend serves the web applications, owns the database and cache, and integrates with approved external providers.

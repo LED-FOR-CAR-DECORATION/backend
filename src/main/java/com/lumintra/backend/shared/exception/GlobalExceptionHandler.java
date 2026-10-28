@@ -29,6 +29,17 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final Tracer tracer;
 
+    @ExceptionHandler(com.lumintra.backend.shared.exception.iam.EmailVerificationException.class)
+    public ResponseEntity<ErrorResponse> handleEmailVerification(com.lumintra.backend.shared.exception.iam.EmailVerificationException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "EMAIL_NOT_VERIFIED" -> HttpStatus.FORBIDDEN;
+            case "OTP_RATE_LIMITED" -> HttpStatus.TOO_MANY_REQUESTS;
+            case "VERIFICATION_UNAVAILABLE" -> HttpStatus.SERVICE_UNAVAILABLE;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return buildErrorResponse(ex.getCode(), ex.getMessage(), status);
+    }
+
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     public ResponseEntity<ErrorResponse> handleEmailAlreadyRegistered(EmailAlreadyRegisteredException ex) {
         return buildErrorResponse("EMAIL_ALREADY_REGISTERED", ex.getMessage(), HttpStatus.CONFLICT,

@@ -54,6 +54,7 @@ public class LoginUseCase {
             throw new InvalidCredentialsException("Invalid email or password");
         }
 
+        if ("PENDING_VERIFICATION".equals(account.getStatus())) throw new com.lumintra.backend.shared.exception.iam.EmailVerificationException("EMAIL_NOT_VERIFIED", "Verify your email before signing in.");
         loginAttemptService.resetAttempts(request.email());
 
         List<String> roles;
