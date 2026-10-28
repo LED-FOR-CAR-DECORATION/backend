@@ -1,96 +1,48 @@
-# Authentication APIs - IAM-01 through IAM-05
+# Authentication API contracts
 
-Try the APIs through `/swagger-ui/index.html`; the OpenAPI JSON is available at `/v3/api-docs`. Successful response bodies use `{ "data": ... }`. Errors use `{ code, message, status, timestamp, traceId, details }`.
+## Current schema and configuration
+
+The [approved Drive schema](schema-reference.md) defines `REFRESH_TOKEN` with a direct `account_id` foreign key. There are no `auth_sessions` or `google_identities` tables and no added refresh-token columns on `user_account`. Flyway is removed; development uses Hibernate `create` under the [documented temporary exception](architecture-exceptions.md). Production retains `validate`. Do not start the development profile against data that must be preserved.
 
 ## Endpoints
 
-| Method | Endpoint | JSON request | Result |
+| Method | Endpoint | Request | Success |
 | --- | --- | --- | --- |
-| POST | `/api/auth/register` | `fullName`, `email`, `password`, `confirmPassword` | 201, creates a Customer and profile |
-| POST | `/api/auth/login` | `email`, `password` | 200, JWT token pair |
-| POST | `/api/management/auth/login` | `email`, `password` | 200, JWT token pair; active Employees only |
-| POST | `/api/auth/google` | `idToken`, optional linking `password` | 200, JWT token pair; links an account or creates a Customer |
-| POST | `/api/management/auth/google` | `idToken`, optional linking `password` | 200, JWT token pair; the Employee account must already exist |
-| POST | `/api/auth/refresh` | `refreshToken` | 200, new JWT token pair; invalidates the previous refresh token |
-| POST | `/api/auth/logout` | No body; `Authorization: Bearer <accessToken>` | 204, revokes all sessions on all devices |
+| POST | `/api/auth/register` | `email`, `password`, `confirmPassword` | 201: `data` contains `userId`, `email`, `status: PENDING_VERIFICATION` |
+| POST | `/api/auth/verify-email` | `email`, six-digit `otp` | 200: account status becomes `ACTIVE` |
+| POST | `/api/auth/resend-verification` | `email` | 202, no body |
+| POST | `/api/auth/login` | `email`, `password` | 200: JWT pair; both Customer and Employee accounts use this endpoint |
+| POST | `/api/auth/google` | Google `idToken`, optional linking `password` | 200: JWT pair |
+| POST | `/api/management/auth/google` | Google `idToken`, optional linking `password` | 200: JWT pair; an active Employee account must already exist |
+| POST | `/api/auth/refresh` | `refreshToken` | 200: rotated JWT pair |
+| POST | `/api/auth/logout` | Bearer access token, no body | 204: all account refresh records revoked |
 
-Public email login also accepts Employees for compatibility with the current client. Management routes always check the account type on the backend and never create internal accounts automatically.
+There is no `/api/management/auth/login` endpoint. See [registration-verification.md](registration-verification.md) for OTP delivery, cooldown, attempts and failure recovery. Full name is not accepted by the registration DTO; the profile can be completed later.
 
-## Tokens and sessions
+## Tokens and revocation
 
-```json
-{
-  "data": {
-    "accessToken": "<access-token>",
-    "refreshToken": "<refresh-token>",
-    "tokenType": "Bearer",
-    "expiresIn": 900
-  }
-}
-```
+Login returns `data: { accessToken, refreshToken, tokenType: "Bearer", expiresIn: 900 }`. Access tokens last 15 minutes. Each login creates a refresh record with an absolute 30-day expiry. JWT `sid` contains that record's ID; `type` distinguishes access and refresh tokens and each token has a unique `jti`.
 
-Access tokens last 15 minutes. Refresh sessions have an absolute lifetime of 30 days from initial login. Rotation does not extend that deadline. Tokens contain a unique `jti`, a session `sid`, and a `type` of `access` or `refresh`. Refresh tokens cannot be used as Bearer access tokens, and access tokens cannot be used for refresh. Inactive or locked accounts cannot receive new tokens.
+Only SHA-256 refresh hashes are stored. Issue, rotation and logout serialize on the account row. Rotation verifies signature/type/expiry, record ownership, revocation and hash, then replaces the stored hash in one transaction. At most one concurrent request using the same refresh token succeeds; the old token is invalid immediately. Rotation does not extend the original 30-day expiry. Clients must coalesce refresh requests and store the returned pair; do not automatically retry a timed-out rotation.
 
-`auth_sessions` stores only the SHA-256 hash of each refresh token. Issue, refresh and logout operations lock the same account row. Refresh validates the session, hash and expiry, then replaces the hash in one transaction. At most one of two concurrent requests using the same refresh token can succeed. Clients must store the new pair and coalesce concurrent refresh requests. Do not automatically retry a timed-out refresh: the previous token may already have been consumed.
+Protected APIs check that the referenced refresh record remains active. Logout sets `revoked_at` on every account refresh record before adding the current access token's `jti` to Redis with its remaining lifetime as TTL. Database checks enforce logout even if Redis is unavailable. A database outage is never authentication success. Old tokens pointing to removed session UUIDs require a new login.
 
-Protected APIs check database session state on every request. Logout first revokes every account session in the database, then writes `auth:blacklist:<jti>` to Redis with the access token's remaining lifetime as its TTL. Database checks enforce revocation during Redis outages. A database failure never counts as successful authentication. Signing in again creates a new session.
+Five failed password attempts lock the account for 15 minutes. The fifth failure returns 401; subsequent attempts during lockout return 423. A successful login resets counters. Failed attempts use a separate database transaction and pessimistic lock. Employee success/lockout events are written to audit logs by account ID and role.
 
-## Lockout and audit
+## Google login
 
-Five failed password attempts lock the account for 15 minutes. The fifth failure returns 401; subsequent requests during lockout return 423. Successful login resets the attempt counter and lockout timestamp. After lockout expires, a new failure starts the counter at one. Attempts are stored in the database using a separate transaction and a pessimistic lock, so they survive a failed login rollback and Redis recovery.
+Configure `GOOGLE_CLIENT_ID`. The verifier checks RSA signature through Google's fixed JWKS endpoint, issuer, audience, expiry, subject and verified email. Key retrieval has three-second connection/read timeouts and at most one retry with 100 ms backoff for provider failures. Verification occurs before database transactions.
 
-Successful Employee login publishes `StaffLoginSuccessEvent`; reaching the lockout threshold publishes `StaffAccountLockedEvent`. The listener writes audit logs containing user ID and role, without passwords, tokens or email addresses. Audit records currently live in application logs; there is no separate audit table.
+Account lookup uses the verified normalized email, matching the approved schema; no provider-identity table is introduced. Gmail/Workspace addresses can link to an existing active account or create a new Customer through entity factories. For email outside Gmail/Workspace, first register and verify it, then provide the existing account password on each Google login. Unknown non-authoritative emails are rejected with `GOOGLE_LINK_REQUIRED` rather than creating accounts whose provider identity cannot be safely persisted in the approved schema. Management Google login never creates internal accounts. Pending password registrations must complete OTP confirmation before Google or password login.
 
-## Google ID tokens
+## Errors and Swagger
 
-Set `GOOGLE_CLIENT_ID` to the application's OAuth client ID. Without it, Google login returns 503 `GOOGLE_UNAVAILABLE`; email/password APIs remain available.
+Every error uses `{ code, message, status, timestamp, traceId, details }`. Invalid fields/JSON/OTP return 400; credentials or invalid/expired/revoked/replayed tokens return 401; unverified/inactive accounts, denied management access or linking confirmation return 403; duplicates return 409; lockout returns 423; OTP cooldown returns 429; verification/provider/session outages return 503. Unexpected failures return a safe 500 response.
 
-The client sends the Google **ID token** returned by Google Identity Services, not a Google access token:
+Swagger UI is `/swagger-ui/index.html`; OpenAPI JSON is `/v3/api-docs`. Protected operations use the `bearerAuth` scheme.
 
-```json
-{ "idToken": "<google-id-token>" }
-```
+## Verification and scope
 
-The Nimbus JWT decoder verifies the RSA signature against Google's fixed JWKS endpoint and checks issuer, audience, expiry, subject and `email_verified`. Public-key requests have three-second connection/read timeouts and at most one provider-failure retry with a 100 ms backoff. Rejected tokens are not retried. External verification finishes before a database transaction begins.
+Run `./mvnw clean test`. The final branch passes 40 tests covering startup/OpenAPI, registration/factories/normalization/OTP activation, provider retries, Redis adapter failures, management Google restrictions, token lifetime/type, concurrent rotation, logout across devices, Redis fallback, lockout/audit and RSA signature verification. Tests use H2 and mocked Redis/provider transports. No real database, live Redis server or real email/Google account was used.
 
-Account links use the stable Google `sub` in `google_identities`. An existing email is linked to its account. When Google is not authoritative for that email (outside Gmail/Workspace), the existing account password is required before linking:
-
-```json
-{ "idToken": "<google-id-token>", "password": "<existing-account-password>" }
-```
-
-If the email is unknown, only the public API may create a Customer. Management Google login rejects emails without an existing Employee account and never creates internal accounts. Later logins use the stored `sub` link.
-
-Reference: [Google: verify ID tokens on the server](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
-
-## Error codes
-
-| HTTP | Code | Condition |
-| --- | --- | --- |
-| 400 | `VALIDATION_FAILED`, `INVALID_REQUEST` | Invalid fields or JSON payload |
-| 401 | `INVALID_CREDENTIALS` | Incorrect credentials |
-| 401 | `INVALID_TOKEN`, `UNAUTHENTICATED` | Wrong token type, expiry, revocation, refresh replay or missing authentication |
-| 401 | `INVALID_GOOGLE_TOKEN` | Invalid Google token or unverified email |
-| 403 | `MANAGEMENT_ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCESS_DENIED` | Insufficient access or an inactive account |
-| 403 | `GOOGLE_LINK_REQUIRED` | Password confirmation required to link a non-Gmail/Workspace email |
-| 409 | `EMAIL_ALREADY_REGISTERED`, `DATA_CONFLICT` | Duplicate email/identity or a concurrent linking conflict |
-| 423 | `ACCOUNT_LOCKED` | Temporary account lockout |
-| 503 | `GOOGLE_UNAVAILABLE`, `AUTH_UNAVAILABLE` | Provider failure or session verification unavailable |
-
-## Database migrations
-
-Flyway uses `V1__iam_baseline.sql`, `V2__auth_sessions.sql` and `V3__google_identities.sql`. Hibernate uses `validate` instead of the former development setting `create`, preserving data across application restarts. Migration filenames and SQL contents remain unchanged by the English documentation update.
-
-- New database: keep `FLYWAY_BASELINE_ON_MIGRATE=false` (the default); run V1, V2 and V3.
-- Existing IAM database without Flyway history: verify that the schema matches V1, back up the database, and set `FLYWAY_BASELINE_ON_MIGRATE=true` for the initial transition. Flyway records a V1 baseline and applies V2 and V3. Remove the variable or set it back to `false` afterwards.
-- Database with migration history: keep `false`; only pending migrations are applied.
-
-No migrations were run against development or deployed databases during this implementation. Tokens without `type`/`sid` require a new login after deployment. Application rollback does not automatically delete tables; assess session and token compatibility before rolling back. Expired session records are currently retained; a cleanup job can follow the project's retention policy.
-
-## Tests and client integration
-
-Run `./mvnw test`. Tests use H2 in PostgreSQL mode with actual migrations and do not connect to the development database. Coverage includes registration/rollback, management login, token lifetime/type, concurrent rotation, logout across devices, Redis outages, lockout/reset/audit, Google account linking/creation and real RSA signature verification. The Spring Boot startup test checks the OpenAPI endpoints.
-
-Google tests use test RSA keys and mock the provider for account workflows; no real Google account login was performed. Migrations were tested on H2 and have not been applied to deployed PostgreSQL.
-
-The frontend currently integrates login and registration. Google, refresh and server logout APIs are available for client integration; the current frontend does not call those new endpoints yet.
+The frontend still needs the new OTP confirmation screen and calls to Google/refresh/server logout. Password recovery issues #7/#8 are not implemented by this review follow-up.

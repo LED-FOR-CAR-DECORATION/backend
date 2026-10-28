@@ -1,60 +1,41 @@
 package com.lumintra.backend.iam.application;
 
 import com.lumintra.backend.iam.domain.service.GoogleIdentityVerifier.GoogleIdentity;
-import com.lumintra.backend.iam.domain.model.AccountType;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.*;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.*;
-import com.lumintra.backend.shared.exception.iam.AuthFlowException;
-import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
+import com.lumintra.backend.shared.exception.iam.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Service
-@RequiredArgsConstructor
+@Service @RequiredArgsConstructor
 public class GoogleAccountService {
-    private final GoogleIdentityRepository identities;
     private final UserAccountRepository accounts;
     private final CustomerProfileRepository customers;
     private final PasswordEncoder encoder;
 
     @Transactional
     public UserAccountEntity resolve(GoogleIdentity identity, boolean management, String password) {
-        var linked = identities.findById(identity.subject());
-        if (linked.isPresent()) {
-            var account = accounts.lockById(linked.get().getAccount().getAccountId()).orElseThrow();
-            TokenSessionService.checkAccount(account, management);
+        var existing=accounts.lockByEmail(identity.email());
+        if(existing.isPresent()) {
+            var account=existing.get(); TokenSessionService.checkAccount(account,management);
+            if(!identity.authoritativeEmail()) {
+                if(password==null || account.getPasswordHash()==null) throw linkingRequired();
+                if(!encoder.matches(password,account.getPasswordHash())) throw new InvalidCredentialsException("Invalid email or password");
+            }
             return account;
         }
-        var existing = accounts.lockByEmail(identity.email());
-        UserAccountEntity account;
-        if (existing.isPresent()) {
-            account = existing.get();
-            TokenSessionService.checkAccount(account, management);
-            // Google is not authoritative for third-party email ownership: require the local password to link.
-            if (!identity.authoritativeEmail() && (password == null || account.getPasswordHash() == null)) {
-                throw new AuthFlowException("GOOGLE_LINK_REQUIRED", "The existing account password is required to link this email address to Google.");
-            }
-            if (!identity.authoritativeEmail() && !encoder.matches(password, account.getPasswordHash())) throw new InvalidCredentialsException("Invalid email or password");
-            if (identities.existsByAccount_AccountId(account.getAccountId())) throw new InvalidCredentialsException("The account is already linked to another Google identity.");
-        } else {
-            if (management) throw new AuthFlowException("MANAGEMENT_ACCESS_DENIED", "No internal account exists for this email address.");
-            account = new UserAccountEntity();
-            account.setEmail(identity.email());
-            account.setAccountType(AccountType.CUSTOMER);
-            account.setStatus("ACTIVE");
-            accounts.saveAndFlush(account);
-            var profile = new CustomerProfileEntity();
-            profile.setAccount(account);
-            String name = identity.name() == null ? identity.email() : identity.name().strip().replaceAll("[\\p{Cc}\\p{Cf}]", "");
-            if (name.length() < 2) name = identity.email();
-            profile.setFullName(name.substring(0, Math.min(name.length(), 100)));
-            customers.saveAndFlush(profile);
-        }
-        var link = new GoogleIdentityEntity();
-        link.setSubject(identity.subject()); link.setAccount(account);
-        identities.saveAndFlush(link);
+        if(management) throw new AuthFlowException("MANAGEMENT_ACCESS_DENIED","No internal account exists for this email address.");
+        // The approved schema has no provider identity table. Never auto-link an email Google does not own.
+        if(!identity.authoritativeEmail()) throw linkingRequired();
+        var account=UserAccountEntity.googleCustomer(identity.email()); accounts.saveAndFlush(account);
+        String name=identity.name()==null?identity.email():identity.name().strip().replaceAll("[\\p{Cc}\\p{Cf}]","");
+        if(name.length()<2) name=identity.email();
+        customers.saveAndFlush(CustomerProfileEntity.forAccount(account,name.substring(0,Math.min(name.length(),100))));
         return account;
+    }
+    private static AuthFlowException linkingRequired() {
+        return new AuthFlowException("GOOGLE_LINK_REQUIRED","Register and verify your email first, then provide the existing account password to link a non-Gmail/Workspace email.");
     }
 }

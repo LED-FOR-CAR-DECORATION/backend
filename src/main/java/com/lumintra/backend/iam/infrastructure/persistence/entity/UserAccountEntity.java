@@ -11,6 +11,28 @@ import java.time.Instant;
 @Getter
 @Setter
 public class UserAccountEntity {
+    public static UserAccountEntity registerCustomer(String email, String passwordHash) {
+        UserAccountEntity account = new UserAccountEntity();
+        account.setEmail(email);
+        account.setPasswordHash(passwordHash);
+        account.setAccountType(AccountType.CUSTOMER);
+        account.setStatus("PENDING_VERIFICATION");
+        return account;
+    }
+
+    public static UserAccountEntity googleCustomer(String email) {
+        UserAccountEntity account = registerCustomer(email, null);
+        account.setStatus("ACTIVE");
+        return account;
+    }
+
+    public void setEmail(String email) {
+        this.email = email == null ? null : email.strip().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    @PrePersist @PreUpdate
+    private void normalizeEmail() { setEmail(email); }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long accountId;

@@ -33,12 +33,12 @@ public class AuthController {
     private final RegisterUseCase registerUseCase;
 
     @PostMapping("/register")
-    @Operation(summary = "Register a customer account", description = "Public API. Creates an ACTIVE account and a customer profile in one transaction. "
-            + "The role cannot be selected by the caller. Registration does not sign the user in or send a verification email.")
+    @Operation(summary = "Register a customer account", description = "Public API. Creates a pending Customer account and profile, then sends a six-digit email OTP. "
+            + "The request has no fullName field. Confirm the email through POST /api/auth/verify-email before signing in.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Account created successfully", useReturnTypeSchema = true,
                     content = @Content(mediaType = "application/json", examples = @ExampleObject(value = """
-                            {"data":{"userId":123,"email":"customer@example.com","fullName":"John Doe"}}
+                            {"data":{"userId":123,"email":"customer@example.com","status":"PENDING_VERIFICATION"}}
                             """))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed or the JSON payload is invalid",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class), examples = {

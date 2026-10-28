@@ -1,18 +1,12 @@
 # Contributing Guide
 
-## Authentication APIs - IAM-01 through IAM-05
+## Authentication APIs
 
-The backend supports management login, public/management Google login, refresh token rotation and logout from all devices. See the [API contracts, Google configuration, migrations and tests](docs/auth-api.md). Existing IAM databases without Flyway history require an explicit V1 baseline before starting this version.
+The review follow-up uses the approved Drive ERD: refresh tokens reference accounts directly through `REFRESH_TOKEN.account_id`. Email/password login has one public endpoint, `/api/auth/login`; Google login retains separate public and management routes.
 
-## Customer registration API
+Registration accepts `email`, `password` and `confirmPassword`, creates a pending Customer using entity factories, and requires Redis-backed email OTP confirmation before login. See [registration-verification.md](docs/registration-verification.md), [auth-api.md](docs/auth-api.md) and [schema-reference.md](docs/schema-reference.md).
 
-Swagger UI: `http://localhost:8080/swagger-ui/index.html`; OpenAPI JSON: `http://localhost:8080/v3/api-docs` (adjust host/port to your server). The Authentication group documents login and registration with field constraints, examples and success/error schemas. Both endpoints are public. The Authorize dialog accepts an access token using the `bearerAuth` HTTP Bearer scheme; protected operations should declare `@SecurityRequirement(name = "bearerAuth")` when added.
-
-`POST /api/auth/register` is public. Send `fullName`, `email`, `password`, and `confirmPassword` as JSON. The response is HTTP 201 with `{ "data": { "userId": 123, "email": "user@example.com", "fullName": "User Name" } }`. Registration creates an active Customer account and a customer profile atomically, stores a BCrypt password hash, and does not automatically log in or send verification email. Use `/api/auth/login` after registration.
-
-Names must contain 2–100 characters after trimming, without control/format characters. Emails are trimmed, lowercased, validated, limited to 254 characters, and checked for duplicates ignoring case. Passwords require 8–72 characters, at most 72 UTF-8 bytes, uppercase and lowercase ASCII letters, a digit and a special character, no whitespace, plus matching confirmation. Passwords are never trimmed. Validation errors return HTTP 400 with `VALIDATION_FAILED` and field details; known duplicate emails return HTTP 409 with `EMAIL_ALREADY_REGISTERED`. Database constraint conflicts, including a concurrent duplicate insert, return HTTP 409 with `DATA_CONFLICT`. The existing unique email constraint is retained; no database schema change is required.
-
-Run `./mvnw test -Dtest=RegistrationTest` for isolated H2 tests covering persistence, login after registration, validation, duplicate constraints and rollback. These tests do not connect to the configured development database.
+Flyway and the unapproved session/identity tables have been removed. The development profile uses `ddl-auto=create` under the [temporary reviewer-approved exception](docs/architecture-exceptions.md); production retains `validate`. Tests use isolated H2 databases.
 
 This guide defines mandatory engineering rules for the single backend application. The backend serves the web applications, owns the database and cache, and integrates with approved external providers.
 

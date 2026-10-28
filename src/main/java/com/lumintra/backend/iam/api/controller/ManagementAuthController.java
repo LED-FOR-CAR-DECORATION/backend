@@ -28,14 +28,8 @@ import org.springframework.web.bind.annotation.*;
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Google token verification is unavailable", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
 public class ManagementAuthController {
-    private final LoginUseCase login;
     private final GoogleLoginUseCase google;
 
-    @PostMapping("/login")
-    @Operation(summary = "Email login for the management application", description = "Issues a 15-minute access token and a 30-day refresh token. Includes lockout, failed-attempt reset and employee audit events.")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(login.execute(request, true)));
-    }
     @PostMapping("/google")
     @Operation(summary = "Google login for the management application", description = "The email must belong to an existing active Employee account. Unknown accounts are not created.")
     public ResponseEntity<ApiResponse<LoginResponse>> google(@Valid @RequestBody GoogleLoginRequest request) {
