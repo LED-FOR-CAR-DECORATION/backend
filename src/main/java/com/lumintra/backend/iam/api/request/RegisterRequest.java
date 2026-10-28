@@ -8,11 +8,6 @@ import java.util.Objects;
 
 @Schema(description = "Customer registration. Email is trimmed and lowercased; the password is preserved exactly.")
 public record RegisterRequest(
-        @Schema(description = "Full name, 2-100 characters, without control or format characters.", example = "John Doe", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank(message = "Full name is required.")
-        @Size(min = 2, max = 100, message = "Full name must contain 2 to 100 characters.")
-        @Pattern(regexp = "^[^\\p{Cc}\\p{Cf}]+$", message = "Full name contains invalid characters.")
-        String fullName,
         @Schema(description = "A valid, unregistered email address with at most 254 characters.", example = "customer@example.com", format = "email", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank(message = "Email is required.")
         @Email(message = "The email address is invalid.")
@@ -30,7 +25,6 @@ public record RegisterRequest(
         String confirmPassword
 ) {
     public RegisterRequest {
-        fullName = fullName == null ? null : fullName.strip();
         email = email == null ? null : email.strip().toLowerCase(Locale.ROOT);
     }
 

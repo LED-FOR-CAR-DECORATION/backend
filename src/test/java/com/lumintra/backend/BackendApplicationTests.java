@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.url=jdbc:h2:mem:application;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=", "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.hibernate.ddl-auto=validate", "spring.flyway.baseline-on-migrate=false",
+        "spring.jpa.hibernate.ddl-auto=create-drop",
         "app.jwt.secret=test-application-secret-at-least-thirty-two-bytes",
         "google.client.id=", "spring.jpa.show-sql=false"
 })
@@ -34,8 +34,10 @@ class BackendApplicationTests {
                 .andExpect(jsonPath("$.paths['/api/auth/register'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/login'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/refresh'].post").exists())
-                .andExpect(jsonPath("$.paths['/api/management/auth/login'].post").exists())
-                .andExpect(jsonPath("$.components.schemas.RegisterRequest.properties.passwordsMatch").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/auth/verify-email'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/auth/resend-verification'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/management/auth/login']").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.RegisterRequest.properties.fullName").doesNotExist())
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"));
     }
 

@@ -69,6 +69,17 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("DATA_CONFLICT", "The data already exists or is no longer valid. Please check your request.", HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(com.lumintra.backend.shared.exception.iam.EmailVerificationException.class)
+    public ResponseEntity<ErrorResponse> handleEmailVerification(com.lumintra.backend.shared.exception.iam.EmailVerificationException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "EMAIL_NOT_VERIFIED" -> HttpStatus.FORBIDDEN;
+            case "OTP_RATE_LIMITED" -> HttpStatus.TOO_MANY_REQUESTS;
+            case "VERIFICATION_UNAVAILABLE" -> HttpStatus.SERVICE_UNAVAILABLE;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return buildErrorResponse(ex.getCode(), ex.getMessage(), status);
+    }
+
     // IAM
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
