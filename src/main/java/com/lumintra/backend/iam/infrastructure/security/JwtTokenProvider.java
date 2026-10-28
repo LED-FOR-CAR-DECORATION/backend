@@ -28,6 +28,7 @@ public class JwtTokenProvider {
                 throw new IllegalArgumentException("Missing token claims");
             }
             Long.parseLong(claims.getSubject());
+            Long.parseLong(claims.get("sid",String.class));
             return claims;
         } catch (JwtException | IllegalArgumentException ex) {
             throw new AuthFlowException("INVALID_TOKEN", "The token is invalid or expired.", ex);
