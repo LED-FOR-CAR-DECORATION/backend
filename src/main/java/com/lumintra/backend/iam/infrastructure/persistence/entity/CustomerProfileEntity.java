@@ -11,6 +11,16 @@ import java.time.Instant;
 @Getter
 @Setter
 public class CustomerProfileEntity {
+    public static CustomerProfileEntity forAccount(UserAccountEntity account) {
+        return forAccount(account, null);
+    }
+
+    public static CustomerProfileEntity forAccount(UserAccountEntity account, String fullName) {
+        CustomerProfileEntity profile = new CustomerProfileEntity();
+        profile.setAccount(account);
+        profile.setFullName(fullName);
+        return profile;
+    }
     @Id
     private Long accountId;
 

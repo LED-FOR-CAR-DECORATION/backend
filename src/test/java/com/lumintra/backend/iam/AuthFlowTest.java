@@ -39,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @RecordApplicationEvents
 class AuthFlowTest {
     @Configuration @EnableWebMvc @EnableWebSecurity
-    @Import({AuthController.class, ManagementAuthController.class,
+    @Import({AuthController.class, com.lumintra.backend.iam.api.controller.RegistrationVerificationController.class,
             SecurityConfig.class, JwtAuthenticationFilter.class})
     static class WebConfig {
         @Bean GlobalExceptionHandler exceptionHandler() { return new GlobalExceptionHandler(mock(Tracer.class)); }
@@ -51,7 +51,7 @@ class AuthFlowTest {
     @Autowired TokenSessionService sessions;
     @Autowired JwtTokenProvider tokens;
     @Autowired UserAccountRepository accounts;
-    @Autowired AuthSessionRepository sessionRecords;
+    @Autowired RefreshTokenRepository sessionRecords;
     @Autowired CustomerProfileRepository customers;
     @Autowired EmployeeProfileRepository employees;
     @Autowired RoleRepository roles;
@@ -67,8 +67,9 @@ class AuthFlowTest {
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
     }
     UserAccountEntity customer(String email) {
-        register.execute(new RegisterRequest("Test Customer", email, "Secure123!", "Secure123!"));
-        return accounts.findByEmail(email).orElseThrow();
+        var account=UserAccountEntity.registerCustomer(email,encoder.encode("Secure123!"));
+        account.setStatus("ACTIVE"); accounts.saveAndFlush(account);
+        customers.saveAndFlush(CustomerProfileEntity.forAccount(account)); return account;
     }
     UserAccountEntity employee() {
         var account = new UserAccountEntity(); account.setEmail("staff@example.com"); account.setStatus("ACTIVE");
@@ -82,13 +83,11 @@ class AuthFlowTest {
     String loginBody(String email, String password) { return "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"; }
     LoginRequest credentials(String email) { return new LoginRequest(email, "Secure123!"); }
 
-    @Test void publicLoginAndManagementScopeAreEnforced() throws Exception {
+    @Test void sharedEmailLoginAcceptsCustomersAndEmployees() throws Exception {
         customer("customer@example.com"); employee();
         mvc.perform(post("/api/auth/login").contentType("application/json").content(loginBody("customer@example.com", "Secure123!")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.refreshToken").isString());
-        mvc.perform(post("/api/management/auth/login").contentType("application/json").content(loginBody("customer@example.com", "Secure123!")))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("MANAGEMENT_ACCESS_DENIED"));
-        mvc.perform(post("/api/management/auth/login").contentType("application/json").content(loginBody("staff@example.com", "Secure123!")))
+        mvc.perform(post("/api/auth/login").contentType("application/json").content(loginBody("staff@example.com", "Secure123!")))
                 .andExpect(status().isOk());
         assertThat(events.stream(StaffLoginSuccessEvent.class).count()).isEqualTo(1);
     }
@@ -100,23 +99,39 @@ class AuthFlowTest {
         assertThat(Duration.between(access.getIssuedAt().toInstant(), access.getExpiration().toInstant())).isEqualTo(Duration.ofMinutes(15));
         assertThat(Duration.between(refresh.getIssuedAt().toInstant(), refresh.getExpiration().toInstant()).toSeconds()).isBetween(2591999L, 2592000L);
         assertThat(tokens.getAuthentication(pair.getAccessToken()).getAuthorities()).extracting("authority").contains("ROLE_ADMIN");
-        assertThat(sessionRecords.findAll().getFirst().getRefreshHash()).hasSize(64).isNotEqualTo(pair.getRefreshToken());
+        assertThat(sessionRecords.findAll().getFirst().getTokenHash()).hasSize(64).isNotEqualTo(pair.getRefreshToken());
         assertThatThrownBy(() -> tokens.parseAccessToken(pair.getRefreshToken())).isInstanceOf(AuthFlowException.class);
     }
 
+
+
+
+
+
+
+
+
+
+
     @Test void lockoutAfterFiveFailuresResetsAfterExpiryAndAuditsStaff() throws Exception {
         var employee = employee();
-        for (int i = 0; i < 5; i++) mvc.perform(post("/api/management/auth/login").contentType("application/json").content(loginBody(employee.getEmail(), "wrong"))).andExpect(status().isUnauthorized());
+        for (int i = 0; i < 5; i++) mvc.perform(post("/api/auth/login").contentType("application/json").content(loginBody(employee.getEmail(), "wrong"))).andExpect(status().isUnauthorized());
         var locked = accounts.findById(employee.getAccountId()).orElseThrow();
         assertThat(locked.getFailedAttempts()).isEqualTo(5);
         assertThat(locked.getLockoutUntil()).isBetween(Instant.now().plusSeconds(890), Instant.now().plusSeconds(901));
-        mvc.perform(post("/api/management/auth/login").contentType("application/json").content(loginBody(employee.getEmail(), "Secure123!"))).andExpect(status().isLocked());
+        mvc.perform(post("/api/auth/login").contentType("application/json").content(loginBody(employee.getEmail(), "Secure123!"))).andExpect(status().isLocked());
         assertThat(events.stream(StaffAccountLockedEvent.class).count()).isEqualTo(1);
         locked.setLockoutUntil(Instant.now().minusSeconds(1)); accounts.saveAndFlush(locked);
         login.execute(credentials(employee.getEmail()), true);
         var resetAccount = accounts.findById(employee.getAccountId()).orElseThrow();
         assertThat(resetAccount.getFailedAttempts()).isZero(); assertThat(resetAccount.getLockoutUntil()).isNull();
     }
+
+
+
+
+
+
 
     @Test void disabledAccountCannotLogin() throws Exception {
         var account = customer("customer@example.com"); var pair = login.execute(credentials(account.getEmail()));

@@ -2,7 +2,9 @@
 
 ## Authentication implementation
 
-Login/session follow-up: see docs/issues/issue-2.md. Management login is Employee-only. Flyway migrations V1/V2 manage IAM and session tables. Existing IAM databases need an explicit V1 baseline (FLYWAY_BASELINE_ON_MIGRATE=true once); Hibernate now validates instead of recreating tables.
+Email/password login uses only `POST /api/auth/login` for Customers and Employees. Token records map directly to the approved `REFRESH_TOKEN` table; there is no `auth_sessions` table. Development uses Hibernate schema creation under the [temporary reviewer-approved exception](docs/architecture-exceptions.md).
+
+Registration requires OTP email confirmation. See [registration-verification.md](docs/registration-verification.md) and the current [Drive schema reference](docs/schema-reference.md).
 
 This guide defines mandatory engineering rules for the single backend application. The backend serves the web applications, owns the database and cache, and integrates with approved external providers.
 

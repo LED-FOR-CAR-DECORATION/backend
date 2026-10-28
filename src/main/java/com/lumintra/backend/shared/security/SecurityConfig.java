@@ -56,8 +56,7 @@ public class SecurityConfig {
                                 new com.lumintra.backend.shared.exception.iam.AuthFlowException("ACCESS_DENIED", "Access is denied."))))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/auth/register",
-                                "/api/management/auth/login").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/verify-email", "/api/auth/resend-verification").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
