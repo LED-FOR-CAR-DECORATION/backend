@@ -1,6 +1,8 @@
 package com.lumintra.backend.iam.api.controller;
 
+import com.lumintra.backend.iam.api.request.LoginRequest;
 import com.lumintra.backend.iam.api.request.RegisterRequest;
+import com.lumintra.backend.iam.api.response.LoginResponse;
 import com.lumintra.backend.iam.api.response.RegisterResponse;
 import com.lumintra.backend.shared.config.OpenApiConfig;
 import com.lumintra.backend.shared.exception.ErrorResponse;
@@ -118,6 +120,73 @@ class AuthControllerSwaggerTest {
         String[] fields = {"code", "message", "status", "timestamp", "traceId", "details"};
         for (String fieldName : fields) {
             assertThat(ErrorResponse.class.getDeclaredField(fieldName).getAnnotation(Schema.class)).isNotNull();
+        }
+    }
+
+    @Test
+    @DisplayName("login endpoint should have Swagger @Operation and documentation details")
+    void loginEndpointShouldHaveOperationAnnotation() throws NoSuchMethodException {
+        Method loginMethod = AuthController.class.getMethod("login", LoginRequest.class);
+        Operation operation = loginMethod.getAnnotation(Operation.class);
+
+        assertThat(operation).isNotNull();
+        assertThat(operation.summary()).isEqualTo("Authenticate user credentials");
+        assertThat(operation.description()).contains("Authenticates user credentials");
+    }
+
+    @Test
+    @DisplayName("login endpoint should have documented @ApiResponses for 200, 400, 401, 423, and 500")
+    void loginEndpointShouldHaveDocumentedApiResponses() throws NoSuchMethodException {
+        Method loginMethod = AuthController.class.getMethod("login", LoginRequest.class);
+        ApiResponses apiResponses = loginMethod.getAnnotation(ApiResponses.class);
+
+        assertThat(apiResponses).isNotNull();
+        Map<String, io.swagger.v3.oas.annotations.responses.ApiResponse> responseMap =
+                Arrays.stream(apiResponses.value())
+                        .collect(Collectors.toMap(
+                                io.swagger.v3.oas.annotations.responses.ApiResponse::responseCode,
+                                r -> r
+                        ));
+
+        assertThat(responseMap).containsKeys("200", "400", "401", "423", "500");
+        assertThat(responseMap.get("200").description()).contains("successfully");
+        assertThat(responseMap.get("400").description()).contains("Validation failed");
+        assertThat(responseMap.get("401").description()).contains("Unauthorized");
+        assertThat(responseMap.get("423").description()).contains("Locked");
+        assertThat(responseMap.get("500").description()).contains("Internal server error");
+    }
+
+    @Test
+    @DisplayName("LoginRequest record should document fields with @Schema annotations")
+    void loginRequestShouldHaveSchemaAnnotations() throws NoSuchFieldException {
+        Schema classSchema = LoginRequest.class.getAnnotation(Schema.class);
+        assertThat(classSchema).isNotNull();
+
+        String[] fields = {"email", "password"};
+        for (String fieldName : fields) {
+            Schema schema = LoginRequest.class.getDeclaredField(fieldName).getAnnotation(Schema.class);
+            assertThat(schema)
+                    .withFailMessage("Missing @Schema on record field %s", fieldName)
+                    .isNotNull();
+            assertThat(schema.description()).isNotEmpty();
+            assertThat(schema.example()).isNotEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("LoginResponse class should document fields with @Schema annotations")
+    void loginResponseShouldHaveSchemaAnnotations() throws NoSuchFieldException {
+        Schema classSchema = LoginResponse.class.getAnnotation(Schema.class);
+        assertThat(classSchema).isNotNull();
+
+        String[] fields = {"accessToken", "refreshToken", "tokenType", "expiresIn"};
+        for (String fieldName : fields) {
+            Schema fieldSchema = LoginResponse.class.getDeclaredField(fieldName).getAnnotation(Schema.class);
+            assertThat(fieldSchema)
+                    .withFailMessage("Missing @Schema on field %s", fieldName)
+                    .isNotNull();
+            assertThat(fieldSchema.description()).isNotEmpty();
+            assertThat(fieldSchema.example()).isNotEmpty();
         }
     }
 
