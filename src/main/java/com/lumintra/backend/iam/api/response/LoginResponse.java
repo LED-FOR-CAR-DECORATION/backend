@@ -9,5 +9,14 @@ public class LoginResponse {
     private String accessToken;
     private String refreshToken;
     private String tokenType;
-    private long expiresIn; // 900 seconds (15 minutes)
+    private long expiresIn;
+
+    public static LoginResponse of(String accessToken, String refreshToken) {
+        return LoginResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(900) // 15 minutes in seconds
+                .build();
+    }
 }

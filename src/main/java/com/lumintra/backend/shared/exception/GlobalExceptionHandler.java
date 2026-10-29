@@ -1,6 +1,7 @@
 package com.lumintra.backend.shared.exception;
 
 import com.lumintra.backend.shared.exception.iam.AccountLockedException;
+import com.lumintra.backend.shared.exception.iam.EmailAlreadyRegisteredException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import java.time.Instant;
 import java.util.List;
@@ -41,14 +43,36 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("RESOURCE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
-    // General fallback
+    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    public ResponseEntity<ErrorResponse> handleEmailAlreadyRegistered(EmailAlreadyRegisteredException ex) {
+        return buildErrorResponse("EMAIL_ALREADY_REGISTERED", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    // General
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> ErrorResponse.ErrorDetail.builder()
+                        .field(error.getField())
+                        .message(error.getDefaultMessage())
+                        .build())
+                .toList();
+
+        return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST, details);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception exception) {
         log.error("Unexpected system failure occurred", exception);
         return buildErrorResponse("INTERNAL_SERVER_ERROR", "An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    // Helpers
     private ResponseEntity<ErrorResponse> buildErrorResponse(String code, String message, HttpStatus status) {
+        return buildErrorResponse(code, message, status, List.of());
+    }
+
+    private ResponseEntity<ErrorResponse> buildErrorResponse(String code, String message, HttpStatus status, List<ErrorResponse.ErrorDetail> details) {
         String currentTraceId = Optional.ofNullable(tracer.currentSpan())
                 .map(Span::context)
                 .map(TraceContext::traceId)
@@ -60,8 +84,9 @@ public class GlobalExceptionHandler {
                 .status(status.value())
                 .timestamp(Instant.now().toString())
                 .traceId(currentTraceId)
-                .details(List.of())
+                .details(details)
                 .build();
+
         return ResponseEntity.status(status).body(response);
     }
 }

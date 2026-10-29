@@ -1,5 +1,6 @@
 package com.lumintra.backend.iam.infrastructure.persistence.entity;
 
+import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -28,7 +29,9 @@ public class UserAccountEntity {
     @Column(name = "avatar_url")
     private String avatarUrl;
 
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AccountStatus status;
 
     @Column(name = "created_at", updatable = false)
     private Instant createdAt = Instant.now();
@@ -41,4 +44,15 @@ public class UserAccountEntity {
 
     @Column(name = "lockout_until")
     private Instant lockoutUntil;
+
+    public static UserAccountEntity createCustomerAccount(String email, String passwordHash) {
+        UserAccountEntity account = new UserAccountEntity();
+        account.setEmail(email);
+        account.setPasswordHash(passwordHash);
+        account.setAccountType(AccountType.CUSTOMER);
+        account.setStatus(AccountStatus.PENDING_VERIFICATION);
+        account.setCreatedAt(Instant.now());
+        account.setFailedAttempts(0);
+        return account;
+    }
 }

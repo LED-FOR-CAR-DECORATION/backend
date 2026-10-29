@@ -32,4 +32,11 @@ public class CustomerProfileEntity {
 
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    public static CustomerProfileEntity createProfileFor(UserAccountEntity account) {
+        CustomerProfileEntity profile = new CustomerProfileEntity();
+        profile.setAccount(account);
+        profile.setCreatedAt(Instant.now());
+        return profile;
+    }
 }
