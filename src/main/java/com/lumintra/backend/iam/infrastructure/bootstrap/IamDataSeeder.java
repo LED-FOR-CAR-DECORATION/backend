@@ -1,5 +1,6 @@
 package com.lumintra.backend.iam.infrastructure.bootstrap;
 
+import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.*;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.*;
@@ -135,7 +136,7 @@ public class IamDataSeeder implements ApplicationRunner {
             account.setEmail(adminEmail);
             account.setPasswordHash(passwordEncoder.encode(adminPassword));
             account.setAccountType(AccountType.EMPLOYEE);
-            account.setStatus("ACTIVE");
+            account.setStatus(AccountStatus.ACTIVE);
             account.setCreatedAt(Instant.now());
             UserAccountEntity savedAccount = userAccountRepository.save(account);
 
@@ -170,7 +171,7 @@ public class IamDataSeeder implements ApplicationRunner {
             account.setEmail(email);
             account.setPasswordHash(passwordEncoder.encode(password));
             account.setAccountType(AccountType.EMPLOYEE);
-            account.setStatus("ACTIVE");
+            account.setStatus(AccountStatus.ACTIVE);
             account.setCreatedAt(Instant.now());
             UserAccountEntity savedAccount = userAccountRepository.save(account);
 
@@ -194,7 +195,7 @@ public class IamDataSeeder implements ApplicationRunner {
             account.setEmail(email);
             account.setPasswordHash(passwordEncoder.encode(password));
             account.setAccountType(AccountType.CUSTOMER);
-            account.setStatus("ACTIVE");
+            account.setStatus(AccountStatus.ACTIVE);
             account.setCreatedAt(Instant.now());
             UserAccountEntity savedAccount = userAccountRepository.save(account);
 
@@ -263,7 +264,7 @@ public class IamDataSeeder implements ApplicationRunner {
                 new PermissionDef("READ_ASSIGNED_COMMISSION", "View requirements and briefs for assigned commission tickets.", Set.of("DESIGNER")),
                 new PermissionDef("PROCESS_ASSIGNED_COMMISSION", "Process assigned tickets: input time estimates and upload artwork drafts.", Set.of("DESIGNER")),
                 new PermissionDef("MANAGE_COMMISSION_PRICING", "Configure base commission pricing rules and selectable options.", Set.of("MANAGER")),
-                new PermissionDef("FORCE_RESOLVE_COMMISSION", "Override commission states, authorize manual refunds, or force-reassign disputed tickets.", Set.of("ADMIN", "MANAGER"))
+                new PermissionDef("FORCE_RESOLVE_COMMISSION", "Override commission states, authorize manual refunds, or force-reassign disputed tickets.", Set.of("ADMIN", "MANAGER")),
 
                 // 6. Dashboard, Analytics & System Monitoring
                 new PermissionDef("READ_DASHBOARD", "View operational KPIs, revenue charts, and daily summaries.", Set.of("ADMIN", "MANAGER")),

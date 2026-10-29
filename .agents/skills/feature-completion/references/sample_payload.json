@@ -1,0 +1,142 @@
+{
+  "featureSlug": "customer-registration",
+  "projectName": "LED For Car Decoration System (Lumintra)",
+  "projectCode": "LUMINTRA",
+  "creator": "Lumintra Backend Team",
+  "reviewer": "QA / Tech Lead",
+  "issueDate": "2026-10-29",
+  "version": "1.0",
+  "notes": "IAM Module - Customer Registration Endpoint (/api/auth/register)",
+  "testEnvironment": "1. Java 21 + Spring Boot 4.1.1\n2. JUnit 5 + Mockito + AssertJ\n3. PostgreSQL / Redis (Mocked for Unit Tests)",
+  "functions": [
+    {
+      "requirementName": "Register Customer Account",
+      "className": "RegisterAccountUseCase",
+      "functionName": "execute",
+      "functionCode": "FN_REG_01",
+      "sheetName": "RegisterAccount",
+      "description": "Register a new customer account, create customer profile, generate verification OTP, and publish CustomerRegisteredEvent",
+      "preConditionSummary": "UserAccountRepository, CustomerProfileRepository, PasswordEncoder, OtpService, ApplicationEventPublisher initialized",
+      "createdBy": "Backend Developer",
+      "executedBy": "Backend Developer",
+      "loc": 62,
+      "testRequirement": "Verify customer registration normal flow, email normalization (trim/lowercase), boundary lengths, and duplicate email rejection.",
+      "preconditions": [
+        "Email is not registered in UserAccountRepository",
+        "Email already exists in UserAccountRepository"
+      ],
+      "inputs": [
+        {
+          "name": "email",
+          "values": [
+            "\"customer@example.com\"",
+            "\"  Customer@Example.com  \"",
+            "\"a@b.co\" (min boundary)",
+            "\"existing@example.com\""
+          ]
+        },
+        {
+          "name": "password",
+          "values": [
+            "\"P@ssword123\"",
+            "\"Aa1@abcd\" (8 chars min boundary)",
+            "\"Aa1@\" + 68 chars (72 chars max boundary)"
+          ]
+        },
+        {
+          "name": "confirmPassword",
+          "values": [
+            "Matches password"
+          ]
+        }
+      ],
+      "returns": [
+        "RegisterResponse (status=PENDING_VERIFICATION, accountType=CUSTOMER)"
+      ],
+      "exceptions": [
+        "EmailAlreadyRegisteredException"
+      ],
+      "logs": [
+        "Customer registered successfully (Pending Verification)",
+        "Registration rejected: Email already exists"
+      ],
+      "testCases": [
+        {
+          "id": "UTCID01",
+          "preconditions": ["Email is not registered in UserAccountRepository"],
+          "inputs": {
+            "email": "\"customer@example.com\"",
+            "password": "\"P@ssword123\"",
+            "confirmPassword": "Matches password"
+          },
+          "returns": ["RegisterResponse (status=PENDING_VERIFICATION, accountType=CUSTOMER)"],
+          "exceptions": [],
+          "logs": ["Customer registered successfully (Pending Verification)"],
+          "type": "N",
+          "status": "P",
+          "executedDate": "10/29"
+        },
+        {
+          "id": "UTCID02",
+          "preconditions": ["Email is not registered in UserAccountRepository"],
+          "inputs": {
+            "email": "\"  Customer@Example.com  \"",
+            "password": "\"P@ssword123\"",
+            "confirmPassword": "Matches password"
+          },
+          "returns": ["RegisterResponse (status=PENDING_VERIFICATION, accountType=CUSTOMER)"],
+          "exceptions": [],
+          "logs": ["Customer registered successfully (Pending Verification)"],
+          "type": "N",
+          "status": "P",
+          "executedDate": "10/29"
+        },
+        {
+          "id": "UTCID03",
+          "preconditions": ["Email is not registered in UserAccountRepository"],
+          "inputs": {
+            "email": "\"a@b.co\" (min boundary)",
+            "password": "\"Aa1@abcd\" (8 chars min boundary)",
+            "confirmPassword": "Matches password"
+          },
+          "returns": ["RegisterResponse (status=PENDING_VERIFICATION, accountType=CUSTOMER)"],
+          "exceptions": [],
+          "logs": ["Customer registered successfully (Pending Verification)"],
+          "type": "B",
+          "status": "P",
+          "executedDate": "10/29"
+        },
+        {
+          "id": "UTCID04",
+          "preconditions": ["Email is not registered in UserAccountRepository"],
+          "inputs": {
+            "email": "\"customer@example.com\"",
+            "password": "\"Aa1@\" + 68 chars (72 chars max boundary)",
+            "confirmPassword": "Matches password"
+          },
+          "returns": ["RegisterResponse (status=PENDING_VERIFICATION, accountType=CUSTOMER)"],
+          "exceptions": [],
+          "logs": ["Customer registered successfully (Pending Verification)"],
+          "type": "B",
+          "status": "P",
+          "executedDate": "10/29"
+        },
+        {
+          "id": "UTCID05",
+          "preconditions": ["Email already exists in UserAccountRepository"],
+          "inputs": {
+            "email": "\"existing@example.com\"",
+            "password": "\"P@ssword123\"",
+            "confirmPassword": "Matches password"
+          },
+          "returns": [],
+          "exceptions": ["EmailAlreadyRegisteredException"],
+          "logs": ["Registration rejected: Email already exists"],
+          "type": "A",
+          "status": "P",
+          "executedDate": "10/29"
+        }
+      ]
+    }
+  ]
+}
