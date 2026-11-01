@@ -27,6 +27,36 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final Tracer tracer;
 
+    @ExceptionHandler({org.springframework.web.bind.MissingServletRequestParameterException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ErrorResponse> handleMissingParameter(Exception ex) {
+        return buildErrorResponse("INVALID_REQUEST", "Required request parameters are missing or invalid.", HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(com.lumintra.backend.firmware.domain.model.FirmwareException.class)
+    public ResponseEntity<ErrorResponse> handleFirmware(com.lumintra.backend.firmware.domain.model.FirmwareException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "FIRMWARE_FORBIDDEN", "FIRMWARE_SESSION_INVALID" -> HttpStatus.FORBIDDEN;
+            case "FIRMWARE_NOT_FOUND", "FIRMWARE_DEVICE_NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FIRMWARE_CONFLICT", "FIRMWARE_REVOKED", "FIRMWARE_UNAVAILABLE" -> HttpStatus.CONFLICT;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return buildErrorResponse(ex.getCode(), ex.getMessage(), status);
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        return buildErrorResponse("ACCESS_DENIED", "Access is denied.", HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadSize(org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return buildErrorResponse("FILE_TOO_LARGE", "The uploaded file exceeds the allowed size.", HttpStatus.PAYLOAD_TOO_LARGE);
+    }
+
+
+
     // IAM
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {

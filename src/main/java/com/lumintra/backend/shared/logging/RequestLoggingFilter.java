@@ -23,7 +23,8 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
         long startTime = System.currentTimeMillis();
 
-        log.info("HTTP request started [method={}] [path={}]", request.getMethod(), request.getRequestURI());
+        String path = request.getRequestURI().replaceAll("/firmware/downloads/[^/]+", "/firmware/downloads/[redacted]");
+        log.info("HTTP request started [method={}] [path={}]", request.getMethod(), path);
 
         try {
             filterChain.doFilter(request, response);
