@@ -7,7 +7,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,10 +27,9 @@ class JwtTokenProviderTest {
     void createAccessToken_validClaims() {
         Long accountId = 42L;
         String email = "worker@lumintra.com";
-        List<String> roles = List.of("EMPLOYEE", "TECHNICIAN");
-        Set<String> permissions = Set.of("ORDER_READ", "ORDER_UPDATE");
+        List<String> roles = List.of("ROLE_EMPLOYEE", "ROLE_TECHNICIAN");
 
-        String token = jwtTokenProvider.createAccessToken(accountId, email, roles, permissions);
+        String token = jwtTokenProvider.createAccessToken(accountId, email, roles);
 
         assertThat(token).isNotBlank();
         assertThat(jwtTokenProvider.validateToken(token)).isTrue();
@@ -51,7 +49,7 @@ class JwtTokenProviderTest {
     @Test
     @DisplayName("UTCID03 [N]: validateToken returns true for valid access token")
     void validateToken_validToken_returnsTrue() {
-        String token = jwtTokenProvider.createAccessToken(1L, "user@test.com", List.of("CUSTOMER"), Set.of());
+        String token = jwtTokenProvider.createAccessToken(1L, "user@test.com", List.of("ROLE_CUSTOMER"));
 
         assertThat(jwtTokenProvider.validateToken(token)).isTrue();
     }
@@ -68,20 +66,19 @@ class JwtTokenProviderTest {
     @DisplayName("UTCID05 [A]: validateToken returns false for token signed with a different key")
     void validateToken_differentSecretKey_returnsFalse() {
         JwtTokenProvider otherProvider = new JwtTokenProvider(OTHER_SECRET);
-        String tokenFromOther = otherProvider.createAccessToken(1L, "user@test.com", List.of("CUSTOMER"), Set.of());
+        String tokenFromOther = otherProvider.createAccessToken(1L, "user@test.com", List.of("ROLE_CUSTOMER"));
 
         assertThat(jwtTokenProvider.validateToken(tokenFromOther)).isFalse();
     }
 
     @Test
-    @DisplayName("UTCID06 [N]: getAuthentication returns Authentication with subject and authorities from permissions")
-    void getAuthentication_validPermissions_returnsAuthentication() {
+    @DisplayName("UTCID06 [N]: getAuthentication returns Authentication with subject and authorities from roles")
+    void getAuthentication_validRoles_returnsAuthentication() {
         Long accountId = 10L;
         String email = "admin@lumintra.com";
-        List<String> roles = List.of("ADMIN");
-        Set<String> permissions = Set.of("USER_MANAGE", "ROLE_ASSIGN");
+        List<String> roles = List.of("ROLE_ADMIN", "ROLE_STAFF");
 
-        String token = jwtTokenProvider.createAccessToken(accountId, email, roles, permissions);
+        String token = jwtTokenProvider.createAccessToken(accountId, email, roles);
         Authentication authentication = jwtTokenProvider.getAuthentication(token);
 
         assertThat(authentication).isNotNull();
@@ -89,18 +86,17 @@ class JwtTokenProviderTest {
         List<String> granted = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .toList();
-        assertThat(granted).containsExactlyInAnyOrder("USER_MANAGE", "ROLE_ASSIGN");
+        assertThat(granted).containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_STAFF");
     }
 
     @Test
-    @DisplayName("UTCID07 [B]: getAuthentication returns Authentication with empty authorities when permissions is empty")
-    void getAuthentication_emptyPermissions_returnsEmptyAuthorities() {
+    @DisplayName("UTCID07 [B]: getAuthentication returns Authentication with empty authorities when roles is empty")
+    void getAuthentication_emptyRoles_returnsEmptyAuthorities() {
         Long accountId = 11L;
         String email = "customer@lumintra.com";
-        List<String> roles = List.of("CUSTOMER");
-        Set<String> permissions = Set.of();
+        List<String> roles = List.of();
 
-        String token = jwtTokenProvider.createAccessToken(accountId, email, roles, permissions);
+        String token = jwtTokenProvider.createAccessToken(accountId, email, roles);
         Authentication authentication = jwtTokenProvider.getAuthentication(token);
 
         assertThat(authentication).isNotNull();

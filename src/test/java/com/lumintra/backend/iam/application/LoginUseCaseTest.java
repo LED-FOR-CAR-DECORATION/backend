@@ -6,11 +6,10 @@ import com.lumintra.backend.iam.domain.event.StaffAccountLockedEvent;
 import com.lumintra.backend.iam.domain.event.StaffLoginSuccessEvent;
 import com.lumintra.backend.iam.domain.model.AccountType;
 import com.lumintra.backend.iam.domain.service.LoginAttemptService;
-import com.lumintra.backend.iam.infrastructure.persistence.entity.EmployeeProfileEntity;
-import com.lumintra.backend.iam.infrastructure.persistence.entity.PermissionEntity;
+import com.lumintra.backend.iam.infrastructure.persistence.entity.EmployeeEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.RoleEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.UserAccountEntity;
-import com.lumintra.backend.iam.infrastructure.persistence.repository.EmployeeProfileRepository;
+import com.lumintra.backend.iam.infrastructure.persistence.repository.EmployeeRepository;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.iam.AccountLockedException;
@@ -49,7 +48,7 @@ class LoginUseCaseTest {
     private UserAccountRepository userAccountRepository;
 
     @Mock
-    private EmployeeProfileRepository employeeProfileRepository;
+    private EmployeeRepository employeeRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -87,7 +86,7 @@ class LoginUseCaseTest {
         when(loginAttemptService.isAccountLocked("customer@example.com")).thenReturn(false);
         when(userAccountRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
         when(passwordEncoder.matches("P@ssword123", "$2a$10$hashedPassword")).thenReturn(true);
-        when(tokenProvider.createAccessToken(101L, "customer@example.com", List.of("ROLE_CUSTOMER"), Set.of()))
+        when(tokenProvider.createAccessToken(101L, "customer@example.com", List.of("ROLE_CUSTOMER")))
                 .thenReturn("access-token-customer");
         when(tokenProvider.createRefreshToken(101L)).thenReturn("refresh-token-customer");
 
@@ -104,7 +103,7 @@ class LoginUseCaseTest {
     }
 
     @Test
-    @DisplayName("UTCID02 [N]: Employee login succeeds with RBAC permissions and publishes StaffLoginSuccessEvent")
+    @DisplayName("UTCID02 [N]: Employee login succeeds with role and publishes StaffLoginSuccessEvent")
     void login_employeeSuccess() {
         LoginRequest request = new LoginRequest("admin@lumintra.com", "P@ssword123");
 
@@ -116,19 +115,16 @@ class LoginUseCaseTest {
 
         RoleEntity role = new RoleEntity();
         role.setRoleName("ADMIN");
-        PermissionEntity perm = new PermissionEntity();
-        perm.setPermissionName("USER_READ");
-        role.setPermissions(Set.of(perm));
 
-        EmployeeProfileEntity employeeProfile = new EmployeeProfileEntity();
-        employeeProfile.setAccount(employeeAccount);
-        employeeProfile.setRole(role);
+        EmployeeEntity employee = new EmployeeEntity();
+        employee.setAccount(employeeAccount);
+        employee.setRole(role);
 
         when(loginAttemptService.isAccountLocked("admin@lumintra.com")).thenReturn(false);
         when(userAccountRepository.findByEmail("admin@lumintra.com")).thenReturn(Optional.of(employeeAccount));
         when(passwordEncoder.matches("P@ssword123", "$2a$10$hashedPassword")).thenReturn(true);
-        when(employeeProfileRepository.findByAccount_AccountId(201L)).thenReturn(Optional.of(employeeProfile));
-        when(tokenProvider.createAccessToken(eq(201L), eq("admin@lumintra.com"), eq(List.of("ROLE_ADMIN")), eq(Set.of("USER_READ"))))
+        when(employeeRepository.findByAccount_AccountId(201L)).thenReturn(Optional.of(employee));
+        when(tokenProvider.createAccessToken(eq(201L), eq("admin@lumintra.com"), eq(List.of("ROLE_ADMIN"))))
                 .thenReturn("access-token-admin");
         when(tokenProvider.createRefreshToken(201L)).thenReturn("refresh-token-admin");
 
@@ -211,15 +207,15 @@ class LoginUseCaseTest {
 
         RoleEntity role = new RoleEntity();
         role.setRoleName("SUPPORT");
-        EmployeeProfileEntity profile = new EmployeeProfileEntity();
-        profile.setAccount(employeeAccount);
-        profile.setRole(role);
+        EmployeeEntity employee = new EmployeeEntity();
+        employee.setAccount(employeeAccount);
+        employee.setRole(role);
 
         when(loginAttemptService.isAccountLocked("staff@lumintra.com")).thenReturn(false);
         when(userAccountRepository.findByEmail("staff@lumintra.com")).thenReturn(Optional.of(employeeAccount));
         when(passwordEncoder.matches("WrongPassword", "$2a$10$hashedPassword")).thenReturn(false);
         when(loginAttemptService.registerFailedAttempt("staff@lumintra.com")).thenReturn(5);
-        when(employeeProfileRepository.findByAccount_AccountId(202L)).thenReturn(Optional.of(profile));
+        when(employeeRepository.findByAccount_AccountId(202L)).thenReturn(Optional.of(employee));
 
         assertThatThrownBy(() -> loginUseCase.execute(request))
                 .isInstanceOf(InvalidCredentialsException.class)
