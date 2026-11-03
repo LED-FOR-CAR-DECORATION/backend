@@ -2,6 +2,7 @@ package com.lumintra.backend.shared.exception;
 
 import com.lumintra.backend.shared.exception.iam.AccountLockedException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
+import com.lumintra.backend.shared.exception.store.ProductException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -10,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -25,7 +28,38 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final Tracer tracer;
 
-    // IAM
+    // Product exceptions
+    @ExceptionHandler(ProductException.class)
+    public ResponseEntity<ErrorResponse> handleProductException(ProductException ex) {
+        return buildErrorResponse(ex.getCode(), ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    // Validation exceptions
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+        List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> ErrorResponse.ErrorDetail.builder()
+                        .field(error.getField())
+                        .message(error.getDefaultMessage())
+                        .build())
+                .toList();
+
+        return buildErrorResponse("VALIDATION_FAILED", "The request contains invalid fields.", HttpStatus.BAD_REQUEST, details);
+    }
+
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ErrorResponse> handleBindException(BindException ex) {
+        List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> ErrorResponse.ErrorDetail.builder()
+                        .field(error.getField())
+                        .message(error.getDefaultMessage())
+                        .build())
+                .toList();
+
+        return buildErrorResponse("VALIDATION_FAILED", "The request contains invalid fields.", HttpStatus.BAD_REQUEST, details);
+    }
+
+    // IAM exceptions
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
         return buildErrorResponse("INVALID_CREDENTIALS", ex.getMessage(), HttpStatus.UNAUTHORIZED);
@@ -49,6 +83,10 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ErrorResponse> buildErrorResponse(String code, String message, HttpStatus status) {
+        return buildErrorResponse(code, message, status, List.of());
+    }
+
+    private ResponseEntity<ErrorResponse> buildErrorResponse(String code, String message, HttpStatus status, List<ErrorResponse.ErrorDetail> details) {
         String currentTraceId = Optional.ofNullable(tracer.currentSpan())
                 .map(Span::context)
                 .map(TraceContext::traceId)
@@ -60,7 +98,7 @@ public class GlobalExceptionHandler {
                 .status(status.value())
                 .timestamp(Instant.now().toString())
                 .traceId(currentTraceId)
-                .details(List.of())
+                .details(details)
                 .build();
         return ResponseEntity.status(status).body(response);
     }
