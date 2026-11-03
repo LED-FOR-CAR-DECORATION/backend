@@ -6,10 +6,10 @@ import lombok.Setter;
 import java.time.Instant;
 
 @Entity
-@Table(name = "employee_profile")
+@Table(name = "employee")
 @Getter
 @Setter
-public class EmployeeProfileEntity {
+public class EmployeeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long employeeId;

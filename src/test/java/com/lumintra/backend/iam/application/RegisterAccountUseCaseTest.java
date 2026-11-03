@@ -7,9 +7,9 @@ import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
 import com.lumintra.backend.iam.domain.model.OtpPurpose;
 import com.lumintra.backend.iam.domain.service.OtpService;
-import com.lumintra.backend.iam.infrastructure.persistence.entity.CustomerProfileEntity;
+import com.lumintra.backend.iam.infrastructure.persistence.entity.CustomerEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.UserAccountEntity;
-import com.lumintra.backend.iam.infrastructure.persistence.repository.CustomerProfileRepository;
+import com.lumintra.backend.iam.infrastructure.persistence.repository.CustomerRepository;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository;
 import com.lumintra.backend.shared.exception.iam.EmailAlreadyRegisteredException;
 import jakarta.validation.ConstraintViolation;
@@ -44,7 +44,7 @@ class RegisterAccountUseCaseTest {
     private UserAccountRepository userAccountRepository;
 
     @Mock
-    private CustomerProfileRepository customerProfileRepository;
+    private CustomerRepository customerRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -92,8 +92,8 @@ class RegisterAccountUseCaseTest {
         assertThat(response.getAccountType()).isEqualTo(AccountType.CUSTOMER.name());
         assertThat(response.getStatus()).isEqualTo(AccountStatus.PENDING_VERIFICATION.name());
 
-        ArgumentCaptor<CustomerProfileEntity> profileCaptor = ArgumentCaptor.forClass(CustomerProfileEntity.class);
-        verify(customerProfileRepository).save(profileCaptor.capture());
+        ArgumentCaptor<CustomerEntity> profileCaptor = ArgumentCaptor.forClass(CustomerEntity.class);
+        verify(customerRepository).save(profileCaptor.capture());
         assertThat(profileCaptor.getValue().getAccount().getAccountId()).isEqualTo(101L);
 
         ArgumentCaptor<CustomerRegisteredEvent> eventCaptor = ArgumentCaptor.forClass(CustomerRegisteredEvent.class);
@@ -204,7 +204,7 @@ class RegisterAccountUseCaseTest {
                 .hasMessage("Email is already registered");
 
         verify(userAccountRepository, never()).save(any());
-        verify(customerProfileRepository, never()).save(any());
+        verify(customerRepository, never()).save(any());
         verify(otpService, never()).generateAndStoreOtp(any(), any());
         verify(eventPublisher, never()).publishEvent(any());
     }
