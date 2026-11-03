@@ -1,6 +1,7 @@
 package com.lumintra.backend.shared.exception;
 
 import com.lumintra.backend.shared.exception.iam.AccountLockedException;
+import com.lumintra.backend.shared.exception.iam.EmailAlreadyRegisteredException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.exception.store.ProductException;
 import io.micrometer.tracing.Span;
@@ -75,13 +76,18 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("RESOURCE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
-    // General fallback
+    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    public ResponseEntity<ErrorResponse> handleEmailAlreadyRegistered(EmailAlreadyRegisteredException ex) {
+        return buildErrorResponse("EMAIL_ALREADY_REGISTERED", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception exception) {
         log.error("Unexpected system failure occurred", exception);
         return buildErrorResponse("INTERNAL_SERVER_ERROR", "An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    // Helpers
     private ResponseEntity<ErrorResponse> buildErrorResponse(String code, String message, HttpStatus status) {
         return buildErrorResponse(code, message, status, List.of());
     }
@@ -100,6 +106,7 @@ public class GlobalExceptionHandler {
                 .traceId(currentTraceId)
                 .details(details)
                 .build();
+
         return ResponseEntity.status(status).body(response);
     }
 }

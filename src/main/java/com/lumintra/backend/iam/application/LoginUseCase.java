@@ -81,12 +81,7 @@ public class LoginUseCase {
 
         log.info("User login successful [accountId={}] [accountType={}]", account.getAccountId(), account.getAccountType());
 
-        return LoginResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .tokenType("Bearer")
-                .expiresIn(900)
-                .build();
+        return LoginResponse.of(accessToken, refreshToken);
     }
 
     private void handleFailedLogin(String email, UserAccountEntity account) {

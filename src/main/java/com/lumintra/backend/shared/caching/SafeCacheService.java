@@ -61,6 +61,18 @@ public class SafeCacheService {
         }
     }
 
+    public String get(String key) {
+        checkCircuit();
+        try {
+            Object value = redisTemplate.opsForValue().get(key);
+            log.debug("Cache get [key={}] [hit={}]", key, value != null);
+            return value != null ? value.toString() : null;
+        } catch (RuntimeException ex) {
+            handleFailure(ex, "get");
+            return null; // Unreachable
+        }
+    }
+
     public int increment(String key, Duration ttlIfNew) {
         checkCircuit();
         try {

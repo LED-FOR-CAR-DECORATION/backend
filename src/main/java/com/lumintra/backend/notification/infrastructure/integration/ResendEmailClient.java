@@ -24,35 +24,28 @@ public class ResendEmailClient implements EmailProvider {
         this.resendClient = new Resend(apiKey);
         this.fromEmail = fromEmail;
     }
-// EXAMPLE IMPLEMENTATION
-//    @Override
-//    public void sendWelcomeEmail(String emailAddress, String fullName) {
-//        CreateEmailOptions params = CreateEmailOptions.builder()
-//                .from(fromEmail)
-//                .to(emailAddress)
-//                .subject("Welcome to our platform!")
-//                .html("<p>Hi " + fullName + ", welcome aboard!</p>")
-//                .build();
-//
-//        try {
-//            long start = System.currentTimeMillis();
-//            CreateEmailResponse response = resendClient.emails().send(params);
-//            long duration = System.currentTimeMillis() - start;
-//
-//            // Rule 10.1: Static human-readable prefix + structured [key=value] metadata
-//            log.info("Email sent successfully [emailAddress={}] [resendId={}] [duration={}ms]",
-//                    emailAddress, response.getId(), duration);
-//
-//        } catch (ResendException exception) {
-//            // Rule 10.3: Log failure with exception object to preserve the stack trace for debugging
-//            // Rule 10.4: Do not log authorization headers, credentials, or full payloads
-//            log.error("Resend provider failed [emailAddress={}]", emailAddress, exception);
-//
-//            // Rule 6.1 & 6.3: Translate the provider exception to a typed domain exception and preserve original cause
-//            throw new ExternalProviderUnavailableException(
-//                    "Email provider is temporarily unavailable",
-//                    exception
-//            );
-//        }
-//    }
+
+    @Override
+    public void sendOtpEmail(String emailAddress, String fullName, String otp) {
+        String displayName = (fullName != null && !fullName.isBlank()) ? fullName : "Customer";
+
+        CreateEmailOptions params = CreateEmailOptions.builder()
+                .from(fromEmail)
+                .to(emailAddress)
+                .subject("Verify your Lumintra account")
+                .html("<p>Hi " + displayName + ",</p><p>Your verification code is: <strong>" + otp + "</strong></p><p>This code expires in 15 minutes.</p>")
+                .build();
+
+        try {
+            long start = System.currentTimeMillis();
+            CreateEmailResponse response = resendClient.emails().send(params);
+            long duration = System.currentTimeMillis() - start;
+
+            log.info("OTP Email sent successfully [emailAddress={}] [resendId={}] [duration={}ms]",
+                    emailAddress, response.getId(), duration);
+        } catch (ResendException exception) {
+            log.error("Resend provider failed [emailAddress={}]", emailAddress, exception);
+            throw new ExternalProviderUnavailableException("Email provider is temporarily unavailable");
+        }
+    }
 }

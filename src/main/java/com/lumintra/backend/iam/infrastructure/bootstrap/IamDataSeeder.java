@@ -1,5 +1,6 @@
 package com.lumintra.backend.iam.infrastructure.bootstrap;
 
+import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.*;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.*;
@@ -135,7 +136,7 @@ public class IamDataSeeder implements ApplicationRunner {
             account.setEmail(adminEmail);
             account.setPasswordHash(passwordEncoder.encode(adminPassword));
             account.setAccountType(AccountType.EMPLOYEE);
-            account.setStatus("ACTIVE");
+            account.setStatus(AccountStatus.ACTIVE);
             account.setCreatedAt(Instant.now());
             UserAccountEntity savedAccount = userAccountRepository.save(account);
 
@@ -170,7 +171,7 @@ public class IamDataSeeder implements ApplicationRunner {
             account.setEmail(email);
             account.setPasswordHash(passwordEncoder.encode(password));
             account.setAccountType(AccountType.EMPLOYEE);
-            account.setStatus("ACTIVE");
+            account.setStatus(AccountStatus.ACTIVE);
             account.setCreatedAt(Instant.now());
             UserAccountEntity savedAccount = userAccountRepository.save(account);
 
@@ -194,7 +195,7 @@ public class IamDataSeeder implements ApplicationRunner {
             account.setEmail(email);
             account.setPasswordHash(passwordEncoder.encode(password));
             account.setAccountType(AccountType.CUSTOMER);
-            account.setStatus("ACTIVE");
+            account.setStatus(AccountStatus.ACTIVE);
             account.setCreatedAt(Instant.now());
             UserAccountEntity savedAccount = userAccountRepository.save(account);
 
