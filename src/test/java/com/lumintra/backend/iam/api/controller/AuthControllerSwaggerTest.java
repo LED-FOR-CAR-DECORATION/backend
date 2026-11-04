@@ -2,6 +2,7 @@ package com.lumintra.backend.iam.api.controller;
 
 import com.lumintra.backend.iam.api.request.LoginRequest;
 import com.lumintra.backend.iam.api.request.GoogleLoginRequest;
+import com.lumintra.backend.iam.api.request.RefreshTokenRequest;
 import com.lumintra.backend.iam.api.request.RegisterRequest;
 import com.lumintra.backend.iam.api.request.ResendVerificationRequest;
 import com.lumintra.backend.iam.api.request.VerifyEmailRequest;
@@ -339,6 +340,49 @@ class AuthControllerSwaggerTest {
         assertThat(classSchema).isNotNull();
 
         Schema schema = GoogleLoginRequest.class.getDeclaredField("idToken").getAnnotation(Schema.class);
+        assertThat(schema).isNotNull();
+        assertThat(schema.description()).isNotEmpty();
+        assertThat(schema.example()).isNotEmpty();
+    }
+    @Test
+    @DisplayName("refreshToken endpoint should have Swagger @Operation and documentation details")
+    void refreshTokenEndpointShouldHaveOperationAnnotation() throws NoSuchMethodException {
+        Method refreshMethod = AuthController.class.getMethod("refreshToken", RefreshTokenRequest.class);
+        Operation operation = refreshMethod.getAnnotation(Operation.class);
+
+        assertThat(operation).isNotNull();
+        assertThat(operation.summary()).isEqualTo("Refresh access and refresh JWT tokens");
+        assertThat(operation.description()).contains("Validates the provided refresh token");
+    }
+
+    @Test
+    @DisplayName("refreshToken endpoint should have documented @ApiResponses for 200, 400, 401, and 500")
+    void refreshTokenEndpointShouldHaveDocumentedApiResponses() throws NoSuchMethodException {
+        Method refreshMethod = AuthController.class.getMethod("refreshToken", RefreshTokenRequest.class);
+        ApiResponses apiResponses = refreshMethod.getAnnotation(ApiResponses.class);
+
+        assertThat(apiResponses).isNotNull();
+        Map<String, io.swagger.v3.oas.annotations.responses.ApiResponse> responseMap =
+                Arrays.stream(apiResponses.value())
+                        .collect(Collectors.toMap(
+                                io.swagger.v3.oas.annotations.responses.ApiResponse::responseCode,
+                                r -> r
+                        ));
+
+        assertThat(responseMap).containsKeys("200", "400", "401", "500");
+        assertThat(responseMap.get("200").description()).contains("Tokens renewed successfully");
+        assertThat(responseMap.get("400").description()).contains("Validation failed");
+        assertThat(responseMap.get("401").description()).contains("Unauthorized");
+        assertThat(responseMap.get("500").description()).contains("Internal server error");
+    }
+
+    @Test
+    @DisplayName("RefreshTokenRequest record should document fields with @Schema annotations")
+    void refreshTokenRequestShouldHaveSchemaAnnotations() throws NoSuchFieldException {
+        Schema classSchema = RefreshTokenRequest.class.getAnnotation(Schema.class);
+        assertThat(classSchema).isNotNull();
+
+        Schema schema = RefreshTokenRequest.class.getDeclaredField("refreshToken").getAnnotation(Schema.class);
         assertThat(schema).isNotNull();
         assertThat(schema.description()).isNotEmpty();
         assertThat(schema.example()).isNotEmpty();
