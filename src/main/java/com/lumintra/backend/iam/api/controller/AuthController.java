@@ -224,6 +224,145 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
+    @Operation(
+            summary = "Verify customer email with OTP",
+            description = "Validates the 6-digit OTP code sent to customer's email during registration. Upon successful validation, transitions customer account status from PENDING_VERIFICATION to ACTIVE."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Email verified successfully; account is now ACTIVE",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Success",
+                                    value = """
+                                            {
+                                              "data": "Email verified successfully"
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Validation failed: request payload contains invalid fields, invalid/expired OTP, or account already verified",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "Validation Error",
+                                            value = """
+                                                    {
+                                                      "code": "VALIDATION_FAILED",
+                                                      "message": "Invalid request payload",
+                                                      "status": 400,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": [
+                                                        {
+                                                          "field": "otp",
+                                                          "message": "OTP must be exactly 6 digits"
+                                                        }
+                                                      ]
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "Invalid OTP",
+                                            value = """
+                                                    {
+                                                      "code": "INVALID_OTP",
+                                                      "message": "Invalid or expired OTP.",
+                                                      "status": 400,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "Account Already Verified",
+                                            value = """
+                                                    {
+                                                      "code": "ACCOUNT_ALREADY_VERIFIED",
+                                                      "message": "Account is already verified",
+                                                      "status": 400,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "User account not found for provided email",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "User Not Found",
+                                    value = """
+                                            {
+                                              "code": "USER_NOT_FOUND",
+                                              "message": "Account not found",
+                                              "status": 404,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "429",
+                    description = "Too many failed OTP attempts: maximum retry threshold exceeded",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Max Attempts Reached",
+                                    value = """
+                                            {
+                                              "code": "MAX_OTP_ATTEMPTS_REACHED",
+                                              "message": "Maximum OTP attempts reached. Please request a new code.",
+                                              "status": 429,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error: Unexpected system failure",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Internal Error",
+                                    value = """
+                                            {
+                                              "code": "INTERNAL_SERVER_ERROR",
+                                              "message": "An unexpected error occurred",
+                                              "status": 500,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
     @PostMapping("/verify-email")
     public ResponseEntity<ApiResponse<String>> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
         verifyEmailUseCase.execute(request);
