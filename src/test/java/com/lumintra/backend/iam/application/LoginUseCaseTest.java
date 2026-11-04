@@ -6,6 +6,7 @@ import com.lumintra.backend.iam.domain.event.StaffAccountLockedEvent;
 import com.lumintra.backend.iam.domain.event.StaffLoginSuccessEvent;
 import com.lumintra.backend.iam.domain.model.AccountType;
 import com.lumintra.backend.iam.domain.service.LoginAttemptService;
+import com.lumintra.backend.iam.domain.service.RefreshTokenService;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.EmployeeEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.RoleEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.UserAccountEntity;
@@ -58,6 +59,9 @@ class LoginUseCaseTest {
 
     @Mock
     private LoginAttemptService loginAttemptService;
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -99,6 +103,7 @@ class LoginUseCaseTest {
         assertThat(response.getExpiresIn()).isEqualTo(900);
 
         verify(loginAttemptService).resetAttempts("customer@example.com");
+        verify(refreshTokenService).storeRefreshToken(101L, "refresh-token-customer");
         verifyNoInteractions(eventPublisher); // Customers do not publish staff audit events
     }
 
@@ -132,6 +137,7 @@ class LoginUseCaseTest {
 
         assertThat(response.getAccessToken()).isEqualTo("access-token-admin");
         verify(loginAttemptService).resetAttempts("admin@lumintra.com");
+        verify(refreshTokenService).storeRefreshToken(201L, "refresh-token-admin");
 
         ArgumentCaptor<StaffLoginSuccessEvent> eventCaptor = ArgumentCaptor.forClass(StaffLoginSuccessEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
