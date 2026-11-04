@@ -55,4 +55,8 @@ public class UserAccountEntity {
         account.setFailedAttempts(0);
         return account;
     }
+
+    public void verifyEmail() {
+        this.setStatus(AccountStatus.ACTIVE);
+    }
 }

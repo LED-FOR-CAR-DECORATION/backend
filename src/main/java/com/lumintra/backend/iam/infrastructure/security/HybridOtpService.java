@@ -1,4 +1,3 @@
-// src/main/java/com/lumintra/backend/iam/infrastructure/security/HybridOtpService.java
 package com.lumintra.backend.iam.infrastructure.security;
 
 import com.lumintra.backend.iam.domain.model.OtpPurpose;
@@ -7,6 +6,7 @@ import com.lumintra.backend.iam.infrastructure.persistence.entity.UserOtpTokenEn
 import com.lumintra.backend.iam.infrastructure.persistence.repository.UserOtpTokenRepository;
 import com.lumintra.backend.shared.caching.CacheUnavailableException;
 import com.lumintra.backend.shared.caching.SafeCacheService;
+import com.lumintra.backend.shared.exception.iam.MaxOtpAttemptsException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +23,8 @@ import java.time.Instant;
 public class HybridOtpService implements OtpService {
 
     private static final Logger log = LoggerFactory.getLogger(HybridOtpService.class);
-    private static final Duration OTP_TTL = Duration.ofMinutes(15);
+    private static final Duration OTP_TTL = Duration.ofMinutes(5); // 300s
+    private static final int MAX_MISMATCHES = 5;
     private final SecureRandom secureRandom = new SecureRandom();
 
     private final SafeCacheService cacheService;
@@ -33,6 +34,10 @@ public class HybridOtpService implements OtpService {
         return "auth:otp:" + purpose.name() + ":" + email;
     }
 
+    private String getRedisAttemptsKey(String email, OtpPurpose purpose) {
+        return "auth:otp_attempts:" + purpose.name() + ":" + email;
+    }
+
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public String generateAndStoreOtp(String email, OtpPurpose purpose) {
@@ -40,11 +45,12 @@ public class HybridOtpService implements OtpService {
 
         try {
             cacheService.set(getRedisKey(email, purpose), otp, OTP_TTL);
+            // Reset attempts upon new generation
+            cacheService.delete(getRedisAttemptsKey(email, purpose));
             return otp;
         } catch (CacheUnavailableException ex) {
             log.warn("Redis unavailable, storing OTP in DB [email={}] [purpose={}]", email, purpose);
 
-            // Delete any existing OTP for this specific purpose to prevent duplicates
             otpTokenRepository.deleteByEmailAndPurpose(email, purpose);
 
             UserOtpTokenEntity tokenEntity = UserOtpTokenEntity.createOtpFor(
@@ -59,29 +65,55 @@ public class HybridOtpService implements OtpService {
         }
     }
 
+    // Inside HybridOtpService.java:
+
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean validateOtp(String email, String inputOtp, OtpPurpose purpose) {
         if (inputOtp == null || inputOtp.isBlank()) return false;
 
         try {
             String cachedOtp = cacheService.get(getRedisKey(email, purpose));
+            if (cachedOtp == null) return false;
+
             if (inputOtp.equals(cachedOtp)) {
                 cacheService.delete(getRedisKey(email, purpose));
+                cacheService.delete(getRedisAttemptsKey(email, purpose));
                 return true;
+            } else {
+                int attempts = cacheService.increment(getRedisAttemptsKey(email, purpose), OTP_TTL);
+                if (attempts >= MAX_MISMATCHES) {
+                    log.warn("Max OTP mismatches reached, invalidating token [email={}]", email);
+                    cacheService.delete(getRedisKey(email, purpose));
+                    cacheService.delete(getRedisAttemptsKey(email, purpose));
+                    throw new MaxOtpAttemptsException("Maximum OTP attempts reached. Please request a new code.");
+                }
+                return false;
             }
-            return false;
         } catch (CacheUnavailableException ex) {
             log.warn("Redis unavailable, validating OTP from DB [email={}] [purpose={}]", email, purpose);
             return otpTokenRepository.findByEmailAndPurpose(email, purpose)
                     .map(token -> {
-                        boolean isValid = inputOtp.equals(token.getOtpCode()) &&
-                                token.getExpiresAt().isAfter(Instant.now());
-                        if (isValid) {
+                        if (token.getExpiresAt().isBefore(Instant.now())) {
                             otpTokenRepository.delete(token);
+                            return false;
                         }
-                        return isValid;
-                    }).orElse(false);
+
+                        if (inputOtp.equals(token.getOtpCode())) {
+                            otpTokenRepository.delete(token);
+                            return true;
+                        } else {
+                            token.setFailedAttempts(token.getFailedAttempts() + 1);
+                            if (token.getFailedAttempts() >= MAX_MISMATCHES) {
+                                log.warn("Max OTP mismatches reached in DB, invalidating token [email={}]", email);
+                                otpTokenRepository.delete(token);
+                                throw new MaxOtpAttemptsException("Maximum OTP attempts reached. Please request a new code.");
+                            } else {
+                                otpTokenRepository.save(token);
+                            }
+                            return false;
+                        }
+                    }).orElse(false); // Token not found
         }
     }
 }

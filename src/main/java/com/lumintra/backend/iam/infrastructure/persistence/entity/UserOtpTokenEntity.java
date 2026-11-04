@@ -30,12 +30,16 @@ public class UserOtpTokenEntity {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "failed_attempts", nullable = false)
+    private int failedAttempts = 0;
+
     public static UserOtpTokenEntity createOtpFor(String email, String otpCode, OtpPurpose purpose, Instant expiresAt) {
         UserOtpTokenEntity tokenEntity = new UserOtpTokenEntity();
         tokenEntity.setEmail(email);
         tokenEntity.setOtpCode(otpCode);
         tokenEntity.setPurpose(purpose);
         tokenEntity.setExpiresAt(expiresAt);
+        tokenEntity.setFailedAttempts(0);
         return tokenEntity;
     }
 }

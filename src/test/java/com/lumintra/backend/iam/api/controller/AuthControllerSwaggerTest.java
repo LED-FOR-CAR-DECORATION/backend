@@ -2,6 +2,7 @@ package com.lumintra.backend.iam.api.controller;
 
 import com.lumintra.backend.iam.api.request.LoginRequest;
 import com.lumintra.backend.iam.api.request.RegisterRequest;
+import com.lumintra.backend.iam.api.request.VerifyEmailRequest;
 import com.lumintra.backend.iam.api.response.LoginResponse;
 import com.lumintra.backend.iam.api.response.RegisterResponse;
 import com.lumintra.backend.shared.config.OpenApiConfig;
@@ -187,6 +188,56 @@ class AuthControllerSwaggerTest {
                     .isNotNull();
             assertThat(fieldSchema.description()).isNotEmpty();
             assertThat(fieldSchema.example()).isNotEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("verifyEmail endpoint should have Swagger @Operation and documentation details")
+    void verifyEmailEndpointShouldHaveOperationAnnotation() throws NoSuchMethodException {
+        Method verifyMethod = AuthController.class.getMethod("verifyEmail", VerifyEmailRequest.class);
+        Operation operation = verifyMethod.getAnnotation(Operation.class);
+
+        assertThat(operation).isNotNull();
+        assertThat(operation.summary()).isEqualTo("Verify customer email with OTP");
+        assertThat(operation.description()).contains("Validates the 6-digit OTP code");
+    }
+
+    @Test
+    @DisplayName("verifyEmail endpoint should have documented @ApiResponses for 200, 400, 404, 429, and 500")
+    void verifyEmailEndpointShouldHaveDocumentedApiResponses() throws NoSuchMethodException {
+        Method verifyMethod = AuthController.class.getMethod("verifyEmail", VerifyEmailRequest.class);
+        ApiResponses apiResponses = verifyMethod.getAnnotation(ApiResponses.class);
+
+        assertThat(apiResponses).isNotNull();
+        Map<String, io.swagger.v3.oas.annotations.responses.ApiResponse> responseMap =
+                Arrays.stream(apiResponses.value())
+                        .collect(Collectors.toMap(
+                                io.swagger.v3.oas.annotations.responses.ApiResponse::responseCode,
+                                r -> r
+                        ));
+
+        assertThat(responseMap).containsKeys("200", "400", "404", "429", "500");
+        assertThat(responseMap.get("200").description()).contains("successfully");
+        assertThat(responseMap.get("400").description()).contains("Validation failed");
+        assertThat(responseMap.get("404").description()).contains("not found");
+        assertThat(responseMap.get("429").description()).contains("Too many failed OTP attempts");
+        assertThat(responseMap.get("500").description()).contains("Internal server error");
+    }
+
+    @Test
+    @DisplayName("VerifyEmailRequest record should document fields with @Schema annotations")
+    void verifyEmailRequestShouldHaveSchemaAnnotations() throws NoSuchFieldException {
+        Schema classSchema = VerifyEmailRequest.class.getAnnotation(Schema.class);
+        assertThat(classSchema).isNotNull();
+
+        String[] fields = {"email", "otp"};
+        for (String fieldName : fields) {
+            Schema schema = VerifyEmailRequest.class.getDeclaredField(fieldName).getAnnotation(Schema.class);
+            assertThat(schema)
+                    .withFailMessage("Missing @Schema on record field %s", fieldName)
+                    .isNotNull();
+            assertThat(schema.description()).isNotEmpty();
+            assertThat(schema.example()).isNotEmpty();
         }
     }
 
