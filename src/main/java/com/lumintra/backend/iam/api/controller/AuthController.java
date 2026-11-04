@@ -36,6 +36,7 @@ public class AuthController {
     private final VerifyEmailUseCase verifyEmailUseCase;
     private final ResendVerificationEmailUseCase resendVerificationEmailUseCase;
     private final GoogleLoginUseCase googleLoginUseCase;
+    private final RefreshTokenUseCase refreshTokenUseCase;
 
     @Operation(
             summary = "Authenticate user credentials",
@@ -636,6 +637,12 @@ public class AuthController {
     @PostMapping("/google")
     public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
         LoginResponse response = googleLoginUseCase.execute(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(@Valid @RequestBody com.lumintra.backend.iam.api.request.RefreshTokenRequest request) {
+        LoginResponse response = refreshTokenUseCase.execute(request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

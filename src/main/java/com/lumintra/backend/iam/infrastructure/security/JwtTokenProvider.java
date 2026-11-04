@@ -64,6 +64,15 @@ public class JwtTokenProvider {
                 .compact();
     }
 
+    public Long getAccountIdFromToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return Long.parseLong(claims.getSubject());
+    }
+
     public String createRefreshToken(Long accountId) {
         Instant now = Instant.now();
         Instant validity = now.plus(30, ChronoUnit.DAYS);

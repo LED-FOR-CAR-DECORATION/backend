@@ -7,6 +7,7 @@ import com.lumintra.backend.iam.api.response.LoginResponse;
 import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
 import com.lumintra.backend.iam.domain.service.LoginAttemptService;
+import com.lumintra.backend.iam.domain.service.RefreshTokenService;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.CustomerEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.UserAccountEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.CustomerRepository;
@@ -32,6 +33,7 @@ public class GoogleLoginUseCase {
     private final UserAccountRepository userAccountRepository;
     private final CustomerRepository customerRepository;
     private final JwtTokenProvider tokenProvider;
+    private final RefreshTokenService refreshTokenService;
     private final LoginAttemptService loginAttemptService;
 
     @Transactional
@@ -84,6 +86,8 @@ public class GoogleLoginUseCase {
 
         String accessToken = tokenProvider.createAccessToken(account.getAccountId(), account.getEmail(), List.of("ROLE_CUSTOMER"));
         String refreshToken = tokenProvider.createRefreshToken(account.getAccountId());
+
+        refreshTokenService.storeRefreshToken(account.getAccountId(), refreshToken);
 
         log.info("Google login successful [accountId={}] [accountType={}]", account.getAccountId(), account.getAccountType());
 

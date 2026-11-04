@@ -6,10 +6,12 @@ import com.lumintra.backend.iam.domain.event.StaffAccountLockedEvent;
 import com.lumintra.backend.iam.domain.event.StaffLoginSuccessEvent;
 import com.lumintra.backend.iam.domain.model.AccountType;
 import com.lumintra.backend.iam.domain.service.LoginAttemptService;
+import com.lumintra.backend.iam.domain.service.RefreshTokenService;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.EmployeeEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.UserAccountEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.EmployeeRepository;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository;
+import com.lumintra.backend.iam.infrastructure.security.HybridRefreshTokenService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.iam.AccountLockedException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
@@ -33,6 +35,7 @@ public class LoginUseCase {
     private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
+    private final RefreshTokenService refreshTokenService;
     private final LoginAttemptService loginAttemptService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -69,6 +72,8 @@ public class LoginUseCase {
 
         String accessToken = tokenProvider.createAccessToken(account.getAccountId(), account.getEmail(), roles);
         String refreshToken = tokenProvider.createRefreshToken(account.getAccountId());
+
+        refreshTokenService.storeRefreshToken(account.getAccountId(), refreshToken);
 
         log.info("User login successful [accountId={}] [accountType={}]", account.getAccountId(), account.getAccountType());
 
