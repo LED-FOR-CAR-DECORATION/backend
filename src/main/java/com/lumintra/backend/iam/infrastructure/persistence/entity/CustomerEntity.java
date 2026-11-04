@@ -38,4 +38,13 @@ public class CustomerEntity {
         customer.setCreatedAt(Instant.now());
         return customer;
     }
+
+    public static CustomerEntity createOAuthCustomer(UserAccountEntity account, String fullName, String avatarUrl) {
+        CustomerEntity customer = new CustomerEntity();
+        customer.setAccount(account);
+        customer.setFullName(fullName);
+        customer.setAvatarUrl(avatarUrl);
+        customer.setCreatedAt(Instant.now());
+        return customer;
+    }
 }

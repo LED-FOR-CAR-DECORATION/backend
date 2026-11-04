@@ -6,10 +6,7 @@ import com.lumintra.backend.iam.api.request.ResendVerificationRequest;
 import com.lumintra.backend.iam.api.request.VerifyEmailRequest;
 import com.lumintra.backend.iam.api.response.LoginResponse;
 import com.lumintra.backend.iam.api.response.RegisterResponse;
-import com.lumintra.backend.iam.application.LoginUseCase;
-import com.lumintra.backend.iam.application.RegisterAccountUseCase;
-import com.lumintra.backend.iam.application.ResendVerificationEmailUseCase;
-import com.lumintra.backend.iam.application.VerifyEmailUseCase;
+import com.lumintra.backend.iam.application.*;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +34,7 @@ public class AuthController {
     private final RegisterAccountUseCase registerAccountUseCase;
     private final VerifyEmailUseCase verifyEmailUseCase;
     private final ResendVerificationEmailUseCase resendVerificationEmailUseCase;
+    private final GoogleLoginUseCase googleLoginUseCase;
 
     @Operation(
             summary = "Authenticate user credentials",
@@ -505,5 +503,11 @@ public class AuthController {
     public ResponseEntity<Void> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
         resendVerificationEmailUseCase.execute(request);
         return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(@Valid @RequestBody com.lumintra.backend.iam.api.request.GoogleLoginRequest request) {
+        LoginResponse response = googleLoginUseCase.execute(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
