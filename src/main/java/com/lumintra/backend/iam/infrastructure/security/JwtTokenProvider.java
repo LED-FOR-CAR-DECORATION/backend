@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
@@ -83,5 +84,15 @@ public class JwtTokenProvider {
                 .expiration(Date.from(validity))
                 .signWith(key)
                 .compact();
+    }
+
+    public Duration getRemainingExpiration(String token) {
+        try {
+            Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+            long diff = claims.getExpiration().getTime() - System.currentTimeMillis();
+            return diff > 0 ? Duration.ofMillis(diff) : Duration.ZERO;
+        } catch (Exception ex) {
+            return Duration.ZERO;
+        }
     }
 }

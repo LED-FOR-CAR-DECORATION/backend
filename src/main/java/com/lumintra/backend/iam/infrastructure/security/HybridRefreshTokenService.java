@@ -70,4 +70,10 @@ public class HybridRefreshTokenService implements RefreshTokenService {
                     }).orElse(false);
         }
     }
+
+    @Override
+    @Transactional
+    public void revokeAllTokensForAccount(Long accountId) {
+        refreshTokenRepository.deleteAllByAccountId(accountId);
+    }
 }
