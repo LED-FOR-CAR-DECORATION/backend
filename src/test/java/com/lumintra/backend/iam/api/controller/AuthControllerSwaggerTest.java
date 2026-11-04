@@ -1,6 +1,7 @@
 package com.lumintra.backend.iam.api.controller;
 
 import com.lumintra.backend.iam.api.request.LoginRequest;
+import com.lumintra.backend.iam.api.request.GoogleLoginRequest;
 import com.lumintra.backend.iam.api.request.RegisterRequest;
 import com.lumintra.backend.iam.api.request.ResendVerificationRequest;
 import com.lumintra.backend.iam.api.request.VerifyEmailRequest;
@@ -297,5 +298,49 @@ class AuthControllerSwaggerTest {
         assertThat(openAPI.getInfo()).isNotNull();
         assertThat(openAPI.getInfo().getTitle()).isEqualTo("Lumintra Backend API");
         assertThat(openAPI.getInfo().getVersion()).isEqualTo("1.0.0");
+    }
+    @Test
+    @DisplayName("googleLogin endpoint should have Swagger @Operation and documentation details")
+    void googleLoginEndpointShouldHaveOperationAnnotation() throws NoSuchMethodException {
+        Method googleMethod = AuthController.class.getMethod("googleLogin", GoogleLoginRequest.class);
+        Operation operation = googleMethod.getAnnotation(Operation.class);
+
+        assertThat(operation).isNotNull();
+        assertThat(operation.summary()).isEqualTo("Authenticate or register via Google OAuth2");
+        assertThat(operation.description()).contains("Authenticates a customer using a Google ID token");
+    }
+
+    @Test
+    @DisplayName("googleLogin endpoint should have documented @ApiResponses for 200, 400, 401, 423, and 500")
+    void googleLoginEndpointShouldHaveDocumentedApiResponses() throws NoSuchMethodException {
+        Method googleMethod = AuthController.class.getMethod("googleLogin", GoogleLoginRequest.class);
+        ApiResponses apiResponses = googleMethod.getAnnotation(ApiResponses.class);
+
+        assertThat(apiResponses).isNotNull();
+        Map<String, io.swagger.v3.oas.annotations.responses.ApiResponse> responseMap =
+                Arrays.stream(apiResponses.value())
+                        .collect(Collectors.toMap(
+                                io.swagger.v3.oas.annotations.responses.ApiResponse::responseCode,
+                                r -> r
+                        ));
+
+        assertThat(responseMap).containsKeys("200", "400", "401", "423", "500");
+        assertThat(responseMap.get("200").description()).contains("successfully via Google OAuth2");
+        assertThat(responseMap.get("400").description()).contains("Validation failed");
+        assertThat(responseMap.get("401").description()).contains("Unauthorized");
+        assertThat(responseMap.get("423").description()).contains("Locked");
+        assertThat(responseMap.get("500").description()).contains("Internal server error");
+    }
+
+    @Test
+    @DisplayName("GoogleLoginRequest record should document fields with @Schema annotations")
+    void googleLoginRequestShouldHaveSchemaAnnotations() throws NoSuchFieldException {
+        Schema classSchema = GoogleLoginRequest.class.getAnnotation(Schema.class);
+        assertThat(classSchema).isNotNull();
+
+        Schema schema = GoogleLoginRequest.class.getDeclaredField("idToken").getAnnotation(Schema.class);
+        assertThat(schema).isNotNull();
+        assertThat(schema.description()).isNotEmpty();
+        assertThat(schema.example()).isNotEmpty();
     }
 }
