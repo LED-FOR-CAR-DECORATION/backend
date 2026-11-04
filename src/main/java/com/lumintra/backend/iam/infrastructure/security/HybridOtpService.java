@@ -7,6 +7,8 @@ import com.lumintra.backend.iam.infrastructure.persistence.repository.UserOtpTok
 import com.lumintra.backend.shared.caching.CacheUnavailableException;
 import com.lumintra.backend.shared.caching.SafeCacheService;
 import com.lumintra.backend.shared.exception.iam.MaxOtpAttemptsException;
+import com.lumintra.backend.shared.exception.iam.MaxResendAttemptsException;
+import com.lumintra.backend.shared.exception.iam.ResendCooldownException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +38,14 @@ public class HybridOtpService implements OtpService {
 
     private String getRedisAttemptsKey(String email, OtpPurpose purpose) {
         return "auth:otp_attempts:" + purpose.name() + ":" + email;
+    }
+
+    private String getCooldownKey(String email, OtpPurpose purpose) {
+        return "auth:otp_cooldown:" + purpose.name() + ":" + email;
+    }
+
+    private String getResendCountKey(String email, OtpPurpose purpose) {
+        return "auth:otp_resends:" + purpose.name() + ":" + email;
     }
 
     @Override
@@ -114,6 +124,56 @@ public class HybridOtpService implements OtpService {
                             return false;
                         }
                     }).orElse(false); // Token not found
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public String generateOtpForResend(String email, OtpPurpose purpose) {
+        // Check limits
+        try {
+            if (cacheService.hasKey(getCooldownKey(email, purpose))) {
+                throw new ResendCooldownException("Please wait 60 seconds before requesting another email.");
+            }
+            String countStr = cacheService.get(getResendCountKey(email, purpose));
+            if (countStr != null && Integer.parseInt(countStr) >= 3) {
+                throw new MaxResendAttemptsException("Maximum resend attempts reached for this email.");
+            }
+        } catch (CacheUnavailableException ex) {
+            otpTokenRepository.findByEmailAndPurpose(email, purpose).ifPresent(token -> {
+                if (token.getLastSentAt() != null && token.getLastSentAt().isAfter(Instant.now().minusSeconds(60))) {
+                    throw new ResendCooldownException("Please wait 60 seconds before requesting another email.");
+                }
+                if (token.getResendCount() >= 3) {
+                    throw new MaxResendAttemptsException("Maximum resend attempts reached for this email.");
+                }
+            });
+        }
+
+        // Generate and Store
+        String otp = String.format("%06d", secureRandom.nextInt(1000000));
+
+        try {
+            cacheService.set(getRedisKey(email, purpose), otp, OTP_TTL);
+            cacheService.delete(getRedisAttemptsKey(email, purpose));
+
+            cacheService.set(getCooldownKey(email, purpose), "LOCKED", Duration.ofSeconds(60));
+            cacheService.increment(getResendCountKey(email, purpose), Duration.ofHours(24));
+
+            return otp;
+        } catch (CacheUnavailableException ex) {
+            log.warn("Redis unavailable, updating OTP resend in DB [email={}]", email);
+            UserOtpTokenEntity token = otpTokenRepository.findByEmailAndPurpose(email, purpose).orElseGet(() ->
+                    UserOtpTokenEntity.createOtpFor(email, otp, purpose, Instant.now().plus(OTP_TTL))
+            );
+            token.setOtpCode(otp);
+            token.setExpiresAt(Instant.now().plus(OTP_TTL));
+            token.setFailedAttempts(0);
+            token.setResendCount(token.getResendCount() + 1);
+            token.setLastSentAt(Instant.now());
+            otpTokenRepository.save(token);
+
+            return otp;
         }
     }
 }

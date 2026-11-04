@@ -66,6 +66,16 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("MAX_OTP_ATTEMPTS_REACHED", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    @ExceptionHandler(ResendCooldownException.class)
+    public ResponseEntity<ErrorResponse> handleResendCooldown(ResendCooldownException ex) {
+        return buildErrorResponse("RESEND_COOLDOWN_ACTIVE", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @ExceptionHandler(MaxResendAttemptsException.class)
+    public ResponseEntity<ErrorResponse> handleMaxResendAttempts(MaxResendAttemptsException ex) {
+        return buildErrorResponse("MAX_RESEND_ATTEMPTS_REACHED", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
+    }
+
     // General
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {

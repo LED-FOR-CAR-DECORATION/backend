@@ -2,11 +2,13 @@ package com.lumintra.backend.iam.api.controller;
 
 import com.lumintra.backend.iam.api.request.LoginRequest;
 import com.lumintra.backend.iam.api.request.RegisterRequest;
+import com.lumintra.backend.iam.api.request.ResendVerificationRequest;
 import com.lumintra.backend.iam.api.request.VerifyEmailRequest;
 import com.lumintra.backend.iam.api.response.LoginResponse;
 import com.lumintra.backend.iam.api.response.RegisterResponse;
 import com.lumintra.backend.iam.application.LoginUseCase;
 import com.lumintra.backend.iam.application.RegisterAccountUseCase;
+import com.lumintra.backend.iam.application.ResendVerificationEmailUseCase;
 import com.lumintra.backend.iam.application.VerifyEmailUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -34,6 +36,7 @@ public class AuthController {
     private final LoginUseCase loginUseCase;
     private final RegisterAccountUseCase registerAccountUseCase;
     private final VerifyEmailUseCase verifyEmailUseCase;
+    private final ResendVerificationEmailUseCase resendVerificationEmailUseCase;
 
     @Operation(
             summary = "Authenticate user credentials",
@@ -367,5 +370,140 @@ public class AuthController {
     public ResponseEntity<ApiResponse<String>> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
         verifyEmailUseCase.execute(request);
         return ResponseEntity.ok(ApiResponse.success("Email verified successfully"));
+    }
+
+    @Operation(
+            summary = "Resend verification email",
+            description = "Re-generates and emails a new 6-digit verification OTP to a customer in PENDING_VERIFICATION status. Enforces a 60-second cooldown and a maximum of 3 resends per 24 hours."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "202",
+                    description = "Verification email request accepted for delivery"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Validation failed: invalid request payload or account already verified",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "Validation Error",
+                                            value = """
+                                                    {
+                                                      "code": "VALIDATION_FAILED",
+                                                      "message": "Invalid request payload",
+                                                      "status": 400,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": [
+                                                        {
+                                                          "field": "email",
+                                                          "message": "Invalid email format"
+                                                        }
+                                                      ]
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "Account Already Verified",
+                                            value = """
+                                                    {
+                                                      "code": "ACCOUNT_ALREADY_VERIFIED",
+                                                      "message": "Account is already verified.",
+                                                      "status": 400,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "User account not found for provided email",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "User Not Found",
+                                    value = """
+                                            {
+                                              "code": "USER_NOT_FOUND",
+                                              "message": "Account not found",
+                                              "status": 404,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "429",
+                    description = "Rate limit exceeded: cooldown period active (60s) or maximum resend quota reached (3 attempts)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "Cooldown Active",
+                                            value = """
+                                                    {
+                                                      "code": "RESEND_COOLDOWN_ACTIVE",
+                                                      "message": "Please wait 60 seconds before requesting another email.",
+                                                      "status": 429,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "Max Attempts Reached",
+                                            value = """
+                                                    {
+                                                      "code": "MAX_RESEND_ATTEMPTS_REACHED",
+                                                      "message": "Maximum resend attempts reached for this email.",
+                                                      "status": 429,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error: Unexpected system failure",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Internal Error",
+                                    value = """
+                                            {
+                                              "code": "INTERNAL_SERVER_ERROR",
+                                              "message": "An unexpected error occurred",
+                                              "status": 500,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
+    @PostMapping("/resend-verification")
+    public ResponseEntity<Void> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
+        resendVerificationEmailUseCase.execute(request);
+        return ResponseEntity.accepted().build();
     }
 }

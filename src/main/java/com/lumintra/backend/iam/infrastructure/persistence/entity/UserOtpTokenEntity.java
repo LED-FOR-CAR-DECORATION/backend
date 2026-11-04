@@ -33,6 +33,12 @@ public class UserOtpTokenEntity {
     @Column(name = "failed_attempts", nullable = false)
     private int failedAttempts = 0;
 
+    @Column(name = "resend_count", nullable = false)
+    private int resendCount = 0;
+
+    @Column(name = "last_sent_at")
+    private Instant lastSentAt;
+
     public static UserOtpTokenEntity createOtpFor(String email, String otpCode, OtpPurpose purpose, Instant expiresAt) {
         UserOtpTokenEntity tokenEntity = new UserOtpTokenEntity();
         tokenEntity.setEmail(email);
@@ -40,6 +46,8 @@ public class UserOtpTokenEntity {
         tokenEntity.setPurpose(purpose);
         tokenEntity.setExpiresAt(expiresAt);
         tokenEntity.setFailedAttempts(0);
+        tokenEntity.setResendCount(0);
+        tokenEntity.setLastSentAt(Instant.now());
         return tokenEntity;
     }
 }
