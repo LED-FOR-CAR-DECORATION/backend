@@ -47,7 +47,8 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/register",
                                 "/api/auth/verify-email",
-                                "/api/auth/resend-verification"
+                                "/api/auth/resend-verification",
+                                "/api/auth/google"
                         ).permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",

@@ -1,15 +1,13 @@
 package com.lumintra.backend.iam.api.controller;
 
 import com.lumintra.backend.iam.api.request.LoginRequest;
+import com.lumintra.backend.iam.api.request.GoogleLoginRequest;
 import com.lumintra.backend.iam.api.request.RegisterRequest;
 import com.lumintra.backend.iam.api.request.ResendVerificationRequest;
 import com.lumintra.backend.iam.api.request.VerifyEmailRequest;
 import com.lumintra.backend.iam.api.response.LoginResponse;
 import com.lumintra.backend.iam.api.response.RegisterResponse;
-import com.lumintra.backend.iam.application.LoginUseCase;
-import com.lumintra.backend.iam.application.RegisterAccountUseCase;
-import com.lumintra.backend.iam.application.ResendVerificationEmailUseCase;
-import com.lumintra.backend.iam.application.VerifyEmailUseCase;
+import com.lumintra.backend.iam.application.*;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +35,7 @@ public class AuthController {
     private final RegisterAccountUseCase registerAccountUseCase;
     private final VerifyEmailUseCase verifyEmailUseCase;
     private final ResendVerificationEmailUseCase resendVerificationEmailUseCase;
+    private final GoogleLoginUseCase googleLoginUseCase;
 
     @Operation(
             summary = "Authenticate user credentials",
@@ -505,5 +504,138 @@ public class AuthController {
     public ResponseEntity<Void> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
         resendVerificationEmailUseCase.execute(request);
         return ResponseEntity.accepted().build();
+    }
+
+    @Operation(
+            summary = "Authenticate or register via Google OAuth2",
+            description = "Authenticates a customer using a Google ID token. If the user account does not exist, an account and customer profile are automatically created with ACTIVE status and email verified. Returns access and refresh JWT tokens."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "User authenticated successfully via Google OAuth2"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Validation failed: Google ID token is missing or invalid",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Validation Error",
+                                    value = """
+                                            {
+                                              "code": "VALIDATION_FAILED",
+                                              "message": "Invalid request payload",
+                                              "status": 400,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": [
+                                                {
+                                                  "field": "idToken",
+                                                  "message": "Google ID token is required"
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: Invalid or expired Google ID token, or Google login rejected for staff/inactive accounts",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "Invalid Google Token",
+                                            value = """
+                                                    {
+                                                      "code": "INVALID_CREDENTIALS",
+                                                      "message": "Failed to verify Google token.",
+                                                      "status": 401,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "Staff Account Not Allowed",
+                                            value = """
+                                                    {
+                                                      "code": "INVALID_CREDENTIALS",
+                                                      "message": "Google login is not supported for staff accounts.",
+                                                      "status": 401,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "Account Inactive",
+                                            value = """
+                                                    {
+                                                      "code": "INVALID_CREDENTIALS",
+                                                      "message": "Account is suspended or deleted.",
+                                                      "status": 401,
+                                                      "timestamp": "2026-11-04T12:00:00Z",
+                                                      "traceId": "trace-12345",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "423",
+                    description = "Locked: Account is temporarily locked due to consecutive failed attempts",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Account Locked",
+                                    value = """
+                                            {
+                                              "code": "ACCOUNT_LOCKED",
+                                              "message": "Account is locked for 15 minutes.",
+                                              "status": 423,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error: Unexpected system failure during Google authentication",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Internal Error",
+                                    value = """
+                                            {
+                                              "code": "INTERNAL_SERVER_ERROR",
+                                              "message": "An unexpected error occurred",
+                                              "status": 500,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
+    @PostMapping("/google")
+    public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        LoginResponse response = googleLoginUseCase.execute(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
