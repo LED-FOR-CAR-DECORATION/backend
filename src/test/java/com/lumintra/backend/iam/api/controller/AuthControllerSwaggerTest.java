@@ -2,7 +2,9 @@ package com.lumintra.backend.iam.api.controller;
 
 import com.lumintra.backend.iam.api.request.LoginRequest;
 import com.lumintra.backend.iam.api.request.GoogleLoginRequest;
+import com.lumintra.backend.iam.api.request.LogoutRequest;
 import com.lumintra.backend.iam.api.request.RefreshTokenRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import com.lumintra.backend.iam.api.request.RegisterRequest;
 import com.lumintra.backend.iam.api.request.ResendVerificationRequest;
 import com.lumintra.backend.iam.api.request.VerifyEmailRequest;
@@ -383,6 +385,48 @@ class AuthControllerSwaggerTest {
         assertThat(classSchema).isNotNull();
 
         Schema schema = RefreshTokenRequest.class.getDeclaredField("refreshToken").getAnnotation(Schema.class);
+        assertThat(schema).isNotNull();
+        assertThat(schema.description()).isNotEmpty();
+        assertThat(schema.example()).isNotEmpty();
+    }
+    @Test
+    @DisplayName("logout endpoint should have Swagger @Operation and documentation details")
+    void logoutEndpointShouldHaveOperationAnnotation() throws NoSuchMethodException {
+        Method logoutMethod = AuthController.class.getMethod("logout", LogoutRequest.class, HttpServletRequest.class);
+        Operation operation = logoutMethod.getAnnotation(Operation.class);
+
+        assertThat(operation).isNotNull();
+        assertThat(operation.summary()).isEqualTo("Log out user session and invalidate tokens");
+        assertThat(operation.description()).contains("Logs out the authenticated user");
+    }
+
+    @Test
+    @DisplayName("logout endpoint should have documented @ApiResponses for 204, 400, and 500")
+    void logoutEndpointShouldHaveDocumentedApiResponses() throws NoSuchMethodException {
+        Method logoutMethod = AuthController.class.getMethod("logout", LogoutRequest.class, HttpServletRequest.class);
+        ApiResponses apiResponses = logoutMethod.getAnnotation(ApiResponses.class);
+
+        assertThat(apiResponses).isNotNull();
+        Map<String, io.swagger.v3.oas.annotations.responses.ApiResponse> responseMap =
+                Arrays.stream(apiResponses.value())
+                        .collect(Collectors.toMap(
+                                io.swagger.v3.oas.annotations.responses.ApiResponse::responseCode,
+                                r -> r
+                        ));
+
+        assertThat(responseMap).containsKeys("204", "400", "500");
+        assertThat(responseMap.get("204").description()).contains("Session successfully terminated");
+        assertThat(responseMap.get("400").description()).contains("Validation failed");
+        assertThat(responseMap.get("500").description()).contains("Internal server error");
+    }
+
+    @Test
+    @DisplayName("LogoutRequest record should document fields with @Schema annotations")
+    void logoutRequestShouldHaveSchemaAnnotations() throws NoSuchFieldException {
+        Schema classSchema = LogoutRequest.class.getAnnotation(Schema.class);
+        assertThat(classSchema).isNotNull();
+
+        Schema schema = LogoutRequest.class.getDeclaredField("refreshToken").getAnnotation(Schema.class);
         assertThat(schema).isNotNull();
         assertThat(schema.description()).isNotEmpty();
         assertThat(schema.example()).isNotEmpty();

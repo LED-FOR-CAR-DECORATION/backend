@@ -2,6 +2,7 @@ package com.lumintra.backend.iam.api.controller;
 
 import com.lumintra.backend.iam.api.request.LoginRequest;
 import com.lumintra.backend.iam.api.request.GoogleLoginRequest;
+import com.lumintra.backend.iam.api.request.LogoutRequest;
 import com.lumintra.backend.iam.api.request.RefreshTokenRequest;
 import com.lumintra.backend.iam.api.request.RegisterRequest;
 import com.lumintra.backend.iam.api.request.ResendVerificationRequest;
@@ -755,9 +756,66 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @Operation(
+            summary = "Log out user session and invalidate tokens",
+            description = "Logs out the authenticated user by invalidating the provided refresh token, revoking all refresh tokens associated with the account across devices, and blacklisting the JWT access token in Redis until its natural expiration."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "204",
+                    description = "Session successfully terminated and tokens invalidated. No content returned."
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Validation failed: Malformed request body or missing refresh token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Validation Error",
+                                    value = """
+                                            {
+                                              "code": "VALIDATION_ERROR",
+                                              "message": "Validation failed",
+                                              "status": 400,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": [
+                                                {
+                                                  "field": "refreshToken",
+                                                  "message": "Refresh token is required"
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error: Unexpected system failure during logout",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Internal Error",
+                                    value = """
+                                            {
+                                              "code": "INTERNAL_SERVER_ERROR",
+                                              "message": "An unexpected error occurred",
+                                              "status": 500,
+                                              "timestamp": "2026-11-04T12:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
-            @Valid @RequestBody com.lumintra.backend.iam.api.request.LogoutRequest request,
+            @Valid @RequestBody LogoutRequest request,
             HttpServletRequest httpRequest) {
 
         String bearerToken = httpRequest.getHeader("Authorization");
