@@ -7,6 +7,7 @@ import com.lumintra.backend.iam.api.response.LoginResponse;
 import com.lumintra.backend.iam.api.response.RegisterResponse;
 import com.lumintra.backend.iam.application.LoginUseCase;
 import com.lumintra.backend.iam.application.RegisterAccountUseCase;
+import com.lumintra.backend.iam.application.ResendVerificationEmailUseCase;
 import com.lumintra.backend.iam.application.VerifyEmailUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -34,6 +35,7 @@ public class AuthController {
     private final LoginUseCase loginUseCase;
     private final RegisterAccountUseCase registerAccountUseCase;
     private final VerifyEmailUseCase verifyEmailUseCase;
+    private final ResendVerificationEmailUseCase resendVerificationEmailUseCase;
 
     @Operation(
             summary = "Authenticate user credentials",
@@ -367,5 +369,11 @@ public class AuthController {
     public ResponseEntity<ApiResponse<String>> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
         verifyEmailUseCase.execute(request);
         return ResponseEntity.ok(ApiResponse.success("Email verified successfully"));
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<Void> resendVerification(@Valid @RequestBody com.lumintra.backend.iam.api.request.ResendVerificationRequest request) {
+        resendVerificationEmailUseCase.execute(request);
+        return ResponseEntity.accepted().build();
     }
 }

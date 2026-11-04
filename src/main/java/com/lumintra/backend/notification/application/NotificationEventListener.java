@@ -17,4 +17,11 @@ public class NotificationEventListener {
     public void handleCustomerRegistered(CustomerRegisteredEvent event) {
         emailProvider.sendOtpEmail(event.email(), event.fullName(), event.otp());
     }
+
+    @Async
+    @TransactionalEventListener
+    public void handleVerificationEmailResent(com.lumintra.backend.iam.domain.event.VerificationEmailResentEvent event) {
+        // Passing null for fullName allows ResendEmailClient to gracefully default to "Customer"
+        emailProvider.sendOtpEmail(event.email(), null, event.otp());
+    }
 }
