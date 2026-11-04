@@ -2,6 +2,7 @@ package com.lumintra.backend.iam.api.controller;
 
 import com.lumintra.backend.iam.api.request.LoginRequest;
 import com.lumintra.backend.iam.api.request.RegisterRequest;
+import com.lumintra.backend.iam.api.request.ResendVerificationRequest;
 import com.lumintra.backend.iam.api.request.VerifyEmailRequest;
 import com.lumintra.backend.iam.api.response.LoginResponse;
 import com.lumintra.backend.iam.api.response.RegisterResponse;
@@ -239,6 +240,51 @@ class AuthControllerSwaggerTest {
             assertThat(schema.description()).isNotEmpty();
             assertThat(schema.example()).isNotEmpty();
         }
+    }
+
+    @Test
+    @DisplayName("resendVerification endpoint should have Swagger @Operation and documentation details")
+    void resendVerificationEndpointShouldHaveOperationAnnotation() throws NoSuchMethodException {
+        Method resendMethod = AuthController.class.getMethod("resendVerification", ResendVerificationRequest.class);
+        Operation operation = resendMethod.getAnnotation(Operation.class);
+
+        assertThat(operation).isNotNull();
+        assertThat(operation.summary()).isEqualTo("Resend verification email");
+        assertThat(operation.description()).contains("Re-generates and emails a new 6-digit verification OTP");
+    }
+
+    @Test
+    @DisplayName("resendVerification endpoint should have documented @ApiResponses for 202, 400, 404, 429, and 500")
+    void resendVerificationEndpointShouldHaveDocumentedApiResponses() throws NoSuchMethodException {
+        Method resendMethod = AuthController.class.getMethod("resendVerification", ResendVerificationRequest.class);
+        ApiResponses apiResponses = resendMethod.getAnnotation(ApiResponses.class);
+
+        assertThat(apiResponses).isNotNull();
+        Map<String, io.swagger.v3.oas.annotations.responses.ApiResponse> responseMap =
+                Arrays.stream(apiResponses.value())
+                        .collect(Collectors.toMap(
+                                io.swagger.v3.oas.annotations.responses.ApiResponse::responseCode,
+                                r -> r
+                        ));
+
+        assertThat(responseMap).containsKeys("202", "400", "404", "429", "500");
+        assertThat(responseMap.get("202").description()).contains("accepted");
+        assertThat(responseMap.get("400").description()).contains("Validation failed");
+        assertThat(responseMap.get("404").description()).contains("not found");
+        assertThat(responseMap.get("429").description()).contains("Rate limit exceeded");
+        assertThat(responseMap.get("500").description()).contains("Internal server error");
+    }
+
+    @Test
+    @DisplayName("ResendVerificationRequest record should document fields with @Schema annotations")
+    void resendVerificationRequestShouldHaveSchemaAnnotations() throws NoSuchFieldException {
+        Schema classSchema = ResendVerificationRequest.class.getAnnotation(Schema.class);
+        assertThat(classSchema).isNotNull();
+
+        Schema schema = ResendVerificationRequest.class.getDeclaredField("email").getAnnotation(Schema.class);
+        assertThat(schema).isNotNull();
+        assertThat(schema.description()).isNotEmpty();
+        assertThat(schema.example()).isNotEmpty();
     }
 
     @Test
