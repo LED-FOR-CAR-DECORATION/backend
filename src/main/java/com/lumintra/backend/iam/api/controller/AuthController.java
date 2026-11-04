@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -38,6 +39,7 @@ public class AuthController {
     private final ResendVerificationEmailUseCase resendVerificationEmailUseCase;
     private final GoogleLoginUseCase googleLoginUseCase;
     private final RefreshTokenUseCase refreshTokenUseCase;
+    private final LogoutUseCase logoutUseCase;
 
     @Operation(
             summary = "Authenticate user credentials",
@@ -751,5 +753,19 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
         LoginResponse response = refreshTokenUseCase.execute(request);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @Valid @RequestBody com.lumintra.backend.iam.api.request.LogoutRequest request,
+            HttpServletRequest httpRequest) {
+
+        String bearerToken = httpRequest.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            String accessToken = bearerToken.substring(7);
+            logoutUseCase.execute(accessToken, request);
+        }
+
+        return ResponseEntity.noContent().build();
     }
 }
