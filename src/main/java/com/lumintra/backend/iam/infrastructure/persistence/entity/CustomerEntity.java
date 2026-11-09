@@ -1,4 +1,3 @@
-// src/main/java/com/lumintra/backend/iam/infrastructure/persistence/entity/CustomerProfileEntity.java
 package com.lumintra.backend.iam.infrastructure.persistence.entity;
 
 import jakarta.persistence.*;
@@ -7,10 +6,10 @@ import lombok.Setter;
 import java.time.Instant;
 
 @Entity
-@Table(name = "customer_profile")
+@Table(name = "customer")
 @Getter
 @Setter
-public class CustomerProfileEntity {
+public class CustomerEntity {
     @Id
     private Long accountId;
 
@@ -33,10 +32,19 @@ public class CustomerProfileEntity {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    public static CustomerProfileEntity createProfileFor(UserAccountEntity account) {
-        CustomerProfileEntity profile = new CustomerProfileEntity();
-        profile.setAccount(account);
-        profile.setCreatedAt(Instant.now());
-        return profile;
+    public static CustomerEntity createCustomerFor(UserAccountEntity account) {
+        CustomerEntity customer = new CustomerEntity();
+        customer.setAccount(account);
+        customer.setCreatedAt(Instant.now());
+        return customer;
+    }
+
+    public static CustomerEntity createOAuthCustomer(UserAccountEntity account, String fullName, String avatarUrl) {
+        CustomerEntity customer = new CustomerEntity();
+        customer.setAccount(account);
+        customer.setFullName(fullName);
+        customer.setAvatarUrl(avatarUrl);
+        customer.setCreatedAt(Instant.now());
+        return customer;
     }
 }

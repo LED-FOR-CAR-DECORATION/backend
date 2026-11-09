@@ -1,8 +1,5 @@
 package com.lumintra.backend.iam.infrastructure.security;
 
-import com.lumintra.backend.iam.infrastructure.persistence.entity.PermissionEntity;
-import com.lumintra.backend.iam.infrastructure.persistence.entity.RoleEntity;
-import com.lumintra.backend.iam.infrastructure.persistence.entity.UserAccountEntity;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -14,12 +11,11 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Component
 public class JwtTokenProvider {
@@ -38,9 +34,9 @@ public class JwtTokenProvider {
                 .parseSignedClaims(token)
                 .getPayload();
 
-        List<String> permissions = claims.get("permissions", List.class);
-        List<SimpleGrantedAuthority> authorities = permissions != null
-                ? permissions.stream().map(SimpleGrantedAuthority::new).toList()
+        List<String> roles = claims.get("roles", List.class);
+        List<SimpleGrantedAuthority> authorities = roles != null
+                ? roles.stream().map(SimpleGrantedAuthority::new).toList()
                 : List.of();
 
         return new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities);
@@ -48,15 +44,14 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            // 3. Updated validation syntax
             Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
             return true;
         } catch (Exception ex) {
             return false;
         }
-    } // 4. Added the missing closing brace here!
+    }
 
-    public String createAccessToken(Long accountId, String email, List<String> roles, Set<String> permissions) {
+    public String createAccessToken(Long accountId, String email, List<String> roles) {
         Instant now = Instant.now();
         Instant validity = now.plus(15, ChronoUnit.MINUTES);
 
@@ -64,11 +59,19 @@ public class JwtTokenProvider {
                 .subject(accountId.toString())
                 .claim("email", email)
                 .claim("roles", roles)
-                .claim("permissions", permissions)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(validity))
                 .signWith(key)
                 .compact();
+    }
+
+    public Long getAccountIdFromToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return Long.parseLong(claims.getSubject());
     }
 
     public String createRefreshToken(Long accountId) {
@@ -81,5 +84,15 @@ public class JwtTokenProvider {
                 .expiration(Date.from(validity))
                 .signWith(key)
                 .compact();
+    }
+
+    public Duration getRemainingExpiration(String token) {
+        try {
+            Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+            long diff = claims.getExpiration().getTime() - System.currentTimeMillis();
+            return diff > 0 ? Duration.ofMillis(diff) : Duration.ZERO;
+        } catch (Exception ex) {
+            return Duration.ZERO;
+        }
     }
 }

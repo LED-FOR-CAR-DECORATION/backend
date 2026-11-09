@@ -55,4 +55,19 @@ public class UserAccountEntity {
         account.setFailedAttempts(0);
         return account;
     }
+
+    public static UserAccountEntity createOAuthCustomerAccount(String email, String avatarUrl) {
+        UserAccountEntity account = new UserAccountEntity();
+        account.setEmail(email);
+        account.setAccountType(AccountType.CUSTOMER);
+        account.setStatus(AccountStatus.ACTIVE);
+        account.setAvatarUrl(avatarUrl);
+        account.setCreatedAt(Instant.now());
+        account.setFailedAttempts(0);
+        return account;
+    }
+
+    public void verifyEmail() {
+        this.setStatus(AccountStatus.ACTIVE);
+    }
 }

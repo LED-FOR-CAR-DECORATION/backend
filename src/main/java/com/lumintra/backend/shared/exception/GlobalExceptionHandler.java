@@ -1,12 +1,16 @@
 package com.lumintra.backend.shared.exception;
 
+<<<<<<< HEAD
 import com.lumintra.backend.shared.exception.iam.AccountLockedException;
 import com.lumintra.backend.shared.exception.iam.EmailAlreadyRegisteredException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
+=======
+import com.lumintra.backend.shared.exception.iam.*;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
+>>>>>>> origin/develop
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,23 +32,10 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final Tracer tracer;
 
-    // Store exceptions
+    // Store exception
     @ExceptionHandler(InvalidPriceRangeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidPriceRangeException(InvalidPriceRangeException ex) {
         return buildErrorResponse("INVALID_PRICE_RANGE", ex.getMessage(), HttpStatus.BAD_REQUEST);
-    }
-
-    // Validation exceptions (handles both JSON @RequestBody and @ModelAttribute query params)
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
-        List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> ErrorResponse.ErrorDetail.builder()
-                        .field(error.getField())
-                        .message(error.getDefaultMessage())
-                        .build())
-                .toList();
-
-        return buildErrorResponse("VALIDATION_FAILED", "The request contains invalid fields.", HttpStatus.BAD_REQUEST, details);
     }
 
     // IAM exceptions
@@ -66,6 +57,49 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     public ResponseEntity<ErrorResponse> handleEmailAlreadyRegistered(EmailAlreadyRegisteredException ex) {
         return buildErrorResponse("EMAIL_ALREADY_REGISTERED", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    // IAM specific exceptions from origin/develop
+    @ExceptionHandler(InvalidOtpException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidOtp(InvalidOtpException ex) {
+        return buildErrorResponse("INVALID_OTP", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(AccountAlreadyVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleAccountAlreadyVerified(AccountAlreadyVerifiedException ex) {
+        return buildErrorResponse("ACCOUNT_ALREADY_VERIFIED", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleUserNotFound(UserNotFoundException ex) {
+        return buildErrorResponse("USER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(MaxOtpAttemptsException.class)
+    public ResponseEntity<ErrorResponse> handleMaxOtpAttempts(MaxOtpAttemptsException ex) {
+        return buildErrorResponse("MAX_OTP_ATTEMPTS_REACHED", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @ExceptionHandler(ResendCooldownException.class)
+    public ResponseEntity<ErrorResponse> handleResendCooldown(ResendCooldownException ex) {
+        return buildErrorResponse("RESEND_COOLDOWN_ACTIVE", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @ExceptionHandler(MaxResendAttemptsException.class)
+    public ResponseEntity<ErrorResponse> handleMaxResendAttempts(MaxResendAttemptsException ex) {
+        return buildErrorResponse("MAX_RESEND_ATTEMPTS_REACHED", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    // General validation exception (covers both body and query param validation)
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> ErrorResponse.ErrorDetail.builder()
+                        .field(error.getField())
+                        .message(error.getDefaultMessage())
+                        .build())
+                .toList();
+        return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST, details);
     }
 
     @ExceptionHandler(Exception.class)
