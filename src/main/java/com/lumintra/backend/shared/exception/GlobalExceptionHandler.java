@@ -1,16 +1,10 @@
 package com.lumintra.backend.shared.exception;
 
-<<<<<<< HEAD
-import com.lumintra.backend.shared.exception.iam.AccountLockedException;
-import com.lumintra.backend.shared.exception.iam.EmailAlreadyRegisteredException;
-import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
-import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
-=======
 import com.lumintra.backend.shared.exception.iam.*;
+import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
->>>>>>> origin/develop
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
