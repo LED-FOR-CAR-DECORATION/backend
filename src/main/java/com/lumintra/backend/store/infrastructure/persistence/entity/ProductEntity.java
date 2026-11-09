@@ -3,7 +3,10 @@ package com.lumintra.backend.store.infrastructure.persistence.entity;
 import com.lumintra.backend.store.domain.model.ProductStatus;
 import com.lumintra.backend.store.domain.model.ProductType;
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -20,9 +23,7 @@ import java.util.Set;
 @Table(name = "product")
 @Getter
 @Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProductEntity {
 
     @Id
@@ -45,7 +46,6 @@ public class ProductEntity {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "gallery_urls")
-    @Builder.Default
     private List<String> galleryUrls = new ArrayList<>();
 
     @Column(name = "description", columnDefinition = "TEXT")
@@ -61,7 +61,6 @@ public class ProductEntity {
         joinColumns = @JoinColumn(name = "product_id"),
         inverseJoinColumns = @JoinColumn(name = "tag_id")
     )
-    @Builder.Default
     private Set<TagEntity> tags = new HashSet<>();
 
     @CreationTimestamp
@@ -71,4 +70,36 @@ public class ProductEntity {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    public static ProductEntity create(String productName, ProductType productType, BigDecimal basePrice,
+                                       String description, String thumbnailUrl, List<String> galleryUrls,
+                                       ProductStatus status, Set<TagEntity> tags) {
+        ProductEntity entity = new ProductEntity();
+        entity.setProductName(productName);
+        entity.setProductType(productType);
+        entity.setBasePrice(basePrice);
+        entity.setDescription(description);
+        entity.setThumbnailUrl(thumbnailUrl);
+        entity.setGalleryUrls(galleryUrls != null ? galleryUrls : new ArrayList<>());
+        entity.setStatus(status != null ? status : ProductStatus.UNPUBLISHED);
+        entity.setTags(tags != null ? tags : new HashSet<>());
+        return entity;
+    }
+
+    public static ProductEntity of(Long productId, String productName, ProductType productType, BigDecimal basePrice,
+                                  String description, String thumbnailUrl, List<String> galleryUrls,
+                                  ProductStatus status, Set<TagEntity> tags, Instant createdAt) {
+        ProductEntity entity = new ProductEntity();
+        entity.setProductId(productId);
+        entity.setProductName(productName);
+        entity.setProductType(productType);
+        entity.setBasePrice(basePrice);
+        entity.setDescription(description);
+        entity.setThumbnailUrl(thumbnailUrl);
+        entity.setGalleryUrls(galleryUrls != null ? galleryUrls : new ArrayList<>());
+        entity.setStatus(status);
+        entity.setTags(tags != null ? tags : new HashSet<>());
+        entity.setCreatedAt(createdAt);
+        return entity;
+    }
 }

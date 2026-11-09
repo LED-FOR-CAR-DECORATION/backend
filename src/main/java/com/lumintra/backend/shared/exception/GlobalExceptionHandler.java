@@ -3,7 +3,7 @@ package com.lumintra.backend.shared.exception;
 import com.lumintra.backend.shared.exception.iam.AccountLockedException;
 import com.lumintra.backend.shared.exception.iam.EmailAlreadyRegisteredException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
-import com.lumintra.backend.shared.exception.store.ProductException;
+import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -12,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -29,27 +28,15 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final Tracer tracer;
 
-    // Product exceptions
-    @ExceptionHandler(ProductException.class)
-    public ResponseEntity<ErrorResponse> handleProductException(ProductException ex) {
-        return buildErrorResponse(ex.getCode(), ex.getMessage(), HttpStatus.BAD_REQUEST);
+    // Store exceptions
+    @ExceptionHandler(InvalidPriceRangeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPriceRangeException(InvalidPriceRangeException ex) {
+        return buildErrorResponse("INVALID_PRICE_RANGE", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
-    // Validation exceptions
+    // Validation exceptions (handles both JSON @RequestBody and @ModelAttribute query params)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
-        List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> ErrorResponse.ErrorDetail.builder()
-                        .field(error.getField())
-                        .message(error.getDefaultMessage())
-                        .build())
-                .toList();
-
-        return buildErrorResponse("VALIDATION_FAILED", "The request contains invalid fields.", HttpStatus.BAD_REQUEST, details);
-    }
-
-    @ExceptionHandler(BindException.class)
-    public ResponseEntity<ErrorResponse> handleBindException(BindException ex) {
         List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> ErrorResponse.ErrorDetail.builder()
                         .field(error.getField())

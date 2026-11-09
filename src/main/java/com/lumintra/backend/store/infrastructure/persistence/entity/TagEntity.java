@@ -1,7 +1,10 @@
 package com.lumintra.backend.store.infrastructure.persistence.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -11,9 +14,7 @@ import java.time.Instant;
 @Table(name = "tag")
 @Getter
 @Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class TagEntity {
 
     @Id
@@ -34,4 +35,19 @@ public class TagEntity {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    public static TagEntity create(String name, String description) {
+        TagEntity entity = new TagEntity();
+        entity.setName(name);
+        entity.setDescription(description);
+        return entity;
+    }
+
+    public static TagEntity of(Long tagId, String name, String description) {
+        TagEntity entity = new TagEntity();
+        entity.setTagId(tagId);
+        entity.setName(name);
+        entity.setDescription(description);
+        return entity;
+    }
 }

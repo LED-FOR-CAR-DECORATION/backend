@@ -1,14 +1,12 @@
 package com.lumintra.backend.store;
 
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
-import com.lumintra.backend.shared.exception.store.ProductException;
+import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.store.api.controller.StoreProductController;
 import com.lumintra.backend.store.api.request.ProductFilterRequest;
-import com.lumintra.backend.store.api.response.ProductSummaryResponse;
-import com.lumintra.backend.store.api.response.TagResponse;
+import com.lumintra.backend.store.api.response.ProductListResponse;
 import com.lumintra.backend.store.application.ListProductsUseCase;
-import com.lumintra.backend.store.application.ProductPageResult;
 import com.lumintra.backend.store.domain.model.ProductType;
 import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,15 +49,15 @@ class StoreProductControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/store/listings - Returns 200 with standard response envelope and meta")
-    void shouldReturn200WithEnvelopeForListings() throws Exception {
-        TagResponse tag = TagResponse.builder()
+    @DisplayName("GET /api/store/products - Returns 200 with standard response envelope and meta")
+    void shouldReturn200WithEnvelopeForProducts() throws Exception {
+        ProductListResponse.ProductItem.TagItem tag = ProductListResponse.ProductItem.TagItem.builder()
                 .tagId(1L)
                 .name("Cyberpunk")
                 .description("Cyberpunk theme")
                 .build();
 
-        ProductSummaryResponse item = ProductSummaryResponse.builder()
+        ProductListResponse.ProductItem item = ProductListResponse.ProductItem.builder()
                 .productId(1L)
                 .productName("LED Panel 16x16")
                 .description("High brightness matrix")
@@ -81,9 +79,9 @@ class StoreProductControllerTest {
                 .build();
 
         when(listProductsUseCase.execute(any(ProductFilterRequest.class)))
-                .thenReturn(new ProductPageResult(List.of(item), meta));
+                .thenReturn(new ProductListResponse(List.of(item), meta));
 
-        mockMvc.perform(get("/api/store/listings")
+        mockMvc.perform(get("/api/store/products")
                         .param("page", "0")
                         .param("size", "20")
                         .param("productType", "LED")
@@ -99,8 +97,8 @@ class StoreProductControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/store/products - Also works as alias for catalog browsing")
-    void shouldReturn200ForProductsAlias() throws Exception {
+    @DisplayName("GET /api/store/products - Returns 200 with default pagination parameters")
+    void shouldReturn200WithDefaultParametersForProducts() throws Exception {
         PaginationMeta meta = PaginationMeta.builder()
                 .page(0)
                 .size(20)
@@ -111,7 +109,7 @@ class StoreProductControllerTest {
                 .build();
 
         when(listProductsUseCase.execute(any(ProductFilterRequest.class)))
-                .thenReturn(new ProductPageResult(List.of(), meta));
+                .thenReturn(new ProductListResponse(List.of(), meta));
 
         mockMvc.perform(get("/api/store/products"))
                 .andExpect(status().isOk())
@@ -120,9 +118,9 @@ class StoreProductControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/store/listings - Filters by SUBSCRIPTION product type")
+    @DisplayName("GET /api/store/products - Filters by SUBSCRIPTION product type")
     void shouldAcceptSubscriptionProductType() throws Exception {
-        ProductSummaryResponse item = ProductSummaryResponse.builder()
+        ProductListResponse.ProductItem item = ProductListResponse.ProductItem.builder()
                 .productId(99L)
                 .productName("VIP Pass")
                 .productType(ProductType.SUBSCRIPTION)
@@ -141,18 +139,18 @@ class StoreProductControllerTest {
                 .build();
 
         when(listProductsUseCase.execute(any(ProductFilterRequest.class)))
-                .thenReturn(new ProductPageResult(List.of(item), meta));
+                .thenReturn(new ProductListResponse(List.of(item), meta));
 
-        mockMvc.perform(get("/api/store/listings")
+        mockMvc.perform(get("/api/store/products")
                         .param("productType", "SUBSCRIPTION"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].productType").value("SUBSCRIPTION"));
     }
 
     @Test
-    @DisplayName("GET /api/store/listings - Validation failure returns 400 with VALIDATION_FAILED code")
+    @DisplayName("GET /api/store/products - Validation failure returns 400 with VALIDATION_FAILED code")
     void shouldReturn400OnValidationFailure() throws Exception {
-        mockMvc.perform(get("/api/store/listings")
+        mockMvc.perform(get("/api/store/products")
                         .param("minPrice", "-1000"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
@@ -160,14 +158,23 @@ class StoreProductControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/store/listings - Invalid price range returns 400 with INVALID_PRICE_RANGE code")
-    void shouldReturn400OnInvalidPriceRange() throws Exception {
-        when(listProductsUseCase.execute(any(ProductFilterRequest.class)))
-                .thenThrow(new ProductException("INVALID_PRICE_RANGE", "Minimum price cannot be greater than maximum price"));
-
-        mockMvc.perform(get("/api/store/listings")
+    @DisplayName("GET /api/store/products - Custom DTO validation failure when minPrice > maxPrice")
+    void shouldReturn400WhenMinPriceGreaterThanMaxPriceViaDtoValidation() throws Exception {
+        mockMvc.perform(get("/api/store/products")
                         .param("minPrice", "500000")
                         .param("maxPrice", "200000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details[0].field").value("minPrice"));
+    }
+
+    @Test
+    @DisplayName("GET /api/store/products - InvalidPriceRangeException returns 400 with INVALID_PRICE_RANGE code")
+    void shouldReturn400OnInvalidPriceRangeException() throws Exception {
+        when(listProductsUseCase.execute(any(ProductFilterRequest.class)))
+                .thenThrow(new InvalidPriceRangeException("Minimum price cannot be greater than maximum price"));
+
+        mockMvc.perform(get("/api/store/products"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_PRICE_RANGE"));
     }
