@@ -44,6 +44,10 @@ public class CartEntity {
         return entity;
     }
 
+    public void touch() {
+        this.updatedAt = Instant.now();
+    }
+
     public boolean isOwnedBy(Long userId) {
         return userId != null && Objects.equals(this.customerId, userId);
     }

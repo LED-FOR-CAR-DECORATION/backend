@@ -71,4 +71,11 @@ public class CartItemEntity {
         entity.setAddedAt(addedAt);
         return entity;
     }
+
+    public void updateQuantityAndPrice(int newQuantity, BigDecimal latestUnitPrice) {
+        this.quantity = newQuantity;
+        if (latestUnitPrice != null) {
+            this.unitPrice = latestUnitPrice;
+        }
+    }
 }
