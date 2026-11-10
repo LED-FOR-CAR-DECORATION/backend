@@ -76,7 +76,22 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("MAX_RESEND_ATTEMPTS_REACHED", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    @ExceptionHandler(PasswordResetLockedException.class)
+    public ResponseEntity<ErrorResponse> handlePasswordResetLocked(PasswordResetLockedException ex) {
+        return buildErrorResponse("PASSWORD_RESET_LOCKED", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @ExceptionHandler(PasswordResetUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handlePasswordResetUnavailable(PasswordResetUnavailableException ex) {
+        return buildErrorResponse("PASSWORD_RESET_UNAVAILABLE", ex.getMessage(), HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
     // General
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
         List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
