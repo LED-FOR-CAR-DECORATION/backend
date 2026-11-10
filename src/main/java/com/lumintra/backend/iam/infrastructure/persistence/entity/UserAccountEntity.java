@@ -2,9 +2,12 @@ package com.lumintra.backend.iam.infrastructure.persistence.entity;
 
 import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
+
 import jakarta.persistence.*;
+
 import lombok.Getter;
 import lombok.Setter;
+
 import java.time.Instant;
 
 @Entity
@@ -64,6 +67,15 @@ public class UserAccountEntity {
         account.setAvatarUrl(avatarUrl);
         account.setCreatedAt(Instant.now());
         account.setFailedAttempts(0);
+        return account;
+    }
+
+    public static UserAccountEntity createInternalAccount(String email, String passwordHash) {
+        UserAccountEntity account = new UserAccountEntity();
+        account.email = email;
+        account.passwordHash = passwordHash;
+        account.accountType = AccountType.EMPLOYEE;
+        account.status = AccountStatus.ACTIVE;
         return account;
     }
 

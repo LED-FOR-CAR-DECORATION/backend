@@ -21,7 +21,10 @@ Scope: this backend repository. Read `README.md` (Contributing Guide) before cha
 
 ## Persistence, cache, and providers
 
-- Version every schema change with a migration. Define short transactions in the application/use-case layer; do not keep a DB transaction open while waiting for a provider.
+- The database schema is finalized. Use the existing Supabase schema as the authoritative reference: https://supabase.com/dashboard/project/roovxylmzjqxeypavmtl. Inspect it read-only and adapt application code to it.
+- Do not change database tables, columns, types, constraints, indexes, relationships, or other schema objects. Do not create, edit, or execute schema-changing migrations, DDL, seed/reset scripts, or ORM schema generation. Do not start an application profile that can recreate or update the database schema.
+- If a requirement conflicts with the finalized schema, report the mismatch and implement only what the existing schema supports; do not invent or apply a database change.
+- Define short transactions in the application/use-case layer; do not keep a DB transaction open while waiting for a provider.
 - Enforce uniqueness and referential integrity in both database and application logic. Test rollback for multi-record operations.
 - Cache is not authoritative business storage unless explicitly approved. Specify TTL, namespaced keys, invalidation/refresh, and outage behavior. An outage must not produce incorrect business results.
 - Keep provider clients/SDKs in the owning feature's `infrastructure/integration`, behind integration interfaces. Require timeouts, typed failure mapping, bounded backoff retries for retryable failures, and idempotency keys for external side effects.
