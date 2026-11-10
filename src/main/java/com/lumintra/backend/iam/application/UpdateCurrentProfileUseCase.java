@@ -9,7 +9,9 @@ import com.lumintra.backend.iam.infrastructure.persistence.repository.EmployeeRe
 import com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.exception.iam.UserNotFoundException;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,14 +36,19 @@ public class UpdateCurrentProfileUseCase {
             throw new InvalidCredentialsException("Invalid authenticated account.");
         }
         if (id <= 0) throw new InvalidCredentialsException("Invalid authenticated account.");
-        var account = accounts.findById(id)
-                .orElseThrow(() -> new UserNotFoundException("Account not found."));
-        if (account.getStatus() != AccountStatus.ACTIVE) throw new AccessDeniedException("Account is not active.");
+        var account =
+                accounts.findById(id)
+                        .orElseThrow(() -> new UserNotFoundException("Account not found."));
+        if (account.getStatus() != AccountStatus.ACTIVE)
+            throw new AccessDeniedException("Account is not active.");
 
         List<String> roles;
         if (account.getAccountType() == AccountType.CUSTOMER) {
-            var profile = customers.findById(id)
-                    .orElseThrow(() -> new UserNotFoundException("Customer profile not found."));
+            var profile =
+                    customers
+                            .findById(id)
+                            .orElseThrow(
+                                    () -> new UserNotFoundException("Customer profile not found."));
             profile.setFullName(request.name());
             profile.setPhone(request.phone());
             profile.setAvatarUrl(request.avatar());
@@ -49,9 +56,14 @@ public class UpdateCurrentProfileUseCase {
             customers.saveAndFlush(profile);
             roles = List.of("CUSTOMER");
         } else if (account.getAccountType() == AccountType.EMPLOYEE) {
-            var profile = employees.findByAccount_AccountId(id)
-                    .orElseThrow(() -> new UserNotFoundException("Employee profile not found."));
-            if (profile.getRole() == null || profile.getRole().getRoleName() == null || profile.getRole().getRoleName().isBlank()) {
+            var profile =
+                    employees
+                            .findByAccount_AccountId(id)
+                            .orElseThrow(
+                                    () -> new UserNotFoundException("Employee profile not found."));
+            if (profile.getRole() == null
+                    || profile.getRole().getRoleName() == null
+                    || profile.getRole().getRoleName().isBlank()) {
                 throw new IllegalStateException("Employee role is missing");
             }
             roles = List.of(profile.getRole().getRoleName().toUpperCase(Locale.ROOT));
@@ -64,6 +76,7 @@ public class UpdateCurrentProfileUseCase {
             throw new AccessDeniedException("Unsupported account type.");
         }
         String avatar = request.avatar() == null ? account.getAvatarUrl() : request.avatar();
-        return new CurrentProfileResponse(id, request.name(), account.getEmail(), request.phone(), avatar, roles);
+        return new CurrentProfileResponse(
+                id, request.name(), account.getEmail(), request.phone(), avatar, roles);
     }
 }

@@ -1,5 +1,8 @@
 package com.lumintra.backend.iam.application;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import com.lumintra.backend.iam.api.request.UpdateCurrentProfileRequest;
 import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
@@ -12,6 +15,7 @@ import com.lumintra.backend.iam.infrastructure.persistence.repository.EmployeeRe
 import com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.exception.iam.UserNotFoundException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,9 +28,6 @@ import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 @ExtendWith(MockitoExtension.class)
 class UpdateCurrentProfileUseCaseTest {
     @Mock UserAccountRepository accounts;
@@ -34,18 +35,26 @@ class UpdateCurrentProfileUseCaseTest {
     @Mock EmployeeRepository employees;
     @InjectMocks UpdateCurrentProfileUseCase useCase;
     UserAccountEntity account;
-    final UpdateCurrentProfileRequest request = new UpdateCurrentProfileRequest("New Name", "+84901234567", "https://example.com/new.png");
+    final UpdateCurrentProfileRequest request =
+            new UpdateCurrentProfileRequest(
+                    "New Name", "+84901234567", "https://example.com/new.png");
 
-    @BeforeEach void setup() {
-        account = UserAccountEntity.createCustomerAccount("user@example.com", "original-password-hash");
+    @BeforeEach
+    void setup() {
+        account =
+                UserAccountEntity.createCustomerAccount(
+                        "user@example.com", "original-password-hash");
         account.setAccountId(42L);
         account.setStatus(AccountStatus.ACTIVE);
         account.setAvatarUrl("https://example.com/account.png");
     }
 
-    void account() { when(accounts.findById(42L)).thenReturn(Optional.of(account)); }
+    void account() {
+        when(accounts.findById(42L)).thenReturn(Optional.of(account));
+    }
 
-    @Test @DisplayName("N: Customer update persists editable fields and preserves account credentials")
+    @Test
+    @DisplayName("N: Customer update persists editable fields and preserves account credentials")
     void customerUpdate() {
         account();
         var profile = CustomerEntity.createCustomerFor(account);
@@ -65,10 +74,15 @@ class UpdateCurrentProfileUseCaseTest {
         verifyNoInteractions(employees);
     }
 
-    @Test @DisplayName("N: Employee update preserves role and returns current database role")
+    @Test
+    @DisplayName("N: Employee update preserves role and returns current database role")
     void employeeUpdate() {
-        account(); account.setAccountType(AccountType.EMPLOYEE);
-        var profile = new EmployeeEntity(); var role = new RoleEntity(); role.setRoleName("manager"); profile.setRole(role);
+        account();
+        account.setAccountType(AccountType.EMPLOYEE);
+        var profile = new EmployeeEntity();
+        var role = new RoleEntity();
+        role.setRoleName("manager");
+        profile.setRole(role);
         when(employees.findByAccount_AccountId(42L)).thenReturn(Optional.of(profile));
         var result = useCase.execute("42", request);
         verify(employees).saveAndFlush(profile);
@@ -80,83 +94,113 @@ class UpdateCurrentProfileUseCaseTest {
         verifyNoInteractions(customers);
     }
 
-    @Test @DisplayName("B: Null optional fields clear profile values and restore account avatar fallback")
+    @Test
+    @DisplayName("B: Null optional fields clear profile values and restore account avatar fallback")
     void clearOptionalFields() {
-        account(); var profile = CustomerEntity.createCustomerFor(account);
-        profile.setPhone("0901234567"); profile.setAvatarUrl("https://example.com/old.png");
+        account();
+        var profile = CustomerEntity.createCustomerFor(account);
+        profile.setPhone("0901234567");
+        profile.setAvatarUrl("https://example.com/old.png");
         when(customers.findById(42L)).thenReturn(Optional.of(profile));
         var result = useCase.execute("42", new UpdateCurrentProfileRequest("Name", null, null));
-        assertThat(profile.getPhone()).isNull(); assertThat(profile.getAvatarUrl()).isNull();
-        assertThat(result.phone()).isNull(); assertThat(result.avatar()).isEqualTo(account.getAvatarUrl());
+        assertThat(profile.getPhone()).isNull();
+        assertThat(profile.getAvatarUrl()).isNull();
+        assertThat(result.phone()).isNull();
+        assertThat(result.avatar()).isEqualTo(account.getAvatarUrl());
     }
 
-    @Test @DisplayName("N: GET observes the same profile after PUT")
+    @Test
+    @DisplayName("N: GET observes the same profile after PUT")
     void roundTrip() {
-        account(); var profile = CustomerEntity.createCustomerFor(account);
+        account();
+        var profile = CustomerEntity.createCustomerFor(account);
         when(customers.findById(42L)).thenReturn(Optional.of(profile));
         var updated = useCase.execute("42", request);
         var loaded = new GetCurrentProfileUseCase(accounts, customers, employees).execute("42");
         assertThat(loaded).isEqualTo(updated);
     }
 
-    @Test @DisplayName("A: Invalid authenticated subjects cannot touch storage")
+    @Test
+    @DisplayName("A: Invalid authenticated subjects cannot touch storage")
     void invalidSubjects() {
-        for (String subject : new String[]{null, "abc", "0", "-1", "9223372036854775808"}) {
-            assertThatThrownBy(() -> useCase.execute(subject, request)).isInstanceOf(InvalidCredentialsException.class);
+        for (String subject : new String[] {null, "abc", "0", "-1", "9223372036854775808"}) {
+            assertThatThrownBy(() -> useCase.execute(subject, request))
+                    .isInstanceOf(InvalidCredentialsException.class);
         }
         verifyNoInteractions(accounts, customers, employees);
     }
 
-    @Test @DisplayName("A: Missing account cannot update a profile")
+    @Test
+    @DisplayName("A: Missing account cannot update a profile")
     void missingAccount() {
-        assertThatThrownBy(() -> useCase.execute("42", request)).isInstanceOf(UserNotFoundException.class);
+        assertThatThrownBy(() -> useCase.execute("42", request))
+                .isInstanceOf(UserNotFoundException.class);
         verifyNoInteractions(customers, employees);
     }
 
-    @Test @DisplayName("A: Every inactive status is denied before profile writes")
+    @Test
+    @DisplayName("A: Every inactive status is denied before profile writes")
     void inactiveAccount() {
         account();
         for (var status : AccountStatus.values()) {
             if (status == AccountStatus.ACTIVE) continue;
             account.setStatus(status);
-            assertThatThrownBy(() -> useCase.execute("42", request)).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> useCase.execute("42", request))
+                    .isInstanceOf(AccessDeniedException.class);
         }
         verifyNoInteractions(customers, employees);
     }
 
-    @Test @DisplayName("A: Missing customer profile is not created implicitly")
+    @Test
+    @DisplayName("A: Missing customer profile is not created implicitly")
     void missingCustomer() {
-        account(); assertThatThrownBy(() -> useCase.execute("42", request)).isInstanceOf(UserNotFoundException.class);
+        account();
+        assertThatThrownBy(() -> useCase.execute("42", request))
+                .isInstanceOf(UserNotFoundException.class);
         verify(customers, never()).saveAndFlush(any());
     }
 
-    @Test @DisplayName("A: Missing employee profile is not created implicitly")
+    @Test
+    @DisplayName("A: Missing employee profile is not created implicitly")
     void missingEmployee() {
-        account(); account.setAccountType(AccountType.EMPLOYEE);
-        assertThatThrownBy(() -> useCase.execute("42", request)).isInstanceOf(UserNotFoundException.class);
+        account();
+        account.setAccountType(AccountType.EMPLOYEE);
+        assertThatThrownBy(() -> useCase.execute("42", request))
+                .isInstanceOf(UserNotFoundException.class);
         verify(employees, never()).saveAndFlush(any());
     }
 
-    @Test @DisplayName("A: Missing employee role prevents profile mutation")
+    @Test
+    @DisplayName("A: Missing employee role prevents profile mutation")
     void missingRole() {
-        account(); account.setAccountType(AccountType.EMPLOYEE); var profile = new EmployeeEntity();
+        account();
+        account.setAccountType(AccountType.EMPLOYEE);
+        var profile = new EmployeeEntity();
         when(employees.findByAccount_AccountId(42L)).thenReturn(Optional.of(profile));
-        assertThatThrownBy(() -> useCase.execute("42", request)).isInstanceOf(IllegalStateException.class);
-        assertThat(profile.getFullName()).isNull(); verify(employees, never()).saveAndFlush(any());
+        assertThatThrownBy(() -> useCase.execute("42", request))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(profile.getFullName()).isNull();
+        verify(employees, never()).saveAndFlush(any());
     }
 
-    @Test @DisplayName("A: Database read outage does not become not found")
+    @Test
+    @DisplayName("A: Database read outage does not become not found")
     void readOutage() {
         when(accounts.findById(42L)).thenThrow(new DataAccessResourceFailureException("offline"));
-        assertThatThrownBy(() -> useCase.execute("42", request)).isInstanceOf(DataAccessResourceFailureException.class);
+        assertThatThrownBy(() -> useCase.execute("42", request))
+                .isInstanceOf(DataAccessResourceFailureException.class);
         verifyNoInteractions(customers, employees);
     }
 
-    @Test @DisplayName("A: Flush failure propagates instead of returning a successful update")
+    @Test
+    @DisplayName("A: Flush failure propagates instead of returning a successful update")
     void writeFailure() {
-        account(); var profile = CustomerEntity.createCustomerFor(account);
+        account();
+        var profile = CustomerEntity.createCustomerFor(account);
         when(customers.findById(42L)).thenReturn(Optional.of(profile));
-        when(customers.saveAndFlush(profile)).thenThrow(new DataAccessResourceFailureException("offline"));
-        assertThatThrownBy(() -> useCase.execute("42", request)).isInstanceOf(DataAccessResourceFailureException.class);
+        when(customers.saveAndFlush(profile))
+                .thenThrow(new DataAccessResourceFailureException("offline"));
+        assertThatThrownBy(() -> useCase.execute("42", request))
+                .isInstanceOf(DataAccessResourceFailureException.class);
     }
 }
