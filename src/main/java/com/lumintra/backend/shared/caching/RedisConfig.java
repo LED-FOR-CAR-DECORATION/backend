@@ -25,13 +25,15 @@ public class RedisConfig implements CachingConfigurer {
         RedisCacheConfiguration defaultCacheConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(15))
                 .disableCachingNullValues()
+                .computePrefixWith(cacheName -> cacheName + ":")
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(RedisSerializer.string()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(RedisSerializer.json()));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultCacheConfig)
-                // Specify different TTLs for specific namespaces here
-                // .withCacheConfiguration("order", defaultCacheConfig.entryTtl(Duration.ofHours(1)))
+                .withCacheConfiguration("store:products", defaultCacheConfig.entryTtl(Duration.ofMinutes(15)))
+                .withCacheConfiguration("store:product", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)))
+                .withCacheConfiguration("store:tags", defaultCacheConfig.entryTtl(Duration.ofMinutes(60)))
                 .build();
     }
 
