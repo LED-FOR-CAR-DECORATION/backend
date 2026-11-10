@@ -22,4 +22,6 @@ public interface OrderItemRepository extends JpaRepository<OrderItemEntity, Long
             ORDER BY oi.order.orderId ASC, oi.orderItemId ASC
             """)
     List<OrderItemSummaryRow> findSummaryRowsByOrderIds(@Param("orderIds") Collection<Long> orderIds);
+
+    List<OrderItemEntity> findAllByOrder_OrderIdOrderByOrderItemIdAsc(Long orderId);
 }
