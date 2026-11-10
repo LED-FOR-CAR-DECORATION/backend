@@ -3,6 +3,7 @@ package com.lumintra.backend.iam.infrastructure.persistence.mapper;
 import com.lumintra.backend.iam.api.response.ManagedUserListResponse.UserItem;
 import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.EmployeeEntity;
+
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -14,8 +15,14 @@ public class ManagedUserMapper {
         var account = employee.getAccount();
         String avatar = employee.getAvatarUrl();
         if (avatar == null || avatar.isBlank()) avatar = account.getAvatarUrl();
-        return new UserItem(account.getAccountId(), employee.getFullName(), account.getEmail(),
-                employee.getPhone(), avatar, List.of(employee.getRole().getRoleName().toUpperCase(Locale.ROOT)),
-                account.getStatus(), account.getStatus() == AccountStatus.ACTIVE);
+        return new UserItem(
+                account.getAccountId(),
+                employee.getFullName(),
+                account.getEmail(),
+                employee.getPhone(),
+                avatar,
+                List.of(employee.getRole().getRoleName().toUpperCase(Locale.ROOT)),
+                account.getStatus(),
+                account.getStatus() == AccountStatus.ACTIVE);
     }
 }

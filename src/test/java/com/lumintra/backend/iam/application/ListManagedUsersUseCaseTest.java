@@ -1,5 +1,8 @@
 package com.lumintra.backend.iam.application;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import com.lumintra.backend.iam.api.request.ManagedUserFilterRequest;
 import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
@@ -10,6 +13,7 @@ import com.lumintra.backend.iam.infrastructure.persistence.mapper.ManagedUserMap
 import com.lumintra.backend.iam.infrastructure.persistence.repository.EmployeeRepository;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,9 +30,6 @@ import org.springframework.security.access.AccessDeniedException;
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 @ExtendWith(MockitoExtension.class)
 class ListManagedUsersUseCaseTest {
     @Mock UserAccountRepository accounts;
@@ -36,86 +37,124 @@ class ListManagedUsersUseCaseTest {
     ListManagedUsersUseCase useCase;
     UserAccountEntity account;
     EmployeeEntity requester;
-    final ManagedUserFilterRequest filter = new ManagedUserFilterRequest(1,10,"STAFF",true,"name");
+    final ManagedUserFilterRequest filter =
+            new ManagedUserFilterRequest(1, 10, "STAFF", true, "name");
 
-    @BeforeEach void setup() {
-        useCase=new ListManagedUsersUseCase(accounts,employees,new ManagedUserMapper());
-        account=UserAccountEntity.createCustomerAccount("admin@example.com","private-hash");
-        account.setAccountId(42L); account.setAccountType(AccountType.EMPLOYEE); account.setStatus(AccountStatus.ACTIVE);
-        requester=new EmployeeEntity(); requester.setAccount(account);
-        var role=new RoleEntity();role.setRoleName("ADMIN");requester.setRole(role);
+    @BeforeEach
+    void setup() {
+        useCase = new ListManagedUsersUseCase(accounts, employees, new ManagedUserMapper());
+        account = UserAccountEntity.createCustomerAccount("admin@example.com", "private-hash");
+        account.setAccountId(42L);
+        account.setAccountType(AccountType.EMPLOYEE);
+        account.setStatus(AccountStatus.ACTIVE);
+        requester = new EmployeeEntity();
+        requester.setAccount(account);
+        var role = new RoleEntity();
+        role.setRoleName("ADMIN");
+        requester.setRole(role);
     }
 
-    void account() { when(accounts.findById(42L)).thenReturn(Optional.of(account)); }
-    void authorize() { account();when(employees.findByAccount_AccountId(42L)).thenReturn(Optional.of(requester)); }
+    void account() {
+        when(accounts.findById(42L)).thenReturn(Optional.of(account));
+    }
 
-    @Test @DisplayName("N: Active admin receives safe items and accurate pagination metadata")
+    void authorize() {
+        account();
+        when(employees.findByAccount_AccountId(42L)).thenReturn(Optional.of(requester));
+    }
+
+    @Test
+    @DisplayName("N: Active admin receives safe items and accurate pagination metadata")
     void adminList() {
         authorize();
-        when(employees.findAll(any(Specification.class),any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(requester),PageRequest.of(1,10),11));
-        var result=useCase.execute("42",filter);
+        when(employees.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(requester), PageRequest.of(1, 10), 11));
+        var result = useCase.execute("42", filter);
         assertThat(result.items()).hasSize(1);
         assertThat(result.items().getFirst().email()).isEqualTo("admin@example.com");
         assertThat(result.meta().getTotalElements()).isEqualTo(11);
         assertThat(result.meta().getPage()).isEqualTo(1);
-        var pageable=ArgumentCaptor.forClass(Pageable.class);
-        verify(employees).findAll(any(Specification.class),pageable.capture());
-        assertThat(pageable.getValue().getSort().getOrderFor("account.accountId").isDescending()).isTrue();
+        var pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(employees).findAll(any(Specification.class), pageable.capture());
+        assertThat(pageable.getValue().getSort().getOrderFor("account.accountId").isDescending())
+                .isTrue();
     }
 
-    @Test @DisplayName("N: Current database manager role is permitted")
+    @Test
+    @DisplayName("N: Current database manager role is permitted")
     void managerList() {
-        authorize();requester.getRole().setRoleName("manager");
-        when(employees.findAll(any(Specification.class),any(Pageable.class))).thenReturn(new PageImpl<EmployeeEntity>(List.of()));
-        assertThat(useCase.execute("42",filter).items()).isEmpty();
+        authorize();
+        requester.getRole().setRoleName("manager");
+        when(employees.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<EmployeeEntity>(List.of()));
+        assertThat(useCase.execute("42", filter).items()).isEmpty();
     }
 
-    @Test @DisplayName("A: Stale JWT admin privilege cannot override a demoted database role")
+    @Test
+    @DisplayName("A: Stale JWT admin privilege cannot override a demoted database role")
     void demotedRole() {
-        authorize(); requester.getRole().setRoleName("STAFF");
-        assertThatThrownBy(() -> useCase.execute("42",filter)).isInstanceOf(AccessDeniedException.class);
-        verify(employees,never()).findAll(any(Specification.class),any(Pageable.class));
+        authorize();
+        requester.getRole().setRoleName("STAFF");
+        assertThatThrownBy(() -> useCase.execute("42", filter))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(employees, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
-    @Test @DisplayName("A: Inactive caller is denied before querying users")
+    @Test
+    @DisplayName("A: Inactive caller is denied before querying users")
     void inactive() {
-        account(); account.setStatus(AccountStatus.SUSPENDED);
-        assertThatThrownBy(() -> useCase.execute("42",filter)).isInstanceOf(AccessDeniedException.class);
+        account();
+        account.setStatus(AccountStatus.SUSPENDED);
+        assertThatThrownBy(() -> useCase.execute("42", filter))
+                .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(employees);
     }
 
-    @Test @DisplayName("A: Customer caller cannot list internal users")
+    @Test
+    @DisplayName("A: Customer caller cannot list internal users")
     void customer() {
-        account(); account.setAccountType(AccountType.CUSTOMER);
-        assertThatThrownBy(() -> useCase.execute("42",filter)).isInstanceOf(AccessDeniedException.class);
+        account();
+        account.setAccountType(AccountType.CUSTOMER);
+        assertThatThrownBy(() -> useCase.execute("42", filter))
+                .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(employees);
     }
 
-    @Test @DisplayName("A: Missing internal profile is denied")
+    @Test
+    @DisplayName("A: Missing internal profile is denied")
     void missingProfile() {
-        account(); assertThatThrownBy(() -> useCase.execute("42",filter)).isInstanceOf(AccessDeniedException.class);
-        verify(employees,never()).findAll(any(Specification.class),any(Pageable.class));
+        account();
+        assertThatThrownBy(() -> useCase.execute("42", filter))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(employees, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
-    @Test @DisplayName("A: Missing caller account returns unauthorized")
+    @Test
+    @DisplayName("A: Missing caller account returns unauthorized")
     void missingAccount() {
-        assertThatThrownBy(() -> useCase.execute("42",filter)).isInstanceOf(InvalidCredentialsException.class);
+        assertThatThrownBy(() -> useCase.execute("42", filter))
+                .isInstanceOf(InvalidCredentialsException.class);
         verifyNoInteractions(employees);
     }
 
-    @Test @DisplayName("A: Invalid subjects cannot access the database")
+    @Test
+    @DisplayName("A: Invalid subjects cannot access the database")
     void invalidSubjects() {
-        for (String subject:new String[]{null,"abc","0","-1","9223372036854775808"}) {
-            assertThatThrownBy(() -> useCase.execute(subject,filter)).isInstanceOf(InvalidCredentialsException.class);
+        for (String subject : new String[] {null, "abc", "0", "-1", "9223372036854775808"}) {
+            assertThatThrownBy(() -> useCase.execute(subject, filter))
+                    .isInstanceOf(InvalidCredentialsException.class);
         }
-        verifyNoInteractions(accounts,employees);
+        verifyNoInteractions(accounts, employees);
     }
 
-    @Test @DisplayName("A: Storage outage propagates instead of returning an empty list")
+    @Test
+    @DisplayName("A: Storage outage propagates instead of returning an empty list")
     void outage() {
-        authorize();when(employees.findAll(any(Specification.class),any(Pageable.class)))
-                .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("offline"));
-        assertThatThrownBy(() -> useCase.execute("42",filter)).isInstanceOf(org.springframework.dao.DataAccessResourceFailureException.class);
+        authorize();
+        when(employees.findAll(any(Specification.class), any(Pageable.class)))
+                .thenThrow(
+                        new org.springframework.dao.DataAccessResourceFailureException("offline"));
+        assertThatThrownBy(() -> useCase.execute("42", filter))
+                .isInstanceOf(org.springframework.dao.DataAccessResourceFailureException.class);
     }
 }
