@@ -52,8 +52,16 @@ public class UserProfileController {
                                 examples =
                                         @ExampleObject(
                                                 value =
-                                                        "{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication"
-                                                            + " is required.\",\"status\":401,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}"))),
+                                                        """
+                                                        {
+                                                          "code": "UNAUTHORIZED",
+                                                          "message": "Authentication is required.",
+                                                          "status": 401,
+                                                          "timestamp": "2026-11-10T12:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "403",
                 description = "Inactive account",
@@ -63,8 +71,16 @@ public class UserProfileController {
                                 examples =
                                         @ExampleObject(
                                                 value =
-                                                        "{\"code\":\"FORBIDDEN\",\"message\":\"Access"
-                                                            + " is denied.\",\"status\":403,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}"))),
+                                                        """
+                                                        {
+                                                          "code": "FORBIDDEN",
+                                                          "message": "Access is denied.",
+                                                          "status": 403,
+                                                          "timestamp": "2026-11-10T12:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
                 description = "Account or profile missing",
@@ -74,8 +90,16 @@ public class UserProfileController {
                                 examples =
                                         @ExampleObject(
                                                 value =
-                                                        "{\"code\":\"USER_NOT_FOUND\",\"message\":\"Account"
-                                                            + " not found.\",\"status\":404,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}"))),
+                                                        """
+                                                        {
+                                                          "code": "USER_NOT_FOUND",
+                                                          "message": "Account not found.",
+                                                          "status": 404,
+                                                          "timestamp": "2026-11-10T12:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "500",
                 description = "Unexpected failure",
@@ -85,9 +109,16 @@ public class UserProfileController {
                                 examples =
                                         @ExampleObject(
                                                 value =
-                                                        "{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"An"
-                                                            + " unexpected error"
-                                                            + " occurred\",\"status\":500,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}")))
+                                                        """
+{
+  "code": "INTERNAL_SERVER_ERROR",
+  "message": "An unexpected error occurred",
+  "status": 500,
+  "timestamp": "2026-11-10T12:00:00Z",
+  "traceId": "trace-123",
+  "details": []
+}
+""")))
     })
     public ResponseEntity<ApiResponse<CurrentProfileResponse>> me(Authentication authentication) {
         if (authentication == null
