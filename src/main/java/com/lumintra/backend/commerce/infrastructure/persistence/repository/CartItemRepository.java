@@ -4,6 +4,7 @@ import com.lumintra.backend.commerce.infrastructure.persistence.entity.CartItemE
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,4 +13,6 @@ public interface CartItemRepository extends JpaRepository<CartItemEntity, Long> 
     List<CartItemEntity> findAllByCart_CartIdOrderByAddedAtDesc(Long cartId);
 
     Optional<CartItemEntity> findByCart_CartIdAndProductId(Long cartId, Long productId);
+
+    List<CartItemEntity> findAllByCart_CartIdAndCartItemIdIn(Long cartId, Collection<Long> cartItemIds);
 }
