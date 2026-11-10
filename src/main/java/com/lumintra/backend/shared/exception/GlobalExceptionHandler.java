@@ -1,6 +1,8 @@
 package com.lumintra.backend.shared.exception;
 
+import com.lumintra.backend.shared.exception.commerce.*;
 import com.lumintra.backend.shared.exception.iam.*;
+import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -9,10 +11,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import java.time.Instant;
 import java.util.List;
@@ -25,7 +29,34 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final Tracer tracer;
 
-    // IAM
+    // Store exception
+    @ExceptionHandler(InvalidPriceRangeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPriceRangeException(InvalidPriceRangeException ex) {
+        return buildErrorResponse("INVALID_PRICE_RANGE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    // Commerce exceptions
+    @ExceptionHandler(ProductNotAvailableException.class)
+    public ResponseEntity<ErrorResponse> handleProductNotAvailable(ProductNotAvailableException ex) {
+        return buildErrorResponse("PRODUCT_NOT_AVAILABLE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(ProductAlreadyOwnedException.class)
+    public ResponseEntity<ErrorResponse> handleProductAlreadyOwned(ProductAlreadyOwnedException ex) {
+        return buildErrorResponse("PRODUCT_ALREADY_OWNED", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DigitalItemQuantityLimitException.class)
+    public ResponseEntity<ErrorResponse> handleDigitalItemQuantityLimit(DigitalItemQuantityLimitException ex) {
+        return buildErrorResponse("DIGITAL_ITEM_QUANTITY_LIMIT", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ErrorResponse> handleInsufficientStock(InsufficientStockException ex) {
+        return buildErrorResponse("INSUFFICIENT_STOCK", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    // IAM exceptions
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
         return buildErrorResponse("INVALID_CREDENTIALS", ex.getMessage(), HttpStatus.UNAUTHORIZED);
@@ -46,6 +77,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("EMAIL_ALREADY_REGISTERED", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    // IAM specific exceptions from origin/develop
     @ExceptionHandler(InvalidOtpException.class)
     public ResponseEntity<ErrorResponse> handleInvalidOtp(InvalidOtpException ex) {
         return buildErrorResponse("INVALID_OTP", ex.getMessage(), HttpStatus.BAD_REQUEST);
@@ -76,6 +108,35 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("MAX_RESEND_ATTEMPTS_REACHED", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    // General validation exception (covers both body and query param validation)
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> ErrorResponse.ErrorDetail.builder()
+                        .field(error.getField())
+                        .message(error.getDefaultMessage())
+                        .build())
+                .toList();
+        return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST, details);
+    }
+
+    // Security exceptions
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException ex) {
+        return buildErrorResponse("UNAUTHORIZED", "Authentication is required.", HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException ex) {
+        return buildErrorResponse("FORBIDDEN", "Access is denied.", HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception exception) {
+        log.error("Unexpected system failure occurred", exception);
+        return buildErrorResponse("INTERNAL_SERVER_ERROR", "An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
     @ExceptionHandler(PasswordResetLockedException.class)
     public ResponseEntity<ErrorResponse> handlePasswordResetLocked(PasswordResetLockedException ex) {
         return buildErrorResponse("PASSWORD_RESET_LOCKED", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
@@ -86,28 +147,9 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("PASSWORD_RESET_UNAVAILABLE", ex.getMessage(), HttpStatus.SERVICE_UNAVAILABLE);
     }
 
-    // General
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableBody(org.springframework.http.converter.HttpMessageNotReadableException ex) {
         return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> ErrorResponse.ErrorDetail.builder()
-                        .field(error.getField())
-                        .message(error.getDefaultMessage())
-                        .build())
-                .toList();
-
-        return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST, details);
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception exception) {
-        log.error("Unexpected system failure occurred", exception);
-        return buildErrorResponse("INTERNAL_SERVER_ERROR", "An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     // Helpers
