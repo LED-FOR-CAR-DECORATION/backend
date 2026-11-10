@@ -3,19 +3,23 @@ package com.lumintra.backend.commerce.api.controller;
 import com.lumintra.backend.commerce.api.request.CheckoutRequest;
 import com.lumintra.backend.commerce.api.request.OrderFilterRequest;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
+import com.lumintra.backend.commerce.api.response.OrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.OrderListResponse;
 import com.lumintra.backend.commerce.application.CheckoutOrderUseCase;
+import com.lumintra.backend.commerce.application.GetOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListOrdersUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +27,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,6 +43,7 @@ public class OrderController {
 
     private final CheckoutOrderUseCase checkoutOrderUseCase;
     private final ListOrdersUseCase listOrdersUseCase;
+    private final GetOrderDetailUseCase getOrderDetailUseCase;
 
     @Operation(
             summary = "List authenticated customer's purchase orders",
@@ -107,6 +113,98 @@ public class OrderController {
         Long customerId = extractCustomerId(authentication);
         OrderListResponse result = listOrdersUseCase.execute(customerId, request);
         return ResponseEntity.ok(ApiResponse.success(result.items(), result.meta()));
+    }
+
+    @Operation(
+            summary = "View purchase order detail",
+            description = "Retrieves full details of an order owned by the authenticated CUSTOMER, including snapshotted line items (with previewGifUrl for CHARACTER items), optional AhaMove delivery tracking, and active SePay VietQR retry info or confirmed payment summary."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Order detail retrieved successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid or non-positive order id path parameter",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Validation Failed",
+                                    value = """
+                                            {
+                                              "code": "VALIDATION_FAILED",
+                                              "message": "Invalid request parameter",
+                                              "status": 400,
+                                              "timestamp": "2026-11-10T09:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": [
+                                                {
+                                                  "field": "id",
+                                                  "message": "id must be greater than 0"
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing, expired, or invalid JWT authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: account type is not CUSTOMER (e.g. EMPLOYEE accounts are denied)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Not Found: order does not exist or belongs to another customer",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Order Not Found",
+                                    value = """
+                                            {
+                                              "code": "ORDER_NOT_FOUND",
+                                              "message": "Order not found.",
+                                              "status": 404,
+                                              "timestamp": "2026-11-10T09:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<OrderDetailResponse>> getOrderDetail(
+            Authentication authentication,
+            @Parameter(description = "Numeric purchase order identifier", example = "102")
+            @PathVariable @Positive(message = "id must be greater than 0") Long id) {
+        Long customerId = extractCustomerId(authentication);
+        OrderDetailResponse response = getOrderDetailUseCase.execute(customerId, id);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @Operation(

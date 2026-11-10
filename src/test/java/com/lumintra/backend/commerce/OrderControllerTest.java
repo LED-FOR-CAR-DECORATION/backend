@@ -4,12 +4,16 @@ import com.lumintra.backend.commerce.api.controller.OrderController;
 import com.lumintra.backend.commerce.api.request.CheckoutRequest;
 import com.lumintra.backend.commerce.api.request.OrderFilterRequest;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
+import com.lumintra.backend.commerce.api.response.OrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.OrderListResponse;
 import com.lumintra.backend.commerce.application.CheckoutOrderUseCase;
+import com.lumintra.backend.commerce.application.GetOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListOrdersUseCase;
+import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.OrderType;
 import com.lumintra.backend.commerce.domain.model.PaymentGateway;
+import com.lumintra.backend.commerce.domain.model.PaymentStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
@@ -17,10 +21,12 @@ import com.lumintra.backend.shared.exception.commerce.AddressNotFoundException;
 import com.lumintra.backend.shared.exception.commerce.DeliveryAddressRequiredException;
 import com.lumintra.backend.shared.exception.commerce.InsufficientStockException;
 import com.lumintra.backend.shared.exception.commerce.InvalidCartItemException;
+import com.lumintra.backend.shared.exception.commerce.OrderNotFoundException;
 import com.lumintra.backend.shared.exception.commerce.ProductAlreadyOwnedException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
+import com.lumintra.backend.store.domain.model.ProductType;
 import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,6 +65,9 @@ class OrderControllerTest {
 
     @MockitoBean
     private ListOrdersUseCase listOrdersUseCase;
+
+    @MockitoBean
+    private GetOrderDetailUseCase getOrderDetailUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -384,5 +393,197 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
 
         verifyNoInteractions(listOrdersUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-08 UTCID01 [N]: GET /api/orders/{id} for PENDING_PAYMENT MIXED order returns 200 OK with items, delivery, and VietQR instructions")
+    void getOrderDetail_pendingMixedOrder_returns200WithDeliveryAndVietQr() throws Exception {
+        Instant createdAt = Instant.parse("2026-11-10T16:45:00Z");
+        Instant expiresAt = Instant.parse("2026-11-10T17:00:00Z");
+
+        OrderDetailResponse response = OrderDetailResponse.builder()
+                .orderId(102L)
+                .orderType(OrderType.MIXED)
+                .status(OrderStatus.PENDING_PAYMENT)
+                .subtotal(new BigDecimal("250000.00"))
+                .shippingFee(new BigDecimal("0.00"))
+                .totalAmount(new BigDecimal("250000.00"))
+                .expiresAt(expiresAt)
+                .createdAt(createdAt)
+                .items(List.of(
+                        OrderDetailResponse.OrderItemDetail.builder()
+                                .orderItemId(1L)
+                                .productId(5L)
+                                .productName("Lumintra LED Matrix v1")
+                                .productType(ProductType.LED)
+                                .thumbnailUrl("https://cdn.lumintra.com/products/led.png")
+                                .previewGifUrl(null)
+                                .unitPrice(new BigDecimal("200000.00"))
+                                .quantity(1)
+                                .subtotal(new BigDecimal("200000.00"))
+                                .build(),
+                        OrderDetailResponse.OrderItemDetail.builder()
+                                .orderItemId(2L)
+                                .productId(8L)
+                                .productName("Pixel Cat Character")
+                                .productType(ProductType.CHARACTER)
+                                .thumbnailUrl("https://cdn.lumintra.com/products/cat.png")
+                                .previewGifUrl("https://cdn.lumintra.com/characters/cat-preview.gif")
+                                .unitPrice(new BigDecimal("50000.00"))
+                                .quantity(1)
+                                .subtotal(new BigDecimal("50000.00"))
+                                .build()
+                ))
+                .delivery(OrderDetailResponse.DeliveryDetail.builder()
+                        .carrier("AHAMOVE")
+                        .recipientName("Dang Phuoc Nguyen")
+                        .recipientPhone("0912345678")
+                        .fullAddress("Saigon Hi-Tech Park, Thu Duc City, HCMC")
+                        .latitude(new BigDecimal("10.8411000"))
+                        .longitude(new BigDecimal("106.8099000"))
+                        .deliveryStatus(DeliveryStatus.PENDING)
+                        .trackingNumber(null)
+                        .trackingUrl(null)
+                        .estimatedDeliveryAt(null)
+                        .build())
+                .payment(OrderDetailResponse.PaymentDetail.builder()
+                        .paymentGateway(PaymentGateway.SEPAY)
+                        .status(PaymentStatus.PENDING)
+                        .paymentContent("LUM102")
+                        .qrCodeUrl("https://qr.sepay.vn/img?acc=0123456789&bank=MBBank&amount=250000&des=LUM102")
+                        .bankAccount("0123456789")
+                        .bankName("MBBank")
+                        .expiresAt(expiresAt)
+                        .build())
+                .build();
+
+        when(getOrderDetailUseCase.execute(42L, 102L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/orders/102")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderId").value(102))
+                .andExpect(jsonPath("$.data.orderType").value("MIXED"))
+                .andExpect(jsonPath("$.data.status").value("PENDING_PAYMENT"))
+                .andExpect(jsonPath("$.data.totalAmount").value(250000.00))
+                .andExpect(jsonPath("$.data.items[0].productName").value("Lumintra LED Matrix v1"))
+                .andExpect(jsonPath("$.data.items[0].previewGifUrl").doesNotExist())
+                .andExpect(jsonPath("$.data.items[1].productType").value("CHARACTER"))
+                .andExpect(jsonPath("$.data.items[1].previewGifUrl").value("https://cdn.lumintra.com/characters/cat-preview.gif"))
+                .andExpect(jsonPath("$.data.delivery.carrier").value("AHAMOVE"))
+                .andExpect(jsonPath("$.data.delivery.latitude").value(10.8411))
+                .andExpect(jsonPath("$.data.payment.paymentContent").value("LUM102"))
+                .andExpect(jsonPath("$.data.payment.qrCodeUrl").value("https://qr.sepay.vn/img?acc=0123456789&bank=MBBank&amount=250000&des=LUM102"))
+                .andExpect(jsonPath("$.data.payment.bankReferenceCode").doesNotExist())
+                .andExpect(jsonPath("$.meta").doesNotExist());
+
+        verify(getOrderDetailUseCase).execute(42L, 102L);
+    }
+
+    @Test
+    @DisplayName("COM-08 UTCID02 [N]: GET /api/orders/{id} for COMPLETED DIGITAL order returns null delivery and settled payment summary")
+    void getOrderDetail_completedDigitalOrder_returnsSettledPaymentAndNullDelivery() throws Exception {
+        Instant createdAt = Instant.parse("2026-11-10T10:00:00Z");
+        Instant paidAt = Instant.parse("2026-11-10T10:02:15Z");
+
+        OrderDetailResponse response = OrderDetailResponse.builder()
+                .orderId(101L)
+                .orderType(OrderType.DIGITAL)
+                .status(OrderStatus.COMPLETED)
+                .subtotal(new BigDecimal("59000.00"))
+                .shippingFee(new BigDecimal("0.00"))
+                .totalAmount(new BigDecimal("59000.00"))
+                .expiresAt(null)
+                .createdAt(createdAt)
+                .items(List.of(
+                        OrderDetailResponse.OrderItemDetail.builder()
+                                .orderItemId(10L)
+                                .productId(203L)
+                                .productName("Cyber Dragon")
+                                .productType(ProductType.CHARACTER)
+                                .thumbnailUrl("https://cdn.lumintra.com/products/dragon.png")
+                                .previewGifUrl("https://cdn.lumintra.com/characters/dragon-preview.gif")
+                                .unitPrice(new BigDecimal("59000.00"))
+                                .quantity(1)
+                                .subtotal(new BigDecimal("59000.00"))
+                                .build()
+                ))
+                .delivery(null)
+                .payment(OrderDetailResponse.PaymentDetail.builder()
+                        .paymentGateway(PaymentGateway.SEPAY)
+                        .status(PaymentStatus.SUCCESS)
+                        .bankReferenceCode("SEPAY-FT263149981")
+                        .paidAmount(new BigDecimal("59000.00"))
+                        .paidAt(paidAt)
+                        .build())
+                .build();
+
+        when(getOrderDetailUseCase.execute(42L, 101L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/orders/101")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderId").value(101))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.expiresAt").doesNotExist())
+                .andExpect(jsonPath("$.data.delivery").doesNotExist())
+                .andExpect(jsonPath("$.data.payment.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.payment.bankReferenceCode").value("SEPAY-FT263149981"))
+                .andExpect(jsonPath("$.data.payment.paidAmount").value(59000.00))
+                .andExpect(jsonPath("$.data.payment.paidAt").value("2026-11-10T10:02:15Z"))
+                .andExpect(jsonPath("$.data.payment.qrCodeUrl").doesNotExist());
+
+        verify(getOrderDetailUseCase).execute(42L, 101L);
+    }
+
+    @Test
+    @DisplayName("COM-08 UTCID03 [B]: GET /api/orders/{id} rejects non-numeric and non-positive path ids with 400 VALIDATION_FAILED")
+    void getOrderDetail_invalidPathId_returns400ValidationFailed() throws Exception {
+        mockMvc.perform(get("/api/orders/abc")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details[0].field").value("id"));
+
+        mockMvc.perform(get("/api/orders/0")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details[0].field").value("id"));
+
+        mockMvc.perform(get("/api/orders/-5")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details[0].field").value("id"));
+
+        verifyNoInteractions(getOrderDetailUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-08 UTCID04 [A]: GET /api/orders/{id} returns 404 ORDER_NOT_FOUND for missing/IDOR order, and 401/403 for invalid auth")
+    void getOrderDetail_notFoundAndSecurityDenials_returnExactErrorResponses() throws Exception {
+        when(getOrderDetailUseCase.execute(42L, 999L))
+                .thenThrow(new OrderNotFoundException("Order not found."));
+
+        mockMvc.perform(get("/api/orders/999")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Order not found."));
+
+        mockMvc.perform(get("/api/orders/102"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(get("/api/orders/102")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        mockMvc.perform(get("/api/orders/102")
+                        .with(SecurityMockMvcRequestPostProcessors.user("not-a-number").roles("CUSTOMER")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
 }

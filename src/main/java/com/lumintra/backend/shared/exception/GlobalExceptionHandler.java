@@ -17,6 +17,8 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
@@ -70,6 +72,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AddressNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleAddressNotFound(AddressNotFoundException ex) {
         return buildErrorResponse("ADDRESS_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleOrderNotFound(OrderNotFoundException ex) {
+        return buildErrorResponse("ORDER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     // IAM exceptions
@@ -139,6 +146,31 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
         return buildErrorResponse("VALIDATION_FAILED", "Malformed JSON request or invalid field value", HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        ErrorResponse.ErrorDetail detail = ErrorResponse.ErrorDetail.builder()
+                .field(ex.getName())
+                .message("Invalid parameter value")
+                .build();
+        return buildErrorResponse("VALIDATION_FAILED", "Invalid request parameter", HttpStatus.BAD_REQUEST, List.of(detail));
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleMethodValidation(HandlerMethodValidationException ex) {
+        List<ErrorResponse.ErrorDetail> details = ex.getParameterValidationResults().stream()
+                .flatMap(paramResult -> {
+                    String field = Optional.ofNullable(paramResult.getMethodParameter().getParameterName())
+                            .orElse("parameter");
+                    return paramResult.getResolvableErrors().stream()
+                            .map(error -> ErrorResponse.ErrorDetail.builder()
+                                    .field(field)
+                                    .message(Optional.ofNullable(error.getDefaultMessage()).orElse("Invalid parameter value"))
+                                    .build());
+                })
+                .toList();
+        return buildErrorResponse("VALIDATION_FAILED", "Invalid request parameter", HttpStatus.BAD_REQUEST, details);
     }
 
     // Security exceptions
