@@ -137,6 +137,21 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("INTERNAL_SERVER_ERROR", "An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    @ExceptionHandler(PasswordResetLockedException.class)
+    public ResponseEntity<ErrorResponse> handlePasswordResetLocked(PasswordResetLockedException ex) {
+        return buildErrorResponse("PASSWORD_RESET_LOCKED", ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @ExceptionHandler(PasswordResetUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handlePasswordResetUnavailable(PasswordResetUnavailableException ex) {
+        return buildErrorResponse("PASSWORD_RESET_UNAVAILABLE", ex.getMessage(), HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST);
+    }
+
     // Helpers
     private ResponseEntity<ErrorResponse> buildErrorResponse(String code, String message, HttpStatus status) {
         return buildErrorResponse(code, message, status, List.of());
