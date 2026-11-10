@@ -48,7 +48,7 @@ class ManagedUserControllerTest {
                         "staff@example.com",
                         null,
                         null,
-                        List.of("STAFF"),
+                        "STAFF",
                         AccountStatus.ACTIVE,
                         true);
         var page = new PageImpl<>(List.of(item), PageRequest.of(0, 10), 1);
@@ -63,6 +63,8 @@ class ManagedUserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].accountId").value(7))
                 .andExpect(jsonPath("$.data.meta.totalElements").value(1))
+                .andExpect(jsonPath("$.data.items[0].role").value("STAFF"))
+                .andExpect(jsonPath("$.data.items[0].roles").doesNotExist())
                 .andExpect(jsonPath("$.data.items[0].passwordHash").doesNotExist())
                 .andExpect(jsonPath("$.data.items[0].failedAttempts").doesNotExist());
         verify(useCase).execute("42", new ManagedUserFilterRequest(null, null, null, null, null));

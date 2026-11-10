@@ -54,7 +54,7 @@ class ManagedUserSwaggerTest {
                         "email",
                         "phone",
                         "avatar",
-                        "roles",
+                        "role",
                         "status",
                         "active");
     }

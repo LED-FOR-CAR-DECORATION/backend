@@ -37,7 +37,7 @@ class ManagedUserMapperTest {
         var item = new ManagedUserMapper().toItem(employee);
         assertThat(item.accountId()).isEqualTo(42L);
         assertThat(item.name()).isEqualTo("Staff");
-        assertThat(item.roles()).containsExactly("STAFF");
+        assertThat(item.role()).isEqualTo("STAFF");
         assertThat(item.active()).isTrue();
         assertThat(item.phone()).isEqualTo("0901234567");
         assertThat(item.avatar()).isEqualTo("profile.png");

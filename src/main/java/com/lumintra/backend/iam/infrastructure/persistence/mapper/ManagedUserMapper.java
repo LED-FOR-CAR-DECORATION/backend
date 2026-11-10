@@ -6,7 +6,6 @@ import com.lumintra.backend.iam.infrastructure.persistence.entity.EmployeeEntity
 
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.Locale;
 
 @Component
@@ -21,7 +20,7 @@ public class ManagedUserMapper {
                 account.getEmail(),
                 employee.getPhone(),
                 avatar,
-                List.of(employee.getRole().getRoleName().toUpperCase(Locale.ROOT)),
+                employee.getRole().getRoleName().toUpperCase(Locale.ROOT),
                 account.getStatus(),
                 account.getStatus() == AccountStatus.ACTIVE);
     }

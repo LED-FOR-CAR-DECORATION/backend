@@ -50,10 +50,10 @@ public record ManagedUserListResponse(
                             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
                     String avatar,
             @Schema(
-                            description = "Current database role names without ROLE_ prefix",
-                            example = "[\"MANAGER\"]",
+                            description = "Current database role name without ROLE_ prefix",
+                            example = "MANAGER",
                             requiredMode = Schema.RequiredMode.REQUIRED)
-                    List<String> roles,
+                    String role,
             @Schema(
                             description = "Account lifecycle status",
                             example = "ACTIVE",
@@ -63,9 +63,5 @@ public record ManagedUserListResponse(
                             description = "Whether account status is ACTIVE",
                             example = "true",
                             requiredMode = Schema.RequiredMode.REQUIRED)
-                    boolean active) {
-        public UserItem {
-            roles = List.copyOf(roles);
-        }
-    }
+                    boolean active) {}
 }
