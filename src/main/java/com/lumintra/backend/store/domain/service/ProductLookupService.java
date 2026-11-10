@@ -4,7 +4,10 @@ import com.lumintra.backend.store.domain.model.ProductSnapshot;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 
 public interface ProductLookupService {
+    Optional<ProductSnapshot> findSnapshotById(Long productId);
+
     Map<Long, ProductSnapshot> findSnapshotsByIds(Collection<Long> productIds);
 }

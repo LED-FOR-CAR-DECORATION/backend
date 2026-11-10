@@ -36,6 +36,10 @@ public class CartItemAvailabilityService {
             return AvailabilityCheckResult.unavailable(AvailabilityCheckResult.REASON_ALREADY_OWNED);
         }
 
+        if (product.productType() == ProductType.BUNDLE) {
+            return productAvailabilityPort.evaluateBundleAvailability(customerId, product.productId(), requestedQuantity);
+        }
+
         return AvailabilityCheckResult.availableResult();
     }
 }

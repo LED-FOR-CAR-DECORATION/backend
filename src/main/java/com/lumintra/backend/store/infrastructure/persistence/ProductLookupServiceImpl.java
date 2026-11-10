@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -19,6 +20,15 @@ import java.util.stream.Collectors;
 public class ProductLookupServiceImpl implements ProductLookupService {
 
     private final ProductRepository productRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ProductSnapshot> findSnapshotById(Long productId) {
+        if (productId == null) {
+            return Optional.empty();
+        }
+        return productRepository.findById(productId).map(this::toSnapshot);
+    }
 
     @Override
     @Transactional(readOnly = true)

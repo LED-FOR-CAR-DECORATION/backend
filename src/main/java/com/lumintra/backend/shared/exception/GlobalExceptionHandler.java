@@ -1,5 +1,6 @@
 package com.lumintra.backend.shared.exception;
 
+import com.lumintra.backend.shared.exception.commerce.*;
 import com.lumintra.backend.shared.exception.iam.*;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import io.micrometer.tracing.Span;
@@ -32,6 +33,27 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidPriceRangeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidPriceRangeException(InvalidPriceRangeException ex) {
         return buildErrorResponse("INVALID_PRICE_RANGE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    // Commerce exceptions
+    @ExceptionHandler(ProductNotAvailableException.class)
+    public ResponseEntity<ErrorResponse> handleProductNotAvailable(ProductNotAvailableException ex) {
+        return buildErrorResponse("PRODUCT_NOT_AVAILABLE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(ProductAlreadyOwnedException.class)
+    public ResponseEntity<ErrorResponse> handleProductAlreadyOwned(ProductAlreadyOwnedException ex) {
+        return buildErrorResponse("PRODUCT_ALREADY_OWNED", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DigitalItemQuantityLimitException.class)
+    public ResponseEntity<ErrorResponse> handleDigitalItemQuantityLimit(DigitalItemQuantityLimitException ex) {
+        return buildErrorResponse("DIGITAL_ITEM_QUANTITY_LIMIT", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ErrorResponse> handleInsufficientStock(InsufficientStockException ex) {
+        return buildErrorResponse("INSUFFICIENT_STOCK", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     // IAM exceptions
