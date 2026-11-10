@@ -2,6 +2,7 @@ package com.lumintra.backend.iam.application.listener;
 
 import com.lumintra.backend.iam.domain.event.StaffAccountLockedEvent;
 import com.lumintra.backend.iam.domain.event.StaffLoginSuccessEvent;
+import com.lumintra.backend.iam.domain.event.StaffPasswordChangedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -24,5 +25,12 @@ public class StaffAuditEventListener {
         //TODO Write audit events to database asynchronously
         log.warn("Audit: Staff account locked [userId={}] [email={}] [role={}] [duration=15m]",
                 event.userId(), event.email(), event.role());
+    }
+
+    @org.springframework.transaction.event.TransactionalEventListener(phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT)
+    public void onStaffPasswordChanged(StaffPasswordChangedEvent event) {
+        //TODO Write audit events to database asynchronously
+        log.info("Audit: Staff password changed [userId={}] [role={}]",
+                event.userId(), event.role());
     }
 }

@@ -21,6 +21,28 @@ import java.util.List;
 public class JwtTokenProvider {
 
     private final SecretKey key;
+    private com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository accounts;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public JwtTokenProvider(@Value("${jwt.secret}") String secret,
+            com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository accounts) {
+        this(secret);
+        this.accounts = accounts;
+    }
+
+    private String credentialVersion(Long accountId) {
+        if (accounts == null) return "unit-test";
+        var account = accounts.findById(accountId).orElseThrow(() ->
+                new com.lumintra.backend.shared.exception.iam.InvalidCredentialsException("Account not found."));
+        try {
+            var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(key);
+            return java.util.HexFormat.of().formatHex(mac.doFinal(
+                    (accountId + ":" + account.getPasswordHash()).getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.GeneralSecurityException ex) {
+            throw new IllegalStateException("Credential verification unavailable", ex);
+        }
+    }
 
     public JwtTokenProvider(@Value("${jwt.secret}") String secret) {
         // In production, this must be a strong 256-bit + key from the environment
@@ -44,8 +66,12 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
-            return true;
+            var claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+            if (accounts == null) return true;
+            String actual = claims.get("credentialVersion", String.class);
+            return actual != null && java.security.MessageDigest.isEqual(
+                    actual.getBytes(StandardCharsets.UTF_8),
+                    credentialVersion(Long.parseLong(claims.getSubject())).getBytes(StandardCharsets.UTF_8));
         } catch (Exception ex) {
             return false;
         }
@@ -57,6 +83,8 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(accountId.toString())
+                .id(java.util.UUID.randomUUID().toString())
+                .claim("credentialVersion", credentialVersion(accountId))
                 .claim("email", email)
                 .claim("roles", roles)
                 .issuedAt(Date.from(now))
@@ -80,6 +108,8 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(accountId.toString())
+                .id(java.util.UUID.randomUUID().toString())
+                .claim("credentialVersion", credentialVersion(accountId))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(validity))
                 .signWith(key)

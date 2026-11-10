@@ -2,6 +2,7 @@ package com.lumintra.backend.iam.application.listener;
 
 import com.lumintra.backend.iam.domain.event.StaffAccountLockedEvent;
 import com.lumintra.backend.iam.domain.event.StaffLoginSuccessEvent;
+import com.lumintra.backend.iam.domain.event.StaffPasswordChangedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,15 @@ class StaffAuditEventListenerTest {
         StaffAccountLockedEvent event = new StaffAccountLockedEvent(100L, "technician@lumintra.com", "TECHNICIAN");
 
         assertThatCode(() -> listener.onStaffAccountLocked(event))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("UTCID03 [N]: onStaffPasswordChanged handles staff password changed audit event without exception")
+    void onStaffPasswordChanged_handlesEventSuccessfully() {
+        StaffPasswordChangedEvent event = new StaffPasswordChangedEvent(100L, "admin@lumintra.com", "ADMIN");
+
+        assertThatCode(() -> listener.onStaffPasswordChanged(event))
                 .doesNotThrowAnyException();
     }
 }
