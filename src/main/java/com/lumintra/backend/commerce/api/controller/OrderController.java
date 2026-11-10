@@ -1,8 +1,11 @@
 package com.lumintra.backend.commerce.api.controller;
 
 import com.lumintra.backend.commerce.api.request.CheckoutRequest;
+import com.lumintra.backend.commerce.api.request.OrderFilterRequest;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
+import com.lumintra.backend.commerce.api.response.OrderListResponse;
 import com.lumintra.backend.commerce.application.CheckoutOrderUseCase;
+import com.lumintra.backend.commerce.application.ListOrdersUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -18,10 +21,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "Orders", description = "Endpoints for customers to check out cart items and manage purchase orders")
 @RestController
@@ -30,6 +37,77 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
     private final CheckoutOrderUseCase checkoutOrderUseCase;
+    private final ListOrdersUseCase listOrdersUseCase;
+
+    @Operation(
+            summary = "List authenticated customer's purchase orders",
+            description = "Retrieves a paginated history of orders owned by the authenticated CUSTOMER, sorted by createdAt descending with optional status and UTC date-range filters."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Paginated order history retrieved successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid pagination, status enum, date format, or fromDate after toDate",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Validation Failed",
+                                    value = """
+                                            {
+                                              "code": "VALIDATION_FAILED",
+                                              "message": "Invalid request payload",
+                                              "status": 400,
+                                              "timestamp": "2026-11-10T09:00:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": [
+                                                {
+                                                  "field": "fromDate",
+                                                  "message": "fromDate must not be after toDate"
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing, expired, or invalid JWT authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: account type is not CUSTOMER (e.g. EMPLOYEE accounts are denied)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<OrderListResponse.OrderSummaryItem>>> listOrders(
+            Authentication authentication,
+            @Valid @ModelAttribute OrderFilterRequest request) {
+        Long customerId = extractCustomerId(authentication);
+        OrderListResponse result = listOrdersUseCase.execute(customerId, request);
+        return ResponseEntity.ok(ApiResponse.success(result.items(), result.meta()));
+    }
 
     @Operation(
             summary = "Checkout selected cart items to create an order",
