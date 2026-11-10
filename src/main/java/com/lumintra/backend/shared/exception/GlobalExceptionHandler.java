@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -54,6 +55,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InsufficientStockException.class)
     public ResponseEntity<ErrorResponse> handleInsufficientStock(InsufficientStockException ex) {
         return buildErrorResponse("INSUFFICIENT_STOCK", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(InvalidCartItemException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCartItem(InvalidCartItemException ex) {
+        return buildErrorResponse("INVALID_CART_ITEM", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DeliveryAddressRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleDeliveryAddressRequired(DeliveryAddressRequiredException ex) {
+        return buildErrorResponse("DELIVERY_ADDRESS_REQUIRED", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(AddressNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAddressNotFound(AddressNotFoundException ex) {
+        return buildErrorResponse("ADDRESS_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     // IAM exceptions
@@ -118,6 +134,11 @@ public class GlobalExceptionHandler {
                         .build())
                 .toList();
         return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST, details);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        return buildErrorResponse("VALIDATION_FAILED", "Malformed JSON request or invalid field value", HttpStatus.BAD_REQUEST);
     }
 
     // Security exceptions

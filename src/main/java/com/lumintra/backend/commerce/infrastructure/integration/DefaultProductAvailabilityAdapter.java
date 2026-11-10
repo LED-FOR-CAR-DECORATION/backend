@@ -2,6 +2,7 @@ package com.lumintra.backend.commerce.infrastructure.integration;
 
 import com.lumintra.backend.character.domain.service.CharacterLookupService;
 import com.lumintra.backend.commerce.domain.model.AvailabilityCheckResult;
+import com.lumintra.backend.commerce.domain.model.BundleCheckoutInspection;
 import com.lumintra.backend.commerce.domain.service.ProductAvailabilityPort;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.CustomerSubscriptionRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OwnedCharacterRepository;
@@ -68,26 +69,35 @@ public class DefaultProductAvailabilityAdapter implements ProductAvailabilityPor
 
     @Override
     public AvailabilityCheckResult evaluateBundleAvailability(Long customerId, Long productId, int requestedQuantity) {
+        BundleCheckoutInspection inspection = inspectBundleForCheckout(customerId, productId, requestedQuantity);
+        if (!inspection.available()) {
+            return AvailabilityCheckResult.unavailable(inspection.unavailableReason());
+        }
+        return AvailabilityCheckResult.availableResult();
+    }
+
+    @Override
+    public BundleCheckoutInspection inspectBundleForCheckout(Long customerId, Long productId, int requestedQuantity) {
         if (productId == null || requestedQuantity <= 0) {
-            return AvailabilityCheckResult.unavailable(AvailabilityCheckResult.REASON_PRODUCT_UNAVAILABLE);
+            return BundleCheckoutInspection.unavailable(AvailabilityCheckResult.REASON_PRODUCT_UNAVAILABLE);
         }
 
         Optional<BundleSnapshot> bundleOpt = bundleLookupService.findByProductId(productId);
         if (bundleOpt.isEmpty()) {
-            return AvailabilityCheckResult.unavailable(AvailabilityCheckResult.REASON_PRODUCT_UNAVAILABLE);
+            return BundleCheckoutInspection.unavailable(AvailabilityCheckResult.REASON_PRODUCT_UNAVAILABLE);
         }
 
         BundleSnapshot bundle = bundleOpt.get();
         if (bundle.status() != null
                 && !STATUS_PUBLISHED.equalsIgnoreCase(bundle.status())
                 && !STATUS_ACTIVE.equalsIgnoreCase(bundle.status())) {
-            return AvailabilityCheckResult.unavailable(AvailabilityCheckResult.REASON_PRODUCT_UNAVAILABLE);
+            return BundleCheckoutInspection.unavailable(AvailabilityCheckResult.REASON_PRODUCT_UNAVAILABLE);
         }
 
         Instant now = Instant.now();
         if ((bundle.startAt() != null && now.isBefore(bundle.startAt()))
                 || (bundle.endAt() != null && now.isAfter(bundle.endAt()))) {
-            return AvailabilityCheckResult.unavailable(AvailabilityCheckResult.REASON_PRODUCT_UNAVAILABLE);
+            return BundleCheckoutInspection.unavailable(AvailabilityCheckResult.REASON_PRODUCT_UNAVAILABLE);
         }
 
         Set<Long> versionIds = bundle.items().stream()
@@ -98,7 +108,7 @@ public class DefaultProductAvailabilityAdapter implements ProductAvailabilityPor
         if (!versionIds.isEmpty()
                 && customerId != null
                 && ownedCharacterRepository.existsByCustomerIdAndVersionIdInAndIsRevokedFalse(customerId, versionIds)) {
-            return AvailabilityCheckResult.unavailable(AvailabilityCheckResult.REASON_ALREADY_OWNED);
+            return BundleCheckoutInspection.unavailable(AvailabilityCheckResult.REASON_ALREADY_OWNED);
         }
 
         Map<Long, Long> requiredStockByModelId = new HashMap<>();
@@ -109,16 +119,17 @@ public class DefaultProductAvailabilityAdapter implements ProductAvailabilityPor
             }
         }
 
-        if (!requiredStockByModelId.isEmpty()) {
+        boolean containsPhysicalLed = !requiredStockByModelId.isEmpty();
+        if (containsPhysicalLed) {
             Map<Long, Long> availableStocks = ledStockLookupService.findStocksByModelIds(requiredStockByModelId.keySet());
             for (Map.Entry<Long, Long> entry : requiredStockByModelId.entrySet()) {
                 long available = availableStocks.getOrDefault(entry.getKey(), 0L);
                 if (available < entry.getValue()) {
-                    return AvailabilityCheckResult.unavailable(AvailabilityCheckResult.REASON_OUT_OF_STOCK);
+                    return BundleCheckoutInspection.unavailable(AvailabilityCheckResult.REASON_OUT_OF_STOCK);
                 }
             }
         }
 
-        return AvailabilityCheckResult.availableResult();
+        return BundleCheckoutInspection.valid(containsPhysicalLed, Map.copyOf(requiredStockByModelId));
     }
 }
