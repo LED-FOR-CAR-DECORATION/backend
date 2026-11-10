@@ -65,9 +65,16 @@ public class ManagedUserController {
                                 examples =
                                         @ExampleObject(
                                                 value =
-                                                        "{\"code\":\"VALIDATION_FAILED\",\"message\":\"Invalid"
-                                                            + " request"
-                                                            + " parameter\",\"status\":400,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}"))),
+                                                        """
+                                                        {
+                                                          "code": "VALIDATION_FAILED",
+                                                          "message": "Invalid request parameter",
+                                                          "status": 400,
+                                                          "timestamp": "2026-11-10T12:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "401",
                 description = "Authentication required",
@@ -77,8 +84,16 @@ public class ManagedUserController {
                                 examples =
                                         @ExampleObject(
                                                 value =
-                                                        "{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication"
-                                                            + " is required.\",\"status\":401,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}"))),
+                                                        """
+                                                        {
+                                                          "code": "UNAUTHORIZED",
+                                                          "message": "Authentication is required.",
+                                                          "status": 401,
+                                                          "timestamp": "2026-11-10T12:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "403",
                 description = "Caller is not an active admin/manager",
@@ -88,8 +103,16 @@ public class ManagedUserController {
                                 examples =
                                         @ExampleObject(
                                                 value =
-                                                        "{\"code\":\"FORBIDDEN\",\"message\":\"Access"
-                                                            + " is denied.\",\"status\":403,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}"))),
+                                                        """
+                                                        {
+                                                          "code": "FORBIDDEN",
+                                                          "message": "Access is denied.",
+                                                          "status": 403,
+                                                          "timestamp": "2026-11-10T12:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "500",
                 description = "Unexpected storage failure",
@@ -99,9 +122,16 @@ public class ManagedUserController {
                                 examples =
                                         @ExampleObject(
                                                 value =
-                                                        "{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"An"
-                                                            + " unexpected error"
-                                                            + " occurred\",\"status\":500,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}")))
+                                                        """
+{
+  "code": "INTERNAL_SERVER_ERROR",
+  "message": "An unexpected error occurred",
+  "status": 500,
+  "timestamp": "2026-11-10T12:00:00Z",
+  "traceId": "trace-123",
+  "details": []
+}
+""")))
     })
     public ResponseEntity<ApiResponse<ManagedUserListResponse>> list(
             Authentication authentication, @Valid @ModelAttribute ManagedUserFilterRequest filter) {
