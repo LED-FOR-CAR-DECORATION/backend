@@ -18,11 +18,11 @@ VALIDATE_SCRIPT = re.search(r'VALIDATE_AND_CONSUME\s*=\s*new DefaultRedisScript<
 class PasswordResetRedisScriptTest(unittest.TestCase):
     def setUp(self):
         self.redis = fakeredis.FakeStrictRedis()
-        self.keys = ['auth:password-reset:{test}:otp', 'auth:password-reset:{test}:requests', 'auth:password-reset:{test}:lock']
+        self.keys = ['auth:password-reset:{test}:otp', 'auth:password-reset:{test}:requests', 'auth:password-reset:{test}:lock', 'auth:password-reset:{test}:verify_attempts']
         self.val_keys = ['auth:password-reset:{test}:otp', 'auth:password-reset:{test}:verify_attempts']
 
     def issue(self, value='protected-digest'):
-        return self.redis.eval(ISSUE_SCRIPT, 3, *self.keys, value)
+        return self.redis.eval(ISSUE_SCRIPT, 4, *self.keys, value)
 
     def validate(self, value='protected-digest'):
         return self.redis.eval(VALIDATE_SCRIPT, 2, *self.val_keys, value)
@@ -99,6 +99,20 @@ class PasswordResetRedisScriptTest(unittest.TestCase):
         self.issue('digest-single-use')
         self.assertEqual(self.validate('digest-single-use'), 1)
         self.assertEqual(self.validate('digest-single-use'), -1)
+
+    def test_new_challenge_resets_guess_counter(self):
+        self.issue('old')
+        for _ in range(4): self.validate('wrong')
+        self.issue('new')
+        self.assertFalse(self.redis.exists(self.val_keys[1]))
+        self.assertEqual(self.validate('wrong'), 0)
+
+    def test_only_one_concurrent_consumer_succeeds(self):
+        self.issue('single-use')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+            results = list(pool.map(lambda _: self.validate('single-use'), range(24)))
+        self.assertEqual(results.count(1), 1)
+        self.assertEqual(results.count(-1), 23)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

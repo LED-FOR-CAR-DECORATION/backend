@@ -48,7 +48,7 @@ public class ResetPasswordUseCase {
 
         // Locate account
         UserAccountEntity account = userAccountRepository.findByEmail(email)
-                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new UserNotFoundException("Account not found."));
 
         // AC02: Update and hash new password, clearing any temporary lockout
         account.setPasswordHash(passwordEncoder.encode(request.newPassword()));
@@ -70,7 +70,7 @@ public class ResetPasswordUseCase {
             log.info("Staff password changed event published [accountId={}] [role={}]", account.getAccountId(), roleName);
         }
 
-        log.info("Password successfully reset for account [accountId={}] [email={}]", account.getAccountId(), email);
+        log.info("Password successfully reset for account [accountId={}]", account.getAccountId());
         return new ResetPasswordResponse("Password has been reset successfully. Please log in with your new password.");
     }
 }

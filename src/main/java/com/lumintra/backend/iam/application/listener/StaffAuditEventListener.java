@@ -27,10 +27,10 @@ public class StaffAuditEventListener {
                 event.userId(), event.email(), event.role());
     }
 
-    @EventListener
+    @org.springframework.transaction.event.TransactionalEventListener(phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT)
     public void onStaffPasswordChanged(StaffPasswordChangedEvent event) {
         //TODO Write audit events to database asynchronously
-        log.info("Audit: Staff password changed [userId={}] [email={}] [role={}]",
-                event.userId(), event.email(), event.role());
+        log.info("Audit: Staff password changed [userId={}] [role={}]",
+                event.userId(), event.role());
     }
 }

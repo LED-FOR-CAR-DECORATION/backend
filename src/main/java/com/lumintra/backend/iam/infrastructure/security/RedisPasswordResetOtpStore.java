@@ -29,7 +29,10 @@ public class RedisPasswordResetOtpStore implements PasswordResetOtpStore {
             redis.call('DEL', KEYS[2])
             return 0
         end
-        if ARGV[1] ~= '' then redis.call('SET', KEYS[1], ARGV[1], 'EX', 300) end
+        if ARGV[1] ~= '' then
+            redis.call('SET', KEYS[1], ARGV[1], 'EX', 300)
+            redis.call('DEL', KEYS[4])
+        end
         return 1
         """, Long.class);
 
@@ -70,7 +73,7 @@ public class RedisPasswordResetOtpStore implements PasswordResetOtpStore {
     public void issue(String email, String otp) {
         String key = "auth:password-reset:{" + digest("email:" + email) + "}:";
         try {
-            Long result = redis.execute(ISSUE, List.of(key + "otp", key + "requests", key + "lock"),
+            Long result = redis.execute(ISSUE, List.of(key + "otp", key + "requests", key + "lock", key + "verify_attempts"),
                     otp == null ? "" : digest("otp:" + email + ":" + otp));
             if (result == null) throw new PasswordResetUnavailableException();
             if (result == 0) throw new PasswordResetLockedException();

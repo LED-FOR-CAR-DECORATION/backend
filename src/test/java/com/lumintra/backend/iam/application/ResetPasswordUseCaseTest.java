@@ -234,7 +234,7 @@ class ResetPasswordUseCaseTest {
 
         assertThatThrownBy(() -> useCase.execute(new ResetPasswordRequest(email, "123456", "NewP@ssword123", null)))
                 .isInstanceOf(UserNotFoundException.class)
-                .hasMessage("User not found with email: " + email);
+                .hasMessage("Account not found.");
 
         verify(otpStore).validateAndConsume(email, "123456");
         verifyNoInteractions(refreshTokenService);

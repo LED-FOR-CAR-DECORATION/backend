@@ -35,7 +35,7 @@ class RedisPasswordResetOtpStoreTest {
         ArgumentCaptor<List<String>> keys = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<String> digest = ArgumentCaptor.forClass(String.class);
         verify(redis).execute(eq(RedisPasswordResetOtpStore.ISSUE), keys.capture(), digest.capture());
-        assertThat(keys.getValue()).hasSize(3).allSatisfy(k -> assertThat(k).startsWith("auth:password-reset:{").doesNotContain("customer@example.com"));
+        assertThat(keys.getValue()).hasSize(4).allSatisfy(k -> assertThat(k).startsWith("auth:password-reset:{").doesNotContain("customer@example.com"));
         assertThat(digest.getValue()).matches("[a-f0-9]{64}").doesNotContain("001234");
     }
 

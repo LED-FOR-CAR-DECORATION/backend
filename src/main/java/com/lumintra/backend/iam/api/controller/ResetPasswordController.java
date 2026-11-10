@@ -61,7 +61,7 @@ public class ResetPasswordController {
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(
-                                    value = "{\"code\":\"USER_NOT_FOUND\",\"message\":\"User not found with email: user@example.com\",\"status\":404,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}"
+                                    value = "{\"code\":\"USER_NOT_FOUND\",\"message\":\"Account not found.\",\"status\":404,\"timestamp\":\"2026-11-10T12:00:00Z\",\"traceId\":\"trace-123\",\"details\":[]}"
                             )
                     )
             ),
@@ -78,7 +78,7 @@ public class ResetPasswordController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "503",
-                    description = "Redis or persistence store unavailable",
+                    description = "Redis unavailable",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class),
