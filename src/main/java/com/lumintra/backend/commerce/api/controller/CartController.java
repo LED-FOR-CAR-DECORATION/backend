@@ -4,6 +4,7 @@ import com.lumintra.backend.commerce.api.request.AddCartItemRequest;
 import com.lumintra.backend.commerce.api.request.UpdateCartItemQuantityRequest;
 import com.lumintra.backend.commerce.api.response.CartResponse;
 import com.lumintra.backend.commerce.application.AddCartItemUseCase;
+import com.lumintra.backend.commerce.application.ClearCartUseCase;
 import com.lumintra.backend.commerce.application.RemoveCartItemUseCase;
 import com.lumintra.backend.commerce.application.UpdateCartItemQuantityUseCase;
 import com.lumintra.backend.commerce.application.ViewCartUseCase;
@@ -42,6 +43,7 @@ public class CartController {
     private final AddCartItemUseCase addCartItemUseCase;
     private final UpdateCartItemQuantityUseCase updateCartItemQuantityUseCase;
     private final RemoveCartItemUseCase removeCartItemUseCase;
+    private final ClearCartUseCase clearCartUseCase;
 
     @Operation(
             summary = "View active shopping cart",
@@ -484,6 +486,77 @@ public class CartController {
             @PathVariable @Positive(message = "itemId must be greater than 0") Long itemId) {
         Long customerId = extractCustomerId(authentication);
         CartResponse response = removeCartItemUseCase.execute(customerId, itemId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Clear active shopping cart",
+            description = "Unconditionally removes all line items from the authenticated customer's active shopping cart in a single bulk operation while retaining the parent cart record. Succeeds idempotently even if the cart is empty or has not yet been initialized (without creating a new cart row)."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Shopping cart cleared successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = {
+                                    @ExampleObject(
+                                            name = "Existing Cart Cleared",
+                                            value = """
+                                                    {
+                                                      "data": {
+                                                        "cartId": 101,
+                                                        "items": [],
+                                                        "updatedAt": "2026-11-11T17:00:00Z"
+                                                      }
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "No Cart Initialized",
+                                            value = """
+                                                    {
+                                                      "data": {
+                                                        "cartId": null,
+                                                        "items": [],
+                                                        "updatedAt": "2026-11-11T17:00:00Z"
+                                                      }
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing, expired, or invalid JWT authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: account type is not CUSTOMER (e.g. EMPLOYEE accounts are denied)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @DeleteMapping
+    public ResponseEntity<ApiResponse<CartResponse>> clearCart(Authentication authentication) {
+        Long customerId = extractCustomerId(authentication);
+        CartResponse response = clearCartUseCase.execute(customerId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
