@@ -39,7 +39,7 @@ public class LoginUseCase {
     private final LoginAttemptService loginAttemptService;
     private final ApplicationEventPublisher eventPublisher;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public LoginResponse execute(LoginRequest request) {
         if (loginAttemptService.isAccountLocked(request.email())) {
             log.warn("Login rejected: Account locked [email={}]", request.email());
