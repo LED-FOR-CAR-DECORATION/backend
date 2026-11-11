@@ -24,7 +24,7 @@ public class JwtTokenProvider {
     private com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository accounts;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public JwtTokenProvider(@Value("${jwt.secret}") String secret,
+    public JwtTokenProvider(@Value("${app.jwt.secret}") String secret,
             com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository accounts) {
         this(secret);
         this.accounts = accounts;
