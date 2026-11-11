@@ -85,6 +85,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("INVALID_CREDENTIALS", ex.getMessage(), HttpStatus.UNAUTHORIZED);
     }
 
+    @ExceptionHandler(InvalidManagedUserRoleException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidManagedUserRole(InvalidManagedUserRoleException ex) {
+        return buildErrorResponse("INVALID_MANAGED_USER_ROLE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(AccountLockedException.class)
     public ResponseEntity<ErrorResponse> handleAccountLocked(AccountLockedException ex) {
         return buildErrorResponse("ACCOUNT_LOCKED", ex.getMessage(), HttpStatus.LOCKED);

@@ -53,6 +53,9 @@ public class LoginUseCase {
             throw new InvalidCredentialsException("Invalid email or password");
         }
 
+        if (account.isAccessDisabled()) {
+            throw new InvalidCredentialsException("Invalid email or password");
+        }
         loginAttemptService.resetAttempts(request.email());
 
         List<String> roles;

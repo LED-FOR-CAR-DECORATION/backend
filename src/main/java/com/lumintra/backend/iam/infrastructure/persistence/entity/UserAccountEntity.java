@@ -5,13 +5,19 @@ import com.lumintra.backend.iam.domain.model.AccountType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.DynamicUpdate;
 import java.time.Instant;
 
 @Entity
+@DynamicUpdate
 @Table(name = "user_account")
 @Getter
 @Setter
 public class UserAccountEntity {
+    public boolean isAccessDisabled() {
+        return status == AccountStatus.SUSPENDED || status == AccountStatus.DELETED;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long accountId;
