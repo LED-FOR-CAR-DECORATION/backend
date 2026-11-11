@@ -145,13 +145,6 @@
 			<version>0.2.0</version>
 		</dependency>
 
-		<!-- Email -->
-		<dependency>
-			<groupId>com.resend</groupId>
-			<artifactId>resend-java</artifactId>
-			<version>LATEST</version>
-		</dependency>
-
 		<!-- Google SSO -->
 		<!-- Source: https://mvnrepository.com/artifact/com.google.api-client/google-api-client -->
 		<dependency>

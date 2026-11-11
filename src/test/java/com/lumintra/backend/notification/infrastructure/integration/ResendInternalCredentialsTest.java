@@ -13,14 +13,14 @@ import org.springframework.web.client.RestClient;
 
 import java.net.SocketTimeoutException;
 
-class InternalUserEmailClientTest {
+class ResendInternalCredentialsTest {
     MockRestServiceServer server;
-    InternalUserEmailClient client;
+    ResendEmailClient client;
 
     void setup() {
         var b = RestClient.builder().baseUrl("https://api.resend.com");
         server = MockRestServiceServer.bindTo(b).build();
-        client = new InternalUserEmailClient(b.build(), "system@example.com");
+        client = new ResendEmailClient(b.build(), "system@example.com");
     }
 
     void expect(HttpStatus status) {
