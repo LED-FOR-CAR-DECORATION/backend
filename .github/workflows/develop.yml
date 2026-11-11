@@ -89,9 +89,12 @@ jobs:
           imageToDeploy: ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ github.sha }}
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
           resourceGroup: ${{ env.RESOURCE_GROUP }}
+          containerAppEnvironment: lumintra-env
+
           registryUrl: ${{ env.REGISTRY_NAME }}.azurecr.io
           registryUsername: ${{ secrets.REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.REGISTRY_PASSWORD }}
+
           environmentVariables: |
             SPRING_PROFILES_ACTIVE=dev
             DEV_DB_URL=${{ secrets.DB_URL }}
