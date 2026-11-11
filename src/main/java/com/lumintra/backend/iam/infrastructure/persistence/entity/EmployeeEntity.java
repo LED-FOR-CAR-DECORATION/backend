@@ -1,8 +1,10 @@
 package com.lumintra.backend.iam.infrastructure.persistence.entity;
 
 import jakarta.persistence.*;
+
 import lombok.Getter;
 import lombok.Setter;
+
 import java.time.Instant;
 
 @Entity
@@ -35,4 +37,13 @@ public class EmployeeEntity {
 
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    public static EmployeeEntity createInternal(
+            UserAccountEntity account, RoleEntity role, String name) {
+        EmployeeEntity employee = new EmployeeEntity();
+        employee.account = account;
+        employee.role = role;
+        employee.fullName = name;
+        return employee;
+    }
 }
