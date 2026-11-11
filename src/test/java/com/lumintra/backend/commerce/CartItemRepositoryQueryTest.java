@@ -109,4 +109,59 @@ class CartItemRepositoryQueryTest {
         assertThat(reloaded.getUnitPrice()).isEqualByComparingTo("350000.00");
         assertThat(reloaded.getAddedAt()).isEqualTo(originalAddedAt);
     }
+
+    @Test
+    @DisplayName("COM-04 UTCID04 [N]: AC05 deleting last cart item removes only cart_item row, keeps parent cart, and refreshes updatedAt")
+    void deleteLastCartItem_removesOnlyItemRowAndRetainsCartWithUpdatedTimestamp() {
+        CartEntity cart = cartRepository.save(CartEntity.create(42L));
+        CartItemEntity item = cartItemRepository.save(
+                CartItemEntity.create(cart, 12L, 1, new BigDecimal("350000.00"))
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        CartItemEntity managed = cartItemRepository
+                .findByCartItemIdAndCart_CustomerId(item.getCartItemId(), 42L)
+                .orElseThrow();
+        var originalUpdatedAt = managed.getCart().getUpdatedAt();
+
+        cartItemRepository.delete(managed);
+        cartItemRepository.flush();
+        managed.getCart().touch();
+        cartRepository.save(managed.getCart());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(cartItemRepository.findById(item.getCartItemId())).isEmpty();
+        assertThat(cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(cart.getCartId())).isEmpty();
+        CartEntity retainedCart = cartRepository.findByCustomerId(42L).orElseThrow();
+        assertThat(retainedCart.getCartId()).isEqualTo(cart.getCartId());
+        assertThat(retainedCart.getUpdatedAt()).isAfterOrEqualTo(originalUpdatedAt);
+    }
+
+    @Test
+    @DisplayName("COM-04 UTCID05 [N]: AC05 & AC06 deleting one cart item preserves remaining items ordered by addedAt DESC")
+    void deleteOneCartItem_leavesOtherItemsInCartOrderedDesc() {
+        CartEntity cart = cartRepository.save(CartEntity.create(42L));
+        CartItemEntity firstItem = cartItemRepository.save(
+                CartItemEntity.create(cart, 12L, 2, new BigDecimal("350000.00"))
+        );
+        CartItemEntity secondItem = cartItemRepository.save(
+                CartItemEntity.create(cart, 30L, 1, new BigDecimal("59000.00"))
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        CartItemEntity toDelete = cartItemRepository
+                .findByCartItemIdAndCart_CustomerId(firstItem.getCartItemId(), 42L)
+                .orElseThrow();
+
+        cartItemRepository.delete(toDelete);
+        cartItemRepository.flush();
+
+        var remaining = cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(cart.getCartId());
+        assertThat(remaining).hasSize(1);
+        assertThat(remaining.get(0).getCartItemId()).isEqualTo(secondItem.getCartItemId());
+        assertThat(remaining.get(0).getProductId()).isEqualTo(30L);
+    }
 }
