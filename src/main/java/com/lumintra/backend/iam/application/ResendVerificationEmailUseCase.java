@@ -30,6 +30,7 @@ public class ResendVerificationEmailUseCase {
         String normalizedEmail = request.email().trim().toLowerCase();
 
         UserAccountEntity account = userAccountRepository.findByEmail(normalizedEmail)
+                .filter(candidate -> candidate.getStatus() != AccountStatus.DELETED)
                 .orElseThrow(() -> new UserNotFoundException("Account not found"));
 
         if (account.getStatus() == AccountStatus.ACTIVE) {

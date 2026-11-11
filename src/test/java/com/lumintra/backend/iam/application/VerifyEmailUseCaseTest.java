@@ -45,7 +45,7 @@ class VerifyEmailUseCaseTest {
         UserAccountEntity account = UserAccountEntity.createCustomerAccount(email, "hashed_pw");
         assertThat(account.getStatus()).isEqualTo(AccountStatus.PENDING_VERIFICATION);
 
-        when(userAccountRepository.findByEmail(email)).thenReturn(Optional.of(account));
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.of(account));
         when(otpService.validateOtp(email, otp, OtpPurpose.EMAIL_VERIFICATION)).thenReturn(true);
 
         verifyEmailUseCase.execute(request);
@@ -64,12 +64,12 @@ class VerifyEmailUseCaseTest {
 
         UserAccountEntity account = UserAccountEntity.createCustomerAccount(normalizedEmail, "hashed_pw");
 
-        when(userAccountRepository.findByEmail(normalizedEmail)).thenReturn(Optional.of(account));
+        when(userAccountRepository.findForEmailVerification(normalizedEmail)).thenReturn(Optional.of(account));
         when(otpService.validateOtp(normalizedEmail, otp, OtpPurpose.EMAIL_VERIFICATION)).thenReturn(true);
 
         verifyEmailUseCase.execute(request);
 
-        verify(userAccountRepository).findByEmail(normalizedEmail);
+        verify(userAccountRepository).findForEmailVerification(normalizedEmail);
         verify(otpService).validateOtp(normalizedEmail, otp, OtpPurpose.EMAIL_VERIFICATION);
         assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
         verify(userAccountRepository).save(account);
@@ -83,7 +83,7 @@ class VerifyEmailUseCaseTest {
         // Boundary 1: "000000"
         VerifyEmailRequest reqMin = new VerifyEmailRequest(email, "000000");
         UserAccountEntity account1 = UserAccountEntity.createCustomerAccount(email, "hash1");
-        when(userAccountRepository.findByEmail(email)).thenReturn(Optional.of(account1));
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.of(account1));
         when(otpService.validateOtp(email, "000000", OtpPurpose.EMAIL_VERIFICATION)).thenReturn(true);
 
         verifyEmailUseCase.execute(reqMin);
@@ -92,7 +92,7 @@ class VerifyEmailUseCaseTest {
         // Boundary 2: "999999"
         VerifyEmailRequest reqMax = new VerifyEmailRequest(email, "999999");
         UserAccountEntity account2 = UserAccountEntity.createCustomerAccount(email, "hash2");
-        when(userAccountRepository.findByEmail(email)).thenReturn(Optional.of(account2));
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.of(account2));
         when(otpService.validateOtp(email, "999999", OtpPurpose.EMAIL_VERIFICATION)).thenReturn(true);
 
         verifyEmailUseCase.execute(reqMax);
@@ -105,7 +105,7 @@ class VerifyEmailUseCaseTest {
         String email = "notfound@example.com";
         VerifyEmailRequest request = new VerifyEmailRequest(email, "123456");
 
-        when(userAccountRepository.findByEmail(email)).thenReturn(Optional.empty());
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> verifyEmailUseCase.execute(request))
                 .isInstanceOf(UserNotFoundException.class)
@@ -124,7 +124,7 @@ class VerifyEmailUseCaseTest {
         UserAccountEntity activeAccount = UserAccountEntity.createCustomerAccount(email, "hash");
         activeAccount.verifyEmail(); // Status becomes ACTIVE
 
-        when(userAccountRepository.findByEmail(email)).thenReturn(Optional.of(activeAccount));
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.of(activeAccount));
 
         assertThatThrownBy(() -> verifyEmailUseCase.execute(request))
                 .isInstanceOf(AccountAlreadyVerifiedException.class)
@@ -142,7 +142,7 @@ class VerifyEmailUseCaseTest {
 
         UserAccountEntity account = UserAccountEntity.createCustomerAccount(email, "hash");
 
-        when(userAccountRepository.findByEmail(email)).thenReturn(Optional.of(account));
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.of(account));
         when(otpService.validateOtp(email, "654321", OtpPurpose.EMAIL_VERIFICATION)).thenReturn(false);
 
         assertThatThrownBy(() -> verifyEmailUseCase.execute(request))
@@ -161,7 +161,7 @@ class VerifyEmailUseCaseTest {
 
         UserAccountEntity account = UserAccountEntity.createCustomerAccount(email, "hash");
 
-        when(userAccountRepository.findByEmail(email)).thenReturn(Optional.of(account));
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.of(account));
         when(otpService.validateOtp(email, "999999", OtpPurpose.EMAIL_VERIFICATION))
                 .thenThrow(new MaxOtpAttemptsException("Maximum OTP attempts reached. Please request a new code."));
 
@@ -171,5 +171,17 @@ class VerifyEmailUseCaseTest {
 
         assertThat(account.getStatus()).isEqualTo(AccountStatus.PENDING_VERIFICATION);
         verify(userAccountRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A: Verification cannot reactivate a soft-deleted account")
+    void deletedAccountCannotBeVerified() {
+        String email = "deleted@example.test";
+        var account = new UserAccountEntity();
+        account.setStatus(AccountStatus.DELETED);
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.of(account));
+        assertThatThrownBy(() -> verifyEmailUseCase.execute(new VerifyEmailRequest(email, "123456")))
+                .isInstanceOf(UserNotFoundException.class);
+        verifyNoInteractions(otpService);
     }
 }

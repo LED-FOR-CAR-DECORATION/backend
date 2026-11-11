@@ -34,6 +34,9 @@ public class JwtTokenProvider {
         if (accounts == null) return "unit-test";
         var account = accounts.findById(accountId).orElseThrow(() ->
                 new com.lumintra.backend.shared.exception.iam.InvalidCredentialsException("Account not found."));
+        if (account.getStatus() == com.lumintra.backend.iam.domain.model.AccountStatus.DELETED) {
+            throw new com.lumintra.backend.shared.exception.iam.InvalidCredentialsException("Account not found.");
+        }
         try {
             var mac = javax.crypto.Mac.getInstance("HmacSHA256");
             mac.init(key);
