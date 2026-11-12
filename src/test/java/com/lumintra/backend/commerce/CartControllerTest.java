@@ -5,6 +5,7 @@ import com.lumintra.backend.commerce.api.request.AddCartItemRequest;
 import com.lumintra.backend.commerce.api.request.UpdateCartItemQuantityRequest;
 import com.lumintra.backend.commerce.api.response.CartResponse;
 import com.lumintra.backend.commerce.application.AddCartItemUseCase;
+import com.lumintra.backend.commerce.application.RemoveCartItemUseCase;
 import com.lumintra.backend.commerce.application.UpdateCartItemQuantityUseCase;
 import com.lumintra.backend.commerce.application.ViewCartUseCase;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
@@ -38,6 +39,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -59,6 +61,9 @@ class CartControllerTest {
 
     @MockitoBean
     private UpdateCartItemQuantityUseCase updateCartItemQuantityUseCase;
+
+    @MockitoBean
+    private RemoveCartItemUseCase removeCartItemUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -443,5 +448,108 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
 
         verifyNoInteractions(updateCartItemQuantityUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-04 UTCID01 [N]: DELETE /api/cart/items/{itemId} as CUSTOMER returns 200 OK with updated CartResponse")
+    void removeItem_asCustomer_returns200WithUpdatedCart() throws Exception {
+        Instant addedAt = Instant.parse("2026-11-10T02:15:00Z");
+        Instant updatedAt = Instant.parse("2026-11-11T16:00:00Z");
+        CartResponse.CartItemResponse remainingItem = CartResponse.CartItemResponse.builder()
+                .cartItemId(502L)
+                .productId(30L)
+                .productName("Cyber Mascot")
+                .productType(ProductType.CHARACTER)
+                .thumbnailUrl("https://img.lumintra.shop/mascot.png")
+                .quantity(1)
+                .unitPrice(new BigDecimal("59000.00"))
+                .subtotal(new BigDecimal("59000.00"))
+                .isAvailable(true)
+                .unavailableReason(null)
+                .addedAt(addedAt)
+                .build();
+
+        when(removeCartItemUseCase.execute(42L, 501L))
+                .thenReturn(new CartResponse(101L, List.of(remainingItem), updatedAt));
+        when(removeCartItemUseCase.execute(42L, 502L))
+                .thenReturn(new CartResponse(101L, List.of(), updatedAt));
+
+        mockMvc.perform(delete("/api/cart/items/501")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cartId").value(101))
+                .andExpect(jsonPath("$.data.items[0].cartItemId").value(502))
+                .andExpect(jsonPath("$.data.items[0].productType").value("CHARACTER"))
+                .andExpect(jsonPath("$.data.updatedAt").value("2026-11-11T16:00:00Z"))
+                .andExpect(jsonPath("$.meta").doesNotExist());
+
+        mockMvc.perform(delete("/api/cart/items/502")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cartId").value(101))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.meta").doesNotExist());
+
+        verify(removeCartItemUseCase).execute(42L, 501L);
+        verify(removeCartItemUseCase).execute(42L, 502L);
+    }
+
+    @Test
+    @DisplayName("COM-04 UTCID02 [B]: DELETE /api/cart/items/{itemId} rejects non-numeric and non-positive itemId with 400 VALIDATION_FAILED")
+    void removeItem_invalidPathItemId_returns400ValidationFailed() throws Exception {
+        mockMvc.perform(delete("/api/cart/items/abc")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details[0].field").value("itemId"));
+
+        mockMvc.perform(delete("/api/cart/items/0")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details[0].field").value("itemId"));
+
+        mockMvc.perform(delete("/api/cart/items/-5")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details[0].field").value("itemId"));
+
+        verifyNoInteractions(removeCartItemUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-04 UTCID03 [A]: DELETE /api/cart/items/{itemId} returns 404 CART_ITEM_NOT_FOUND when missing or unowned")
+    void removeItem_missingOrUnownedItem_returns404CartItemNotFound() throws Exception {
+        when(removeCartItemUseCase.execute(42L, 999L))
+                .thenThrow(new CartItemNotFoundException("Cart item not found."));
+
+        mockMvc.perform(delete("/api/cart/items/999")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("CART_ITEM_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Cart item not found."));
+    }
+
+    @Test
+    @DisplayName("COM-04 UTCID04 [A]: DELETE /api/cart/items/{itemId} enforces CUSTOMER role and valid numeric principal")
+    void removeItem_unauthorizedForbiddenAndInvalidPrincipal_return401And403() throws Exception {
+        mockMvc.perform(delete("/api/cart/items/501"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(delete("/api/cart/items/501")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        mockMvc.perform(delete("/api/cart/items/501")
+                        .with(SecurityMockMvcRequestPostProcessors.user("not-a-number").roles("CUSTOMER")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+
+        verifyNoInteractions(removeCartItemUseCase);
     }
 }
