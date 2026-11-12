@@ -292,7 +292,7 @@ class AuthControllerSwaggerTest {
     }
 
     @Test
-    @DisplayName("OpenApiConfig should produce OpenAPI bean with title and version")
+    @DisplayName("OpenApiConfig should produce OpenAPI bean with title, version, and Bearer security scheme")
     void openApiConfigShouldProduceValidMetadata() {
         OpenApiConfig config = new OpenApiConfig();
         OpenAPI openAPI = config.customOpenAPI();
@@ -301,6 +301,17 @@ class AuthControllerSwaggerTest {
         assertThat(openAPI.getInfo()).isNotNull();
         assertThat(openAPI.getInfo().getTitle()).isEqualTo("Lumintra Backend API");
         assertThat(openAPI.getInfo().getVersion()).isEqualTo("1.0.0");
+
+        assertThat(openAPI.getComponents()).isNotNull();
+        assertThat(openAPI.getComponents().getSecuritySchemes()).containsKey("bearerAuth");
+        io.swagger.v3.oas.models.security.SecurityScheme scheme =
+                openAPI.getComponents().getSecuritySchemes().get("bearerAuth");
+        assertThat(scheme.getType())
+                .isEqualTo(io.swagger.v3.oas.models.security.SecurityScheme.Type.HTTP);
+        assertThat(scheme.getScheme()).isEqualTo("bearer");
+        assertThat(scheme.getBearerFormat()).isEqualTo("JWT");
+        assertThat(openAPI.getSecurity()).isNotEmpty();
+        assertThat(openAPI.getSecurity().get(0)).containsKey("bearerAuth");
     }
     @Test
     @DisplayName("googleLogin endpoint should have Swagger @Operation and documentation details")

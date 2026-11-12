@@ -35,6 +35,11 @@ public class ProductionEnvironmentValidator implements BeanFactoryPostProcessor,
         List<String> missing = new ArrayList<>();
 
         // TODO: Implement env check for each key when running app on deployed machine
+        validateRequired("SEPAY_BANK_NAME", "app.sepay.bank-name", missing);
+        validateRequired("SEPAY_ACCOUNT_NUMBER", "app.sepay.account-number", missing);
+        validateRequired("SEPAY_ACCOUNT_NAME", "app.sepay.account-name", missing);
+        validateRequired("SEPAY_PAYMENT_PREFIX", "app.sepay.payment-prefix", missing);
+        validateRequired("SEPAY_WEBHOOK_API_KEY", "app.sepay.webhook-api-key", missing);
 
         if (!missing.isEmpty()) {
             StringBuilder message = new StringBuilder("Missing required production environment values:\n");
