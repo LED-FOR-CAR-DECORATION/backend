@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
@@ -201,8 +202,8 @@ class UserAddressRepositoryQueryTest {
                 Instant.parse("2026-11-10T01:00:00Z"));
         entityManager.clear();
 
-        assertThat(userAddressRepository.existsByCustomerId(42L)).isFalse();
-        assertThat(userAddressRepository.existsByCustomerId(99L)).isTrue();
+        assertThat(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(42L)).isFalse();
+        assertThat(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(99L)).isTrue();
     }
 
     @Test
@@ -267,7 +268,7 @@ class UserAddressRepositoryQueryTest {
 
         UserAddressEntity loaded =
                 userAddressRepository
-                        .findByAddressIdAndCustomerId(target.getAddressId(), 42L)
+                        .findByAddressIdAndCustomerIdAndIsDeletedFalse(target.getAddressId(), 42L)
                         .orElseThrow();
         loaded.updateDetails(
                 "Updated Name",
@@ -311,9 +312,123 @@ class UserAddressRepositoryQueryTest {
         entityManager.clear();
 
         assertThat(
-                        userAddressRepository.findByAddressIdAndCustomerId(
+                        userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(
                                 foreignAddress.getAddressId(), 42L))
                 .isEmpty();
-        assertThat(userAddressRepository.findByAddressIdAndCustomerId(999999L, 42L)).isEmpty();
+        assertThat(userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(999999L, 42L)).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-25 UTCID01 [N]: AC03 & AC04 soft-deleted rows are retained in DB but excluded from all active queries")
+    void softDelete_excludesDeletedRowsAcrossAllActiveQueriesAndPreservesDatabaseRow() {
+        Instant initialTimestamp = Instant.parse("2026-11-01T01:00:00Z");
+        Instant deletedAt = Instant.parse("2026-11-12T04:00:00Z");
+
+        UserAddressEntity softDeletedDefault =
+                persistAddress(42L, "Deleted Default", true, initialTimestamp, initialTimestamp);
+        softDeletedDefault.softDelete(deletedAt);
+        userAddressRepository.saveAndFlush(softDeletedDefault);
+
+        UserAddressEntity activeOtherCustomer =
+                persistAddress(99L, "Other Customer", true, initialTimestamp, initialTimestamp);
+        entityManager.clear();
+
+        assertThat(userAddressRepository.findAllByCustomerIdOrdered(42L)).isEmpty();
+        assertThat(
+                        userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(
+                                softDeletedDefault.getAddressId(), 42L))
+                .isEmpty();
+        assertThat(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(42L)).isFalse();
+        assertThat(userAddressRepository.clearDefaultByCustomerId(42L)).isZero();
+
+        UserAddressEntity persistedDeletedRow =
+                userAddressRepository.findById(softDeletedDefault.getAddressId()).orElseThrow();
+        assertThat(persistedDeletedRow.isDeleted()).isTrue();
+        assertThat(persistedDeletedRow.getDeletedAt()).isEqualTo(deletedAt);
+        assertThat(persistedDeletedRow.isDefault()).isFalse();
+
+        assertThat(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(99L)).isTrue();
+        assertThat(
+                        userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(
+                                activeOtherCustomer.getAddressId(), 99L))
+                .isPresent();
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-25 UTCID02 [N]: AC04 deleting default address deterministically promotes newest active address with NULLS LAST tie-breakers")
+    void findActiveByCustomerIdOrdered_selectsNewestPromotionCandidateWithNullsLast() {
+        entityManager
+                .createNativeQuery("ALTER TABLE user_address ALTER COLUMN updated_at SET NULL")
+                .executeUpdate();
+
+        Instant deletedAt = Instant.parse("2026-11-12T05:00:00Z");
+        UserAddressEntity currentDefault =
+                persistAddress(
+                        42L,
+                        "Current Default",
+                        true,
+                        Instant.parse("2026-11-01T01:00:00Z"),
+                        Instant.parse("2026-11-01T01:00:00Z"));
+        UserAddressEntity alreadyDeletedNewer =
+                persistAddress(
+                        42L,
+                        "Already Deleted Newer",
+                        false,
+                        Instant.parse("2026-11-11T01:00:00Z"),
+                        Instant.parse("2026-11-11T01:00:00Z"));
+        alreadyDeletedNewer.softDelete(deletedAt);
+        userAddressRepository.saveAndFlush(alreadyDeletedNewer);
+
+        UserAddressEntity nullUpdatedActive =
+                persistAddress(
+                        42L,
+                        "Null Updated Active",
+                        false,
+                        Instant.parse("2026-11-09T01:00:00Z"),
+                        null);
+        UserAddressEntity olderActive =
+                persistAddress(
+                        42L,
+                        "Older Active",
+                        false,
+                        Instant.parse("2026-11-02T01:00:00Z"),
+                        Instant.parse("2026-11-03T01:00:00Z"));
+        UserAddressEntity newestActive =
+                persistAddress(
+                        42L,
+                        "Newest Active",
+                        false,
+                        Instant.parse("2026-11-04T01:00:00Z"),
+                        Instant.parse("2026-11-08T01:00:00Z"));
+        entityManager.clear();
+
+        UserAddressEntity loadedDefault =
+                userAddressRepository
+                        .findByAddressIdAndCustomerIdAndIsDeletedFalse(
+                                currentDefault.getAddressId(), 42L)
+                        .orElseThrow();
+        loadedDefault.softDelete(deletedAt);
+        userAddressRepository.saveAndFlush(loadedDefault);
+
+        List<UserAddressEntity> candidates =
+                userAddressRepository.findActiveByCustomerIdOrdered(42L, PageRequest.of(0, 1));
+        assertThat(candidates).hasSize(1);
+        assertThat(candidates.getFirst().getAddressId()).isEqualTo(newestActive.getAddressId());
+
+        candidates.getFirst().markDefault();
+        userAddressRepository.saveAndFlush(candidates.getFirst());
+        entityManager.clear();
+
+        List<UserAddressEntity> activeAfterDelete =
+                userAddressRepository.findAllByCustomerIdOrdered(42L);
+        assertThat(activeAfterDelete)
+                .extracting(UserAddressEntity::getAddressId)
+                .containsExactly(
+                        newestActive.getAddressId(),
+                        olderActive.getAddressId(),
+                        nullUpdatedActive.getAddressId());
+        assertThat(activeAfterDelete.getFirst().isDefault()).isTrue();
     }
 }
