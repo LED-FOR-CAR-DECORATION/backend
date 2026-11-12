@@ -132,4 +132,20 @@ class UserAddressSwaggerTest {
                 .extracting(v -> v.responseCode())
                 .containsExactlyInAnyOrder("204", "400", "401", "403", "404", "500");
     }
+
+    @Test
+    @DisplayName(
+            "IAM-26 UTCID01 [N]: AC01-AC04 PATCH setDefaultAddress documents Bearer auth and 200/400/401/403/404/500 codes")
+    void setDefaultAddressContract_documentsExpectedResponses() throws Exception {
+        var method =
+                UserAddressController.class.getMethod(
+                        "setDefaultAddress", Authentication.class, Long.class);
+        assertThat(method.getAnnotation(Operation.class)).isNotNull();
+        assertThat(method.getAnnotation(SecurityRequirement.class).name()).isEqualTo("bearerAuth");
+        var responses = method.getAnnotation(ApiResponses.class);
+        assertThat(responses).isNotNull();
+        assertThat(responses.value())
+                .extracting(v -> v.responseCode())
+                .containsExactlyInAnyOrder("200", "400", "401", "403", "404", "500");
+    }
 }
