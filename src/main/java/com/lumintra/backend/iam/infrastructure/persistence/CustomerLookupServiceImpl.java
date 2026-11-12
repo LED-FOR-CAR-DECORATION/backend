@@ -4,6 +4,7 @@ import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
 import com.lumintra.backend.iam.domain.service.CustomerLookupService;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,5 +55,22 @@ public class CustomerLookupServiceImpl implements CustomerLookupService {
                         Function.identity(),
                         (existing, replacement) -> existing
                 ));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CustomerProfileSnapshot> findProfileByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return Optional.empty();
+        }
+        return customerRepository.findProfileSnapshotByEmail(email.trim());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CustomerProfileSnapshot> findFirstProfile() {
+        return customerRepository.findFirstCustomerProfile(PageRequest.of(0, 1))
+                .stream()
+                .findFirst();
     }
 }

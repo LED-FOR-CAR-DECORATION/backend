@@ -10,5 +10,9 @@ import java.time.Instant;
  */
 public interface PaymentInstructionPort {
 
-    SepayPaymentInstructions buildInstructions(Long orderId, BigDecimal amount, Instant expiresAt);
+    SepayPaymentInstructions buildInstructions(Long orderId, String transactionCode, BigDecimal amount, Instant expiresAt);
+
+    default SepayPaymentInstructions buildInstructions(Long orderId, BigDecimal amount, Instant expiresAt) {
+        return buildInstructions(orderId, null, amount, expiresAt);
+    }
 }

@@ -123,10 +123,10 @@ public record OrderDetailResponse(
             @Schema(description = "Current payment transaction status", example = "PENDING", requiredMode = Schema.RequiredMode.REQUIRED)
             PaymentStatus status,
 
-            @Schema(description = "Bank transfer memo content required for SePay matching (active PENDING_PAYMENT only)", example = "LUM102", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Schema(description = "Bank transfer memo content required for SePay matching (active PENDING_PAYMENT only)", example = "LMTORD102A1B2C3D4", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
             String paymentContent,
 
-            @Schema(description = "Dynamic SePay VietQR image URL (null when paid or expired)", example = "https://qr.sepay.vn/img?acc=0123456789&bank=MBBank&amount=250000&des=LUM102", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Schema(description = "Dynamic SePay VietQR image URL (null when paid or expired)", example = "https://vietqr.app/img?bank=TPBank&acc=10006140844&template=compact&amount=250000&des=LMTORD102A1B2C3D4&showinfo=true&holder=NGUYEN%20QUANG%20KHANH", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
             String qrCodeUrl,
 
             @Schema(description = "Receiving bank account number (active PENDING_PAYMENT only)", example = "0123456789", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)

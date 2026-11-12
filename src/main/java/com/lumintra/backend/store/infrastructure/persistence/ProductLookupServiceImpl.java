@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -44,6 +45,14 @@ public class ProductLookupServiceImpl implements ProductLookupService {
                         Function.identity(),
                         (existing, replacement) -> existing
                 ));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductSnapshot> findAllSnapshots() {
+        return productRepository.findAll().stream()
+                .map(this::toSnapshot)
+                .toList();
     }
 
     private ProductSnapshot toSnapshot(ProductEntity entity) {
