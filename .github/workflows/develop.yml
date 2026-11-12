@@ -90,6 +90,7 @@ jobs:
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
           resourceGroup: ${{ env.RESOURCE_GROUP }}
           containerAppEnvironment: lumintra-env
+          targetPort: 8080
 
           registryUrl: ${{ env.REGISTRY_NAME }}.azurecr.io
           registryUsername: ${{ secrets.REGISTRY_USERNAME }}
