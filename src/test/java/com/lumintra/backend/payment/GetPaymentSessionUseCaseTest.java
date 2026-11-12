@@ -60,7 +60,6 @@ class GetPaymentSessionUseCaseTest {
                 "https://vietqr.app/img",
                 "TPBank",
                 "10006140844",
-                "10006140844",
                 "NGUYEN QUANG KHANH",
                 "LUM",
                 "secret-webhook-key"

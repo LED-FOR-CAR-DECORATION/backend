@@ -9,7 +9,6 @@ import java.util.Locale;
 public record SePayProperties(
         String qrBaseUrl,
         String bankName,
-        String bankAccount,
         String accountNumber,
         String accountName,
         String paymentPrefix,
@@ -43,9 +42,6 @@ public record SePayProperties(
     public String resolvedAccountNumber() {
         if (accountNumber != null && !accountNumber.isBlank()) {
             return accountNumber.trim();
-        }
-        if (bankAccount != null && !bankAccount.isBlank()) {
-            return bankAccount.trim();
         }
         return DEFAULT_ACCOUNT_NUMBER;
     }

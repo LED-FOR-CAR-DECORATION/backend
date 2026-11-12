@@ -1,5 +1,6 @@
 package com.lumintra.backend.payment;
 
+import com.lumintra.backend.commerce.domain.service.OrderPaymentLookupService;
 import com.lumintra.backend.payment.api.response.PaymentSessionResponse;
 import com.lumintra.backend.payment.application.CreatePaymentSessionUseCase;
 import com.lumintra.backend.payment.domain.model.CreatePaymentSessionCommand;
@@ -42,6 +43,9 @@ class CreatePaymentSessionUseCaseTest {
     @Mock
     private PaymentSessionMetadataStore metadataStore;
 
+    @Mock
+    private OrderPaymentLookupService orderPaymentLookupService;
+
     private CreatePaymentSessionUseCase useCase;
 
     @BeforeEach
@@ -50,7 +54,8 @@ class CreatePaymentSessionUseCaseTest {
                 paymentTransactionRepository,
                 paymentGatewayPort,
                 metadataStore,
-                new PaymentSessionMapper()
+                new PaymentSessionMapper(),
+                orderPaymentLookupService
         );
     }
 
@@ -98,6 +103,58 @@ class CreatePaymentSessionUseCaseTest {
         assertThat(metadataCaptor.getValue().customerId()).isEqualTo(42L);
         assertThat(metadataCaptor.getValue().targetType()).isEqualTo(PaymentTargetType.COMMISSION_INITIAL);
         assertThat(metadataCaptor.getValue().targetId()).isEqualTo(301L);
+    }
+
+        @Test
+    @DisplayName("PAY-01 [N]: SepayPaymentIntentAdapter delegates ORDER initialization to PaymentSessionPort and resolves order owner")
+    void createSession_orderViaCommerceIntentAdapter_resolvesOrderOwnerAndReturnsIntent() {
+        String code = "LMTORD102A1B2C3D4";
+        Instant orderExpiresAt = Instant.parse("2026-11-12T17:00:00Z");
+        SePayQrDetails qrDetails = new SePayQrDetails(
+                code,
+                "https://vietqr.app/img?bank=TPBank&acc=10006140844&template=compact&amount=250000&des=" + code + "&showinfo=true&holder=NGUYEN%20QUANG%20KHANH",
+                "TPBank",
+                "10006140844",
+                "NGUYEN QUANG KHANH"
+        );
+
+        when(orderPaymentLookupService.findByOrderId(102L)).thenReturn(java.util.Optional.of(
+                new com.lumintra.backend.commerce.domain.model.OrderPaymentSnapshot(
+                        102L,
+                        42L,
+                        new BigDecimal("250000.00"),
+                        com.lumintra.backend.commerce.domain.model.OrderStatus.PENDING_PAYMENT,
+                        orderExpiresAt
+                )
+        ));
+        when(paymentGatewayPort.generatePaymentCode(PaymentTargetType.ORDER, 102L)).thenReturn(code);
+        when(paymentGatewayPort.buildQrDetails(code, new BigDecimal("250000.00"))).thenReturn(qrDetails);
+        when(paymentTransactionRepository.save(any(PaymentTransactionEntity.class))).thenAnswer(invocation -> {
+            PaymentTransactionEntity entity = invocation.getArgument(0);
+            entity.setPaymentId(5001L);
+            entity.setCreatedAt(Instant.parse("2026-11-12T16:45:00Z"));
+            return entity;
+        });
+
+        com.lumintra.backend.commerce.infrastructure.integration.SepayPaymentIntentAdapter intentAdapter =
+                new com.lumintra.backend.commerce.infrastructure.integration.SepayPaymentIntentAdapter(useCase);
+
+        com.lumintra.backend.commerce.domain.model.PaymentIntentResult result =
+                intentAdapter.initializePaymentIntent(
+                        102L,
+                        new BigDecimal("250000.00"),
+                        com.lumintra.backend.commerce.domain.model.PaymentGateway.SEPAY
+                );
+
+        assertThat(result.paymentId()).isEqualTo(5001L);
+        assertThat(result.gateway()).isEqualTo(com.lumintra.backend.commerce.domain.model.PaymentGateway.SEPAY);
+        assertThat(result.status()).isEqualTo(com.lumintra.backend.commerce.domain.model.PaymentStatus.PENDING);
+        assertThat(result.transactionCode()).isEqualTo(code);
+
+        ArgumentCaptor<PaymentSessionMetadata> metadataCaptor = ArgumentCaptor.forClass(PaymentSessionMetadata.class);
+        verify(metadataStore).save(metadataCaptor.capture(), any(Duration.class));
+        assertThat(metadataCaptor.getValue().customerId()).isEqualTo(42L);
+        assertThat(metadataCaptor.getValue().expiresAt()).isEqualTo(orderExpiresAt);
     }
 
     @Test

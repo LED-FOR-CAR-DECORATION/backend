@@ -356,23 +356,31 @@ class GetOrderDetailUseCaseTest {
     }
 
     @Test
-    @DisplayName("UTCID09 [N]: SepayPaymentInstructionAdapter constructs VietQR URL with LUM{orderId} memo and normalized amount")
+    @DisplayName("UTCID09 [N]: SepayPaymentInstructionAdapter delegates to PaymentGatewayPort and constructs VietQR URL")
     void sepayAdapter_buildInstructions_constructsExpectedQrCodeUrl() {
+        com.lumintra.backend.payment.infrastructure.integration.SePayProperties properties =
+                new com.lumintra.backend.payment.infrastructure.integration.SePayProperties(
+                        "https://vietqr.app/img",
+                        "TPBank",
+                        "10006140844",
+                        "NGUYEN QUANG KHANH",
+                        "LUM",
+                        "secret"
+                );
         SepayPaymentInstructionAdapter adapter = new SepayPaymentInstructionAdapter(
-                "https://qr.sepay.vn/img",
-                "0123456789",
-                "MBBank"
+                new com.lumintra.backend.payment.infrastructure.integration.SePayGatewayAdapter(properties),
+                properties
         );
         Instant expiresAt = Instant.parse("2026-11-10T17:00:00Z");
 
         SepayPaymentInstructions result = adapter.buildInstructions(102L, new BigDecimal("250000.00"), expiresAt);
 
         assertThat(result.paymentContent()).isEqualTo("LUM102");
-        assertThat(result.bankAccount()).isEqualTo("0123456789");
-        assertThat(result.bankName()).isEqualTo("MBBank");
+        assertThat(result.bankAccount()).isEqualTo("10006140844");
+        assertThat(result.bankName()).isEqualTo("TPBank");
         assertThat(result.expiresAt()).isEqualTo(expiresAt);
         assertThat(result.qrCodeUrl())
-                .isEqualTo("https://qr.sepay.vn/img?acc=0123456789&bank=MBBank&amount=250000&des=LUM102");
+                .isEqualTo("https://vietqr.app/img?bank=TPBank&acc=10006140844&template=compact&amount=250000&des=LUM102&showinfo=true&holder=NGUYEN%20QUANG%20KHANH");
     }
 
     @Test
