@@ -2,6 +2,7 @@ package com.lumintra.backend.commerce.infrastructure.persistence.entity;
 
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.OrderType;
+import com.lumintra.backend.shared.exception.commerce.OrderStatusTransitionException;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -106,5 +107,29 @@ public class OrderEntity {
 
     public boolean isOwnedBy(Long userId) {
         return userId != null && Objects.equals(this.customerId, userId);
+    }
+
+    public boolean canStaffTransitionTo(OrderStatus targetStatus) {
+        if (this.status == null || targetStatus == null) {
+            return false;
+        }
+        return switch (this.status) {
+            case PENDING_PAYMENT -> targetStatus == OrderStatus.CANCELED;
+            case DELIVERY_FAILED -> targetStatus == OrderStatus.PROCESSING;
+            case DELIVERED -> targetStatus == OrderStatus.COMPLETED;
+            default -> false;
+        };
+    }
+
+    public void validateStaffTransition(OrderStatus targetStatus) {
+        if (!canStaffTransitionTo(targetStatus)) {
+            throw new OrderStatusTransitionException(
+                    "Cannot transition order status from " + this.status + " to " + targetStatus + ".");
+        }
+    }
+
+    public void transitionStatusByStaff(OrderStatus targetStatus) {
+        validateStaffTransition(targetStatus);
+        this.status = targetStatus;
     }
 }

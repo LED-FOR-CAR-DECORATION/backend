@@ -105,6 +105,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("ORDER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(OrderStatusTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleOrderStatusTransition(OrderStatusTransitionException ex) {
+        return buildErrorResponse("INVALID_ORDER_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     // IAM exceptions
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {

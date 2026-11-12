@@ -10,6 +10,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,5 +51,43 @@ class LedInventoryServiceImplTest {
         boolean insufficient = ledInventoryService.deductStocksIfAvailable(Map.of(101L, 5L, 205L, 1L));
         assertThat(insufficient).isFalse();
         verify(ledModelRepository, never()).deductStockIfAvailable(205L, 1L);
+    }
+
+    @Test
+    @DisplayName("COM-12 UTCID01 [N]: restoreStocks increments hardware models in ascending ID order")
+    void restoreStocks_multipleModels_restoresInAscendingOrder() {
+        when(ledModelRepository.restoreStock(101L, 3L)).thenReturn(1);
+        when(ledModelRepository.restoreStock(205L, 2L)).thenReturn(1);
+
+        ledInventoryService.restoreStocks(Map.of(205L, 2L, 101L, 3L));
+
+        InOrder inOrder = inOrder(ledModelRepository);
+        inOrder.verify(ledModelRepository).restoreStock(101L, 3L);
+        inOrder.verify(ledModelRepository).restoreStock(205L, 2L);
+        verifyNoMoreInteractions(ledModelRepository);
+    }
+
+    @Test
+    @DisplayName("COM-12 UTCID02 [B]: restoreStocks skips empty/invalid entries and continues cleanly when a model row is missing")
+    void restoreStocks_emptyOrMissingModel_handlesGracefully() {
+        ledInventoryService.restoreStocks(null);
+        ledInventoryService.restoreStocks(Map.of());
+
+        Map<Long, Long> invalidEntries = new HashMap<>();
+        invalidEntries.put(null, 5L);
+        invalidEntries.put(101L, 0L);
+        invalidEntries.put(102L, -2L);
+        invalidEntries.put(103L, null);
+        ledInventoryService.restoreStocks(invalidEntries);
+
+        verifyNoInteractions(ledModelRepository);
+
+        when(ledModelRepository.restoreStock(101L, 2L)).thenReturn(0);
+        when(ledModelRepository.restoreStock(205L, 1L)).thenReturn(1);
+
+        ledInventoryService.restoreStocks(Map.of(101L, 2L, 205L, 1L));
+
+        verify(ledModelRepository).restoreStock(101L, 2L);
+        verify(ledModelRepository).restoreStock(205L, 1L);
     }
 }

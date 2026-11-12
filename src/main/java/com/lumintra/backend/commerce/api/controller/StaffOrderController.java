@@ -1,10 +1,13 @@
 package com.lumintra.backend.commerce.api.controller;
 
 import com.lumintra.backend.commerce.api.request.StaffOrderFilterRequest;
+import com.lumintra.backend.commerce.api.request.UpdateStaffOrderStatusRequest;
 import com.lumintra.backend.commerce.api.response.StaffOrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderListResponse;
+import com.lumintra.backend.commerce.api.response.StaffOrderStatusResponse;
 import com.lumintra.backend.commerce.application.GetStaffOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListStaffOrdersUseCase;
+import com.lumintra.backend.commerce.application.UpdateStaffOrderStatusUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,7 +28,9 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,6 +47,7 @@ public class StaffOrderController {
 
     private final ListStaffOrdersUseCase listStaffOrdersUseCase;
     private final GetStaffOrderDetailUseCase getStaffOrderDetailUseCase;
+    private final UpdateStaffOrderStatusUseCase updateStaffOrderStatusUseCase;
 
     @Operation(
             summary = "List staff order fulfillment queue",
@@ -204,6 +210,108 @@ public class StaffOrderController {
             @PathVariable @Positive(message = "id must be greater than 0") Long id) {
         String subject = extractAuthenticatedSubject(authentication);
         StaffOrderDetailResponse response = getStaffOrderDetailUseCase.execute(subject, id);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Update order fulfillment status",
+            description = "Manually transitions an order across staff-permitted lifecycle transitions: PENDING_PAYMENT -> CANCELED (accepts CANCELLED alias and restores LED hardware stocks), DELIVERY_FAILED -> PROCESSING, and DELIVERED -> COMPLETED."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Order status transitioned successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid path id, malformed JSON, or unsupported target status",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Validation Failed",
+                                    value = """
+                                            {
+                                              "code": "VALIDATION_FAILED",
+                                              "message": "Invalid request payload",
+                                              "status": 400,
+                                              "timestamp": "2026-11-12T06:55:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": [
+                                                {
+                                                  "field": "status",
+                                                  "message": "status must be one of PROCESSING, COMPLETED, CANCELED, or CANCELLED"
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing, expired, or invalid JWT authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: caller is not an active internal STAFF, MANAGER, or ADMIN account",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Not Found: order does not exist",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict: order status cannot transition from its current state to the requested target state",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Invalid Status Transition",
+                                    value = """
+                                            {
+                                              "code": "INVALID_ORDER_STATUS_TRANSITION",
+                                              "message": "Cannot transition order status from PROCESSING to COMPLETED.",
+                                              "status": 409,
+                                              "timestamp": "2026-11-12T06:55:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<StaffOrderStatusResponse>> updateOrderStatus(
+            Authentication authentication,
+            @Parameter(description = "Numeric purchase order identifier", example = "102")
+            @PathVariable @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody UpdateStaffOrderStatusRequest request) {
+        String subject = extractAuthenticatedSubject(authentication);
+        StaffOrderStatusResponse response = updateStaffOrderStatusUseCase.execute(subject, id, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

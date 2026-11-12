@@ -2,10 +2,13 @@ package com.lumintra.backend.commerce;
 
 import com.lumintra.backend.commerce.api.controller.StaffOrderController;
 import com.lumintra.backend.commerce.api.request.StaffOrderFilterRequest;
+import com.lumintra.backend.commerce.api.request.UpdateStaffOrderStatusRequest;
 import com.lumintra.backend.commerce.api.response.StaffOrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderListResponse;
+import com.lumintra.backend.commerce.api.response.StaffOrderStatusResponse;
 import com.lumintra.backend.commerce.application.GetStaffOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListStaffOrdersUseCase;
+import com.lumintra.backend.commerce.application.UpdateStaffOrderStatusUseCase;
 import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.OrderType;
@@ -15,6 +18,7 @@ import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
 import com.lumintra.backend.shared.exception.commerce.OrderNotFoundException;
+import com.lumintra.backend.shared.exception.commerce.OrderStatusTransitionException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
@@ -26,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -42,6 +47,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -59,6 +65,9 @@ class StaffOrderControllerTest {
 
     @MockitoBean
     private GetStaffOrderDetailUseCase getStaffOrderDetailUseCase;
+
+    @MockitoBean
+    private UpdateStaffOrderStatusUseCase updateStaffOrderStatusUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -399,6 +408,169 @@ class StaffOrderControllerTest {
 
         mockMvc.perform(get(PATH + "/102")
                         .with(SecurityMockMvcRequestPostProcessors.user("9").roles("STAFF")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
+
+    @Test
+    @DisplayName("COM-12 UTCID01 [N]: STAFF, MANAGER, and ADMIN receive 200 OK for COMPLETED, PROCESSING, CANCELED, and CANCELLED alias")
+    void updateOrderStatus_allowedRolesAndTargets_returns200() throws Exception {
+        Instant updatedAt = Instant.parse("2026-11-12T06:55:00Z");
+
+        when(updateStaffOrderStatusUseCase.execute(
+                "7", 102L, new UpdateStaffOrderStatusRequest("COMPLETED")))
+                .thenReturn(new StaffOrderStatusResponse(102L, OrderStatus.DELIVERED, OrderStatus.COMPLETED, updatedAt));
+
+        for (String role : new String[]{"STAFF", "MANAGER", "ADMIN"}) {
+            mockMvc.perform(patch(PATH + "/102/status")
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles(role))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"COMPLETED\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.orderId").value(102))
+                    .andExpect(jsonPath("$.data.previousStatus").value("DELIVERED"))
+                    .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                    .andExpect(jsonPath("$.data.updatedAt").value("2026-11-12T06:55:00Z"))
+                    .andExpect(jsonPath("$.meta").doesNotExist());
+        }
+
+        when(updateStaffOrderStatusUseCase.execute(
+                "7", 103L, new UpdateStaffOrderStatusRequest("PROCESSING")))
+                .thenReturn(new StaffOrderStatusResponse(103L, OrderStatus.DELIVERY_FAILED, OrderStatus.PROCESSING, updatedAt));
+
+        mockMvc.perform(patch(PATH + "/103/status")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PROCESSING\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previousStatus").value("DELIVERY_FAILED"))
+                .andExpect(jsonPath("$.data.status").value("PROCESSING"));
+
+        when(updateStaffOrderStatusUseCase.execute(
+                "7", 104L, new UpdateStaffOrderStatusRequest("CANCELLED")))
+                .thenReturn(new StaffOrderStatusResponse(104L, OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELED, updatedAt));
+
+        mockMvc.perform(patch(PATH + "/104/status")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CANCELLED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previousStatus").value("PENDING_PAYMENT"))
+                .andExpect(jsonPath("$.data.status").value("CANCELED"));
+    }
+
+    @Test
+    @DisplayName("COM-12 UTCID02 [B]: Invalid path id, blank/unsupported target status, and malformed JSON return 400 VALIDATION_FAILED")
+    void updateOrderStatus_invalidPathOrBody_returns400ValidationFailed() throws Exception {
+        for (String badId : new String[]{"abc", "0", "-5"}) {
+            mockMvc.perform(patch(PATH + "/" + badId + "/status")
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"COMPLETED\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.details[0].field").value("id"));
+        }
+
+        for (String invalidBody : new String[]{
+                "{}",
+                "{\"status\":\"   \"}",
+                "{\"status\":\"SHIPPING\"}",
+                "{\"status\":\"DELIVERED\"}",
+                "{\"status\":\"processing\"}"
+        }) {
+            mockMvc.perform(patch(PATH + "/102/status")
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(invalidBody))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.details[0].field").value("status"));
+        }
+
+        mockMvc.perform(patch(PATH + "/102/status")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{malformed-json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(updateStaffOrderStatusUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-12 UTCID03 [A]: Anonymous callers return 401 and CUSTOMER/DESIGNER roles return 403")
+    void updateOrderStatus_unauthorizedAndForbiddenRoles_returns401And403() throws Exception {
+        mockMvc.perform(patch(PATH + "/102/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"COMPLETED\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        for (String role : new String[]{"CUSTOMER", "DESIGNER"}) {
+            mockMvc.perform(patch(PATH + "/102/status")
+                            .with(SecurityMockMvcRequestPostProcessors.user("42").roles(role))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"COMPLETED\"}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+
+        verifyNoInteractions(updateStaffOrderStatusUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-12 UTCID04 [A]: Maps OrderNotFoundException->404, OrderStatusTransitionException->409, and 401/403/500 cleanly")
+    void updateOrderStatus_useCaseExceptions_mapToExpectedHttpStatuses() throws Exception {
+        when(updateStaffOrderStatusUseCase.execute(eq("7"), eq(999L), any()))
+                .thenThrow(new OrderNotFoundException("Order not found."));
+
+        mockMvc.perform(patch(PATH + "/999/status")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"COMPLETED\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Order not found."));
+
+        when(updateStaffOrderStatusUseCase.execute(eq("7"), eq(102L), any()))
+                .thenThrow(new OrderStatusTransitionException("Cannot transition order status from PROCESSING to COMPLETED."));
+
+        mockMvc.perform(patch(PATH + "/102/status")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"COMPLETED\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_ORDER_STATUS_TRANSITION"))
+                .andExpect(jsonPath("$.message").value("Cannot transition order status from PROCESSING to COMPLETED."));
+
+        when(updateStaffOrderStatusUseCase.execute(eq("8"), eq(102L), any()))
+                .thenThrow(new AccessDeniedException("Active internal account is required."));
+
+        mockMvc.perform(patch(PATH + "/102/status")
+                        .with(SecurityMockMvcRequestPostProcessors.user("8").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"COMPLETED\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        when(updateStaffOrderStatusUseCase.execute(eq("bad"), eq(102L), any()))
+                .thenThrow(new InvalidCredentialsException("Invalid authenticated account."));
+
+        mockMvc.perform(patch(PATH + "/102/status")
+                        .with(SecurityMockMvcRequestPostProcessors.user("bad").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"COMPLETED\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+
+        when(updateStaffOrderStatusUseCase.execute(eq("9"), eq(102L), any()))
+                .thenThrow(new IllegalStateException("DB unreachable"));
+
+        mockMvc.perform(patch(PATH + "/102/status")
+                        .with(SecurityMockMvcRequestPostProcessors.user("9").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"COMPLETED\"}"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
     }

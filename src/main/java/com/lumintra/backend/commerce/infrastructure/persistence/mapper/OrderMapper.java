@@ -5,6 +5,7 @@ import com.lumintra.backend.commerce.api.response.OrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.OrderListResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderListResponse;
+import com.lumintra.backend.commerce.api.response.StaffOrderStatusResponse;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.PaymentIntentResult;
 import com.lumintra.backend.commerce.domain.model.PaymentStatus;
@@ -380,5 +381,16 @@ public class OrderMapper {
                 .paidAmount(settled ? payment.getAmount() : null)
                 .paidAt(settled ? payment.getPaidAt() : null)
                 .build();
+    }
+
+    public StaffOrderStatusResponse toStaffOrderStatusResponse(
+            Long orderId,
+            OrderStatus previousStatus,
+            OrderStatus status,
+            Instant updatedAt) {
+        if (orderId == null || status == null) {
+            return null;
+        }
+        return new StaffOrderStatusResponse(orderId, previousStatus, status, updatedAt);
     }
 }
