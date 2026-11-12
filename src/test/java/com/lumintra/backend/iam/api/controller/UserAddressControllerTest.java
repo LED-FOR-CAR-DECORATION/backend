@@ -10,16 +10,20 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.lumintra.backend.iam.api.request.AddUserAddressRequest;
+import com.lumintra.backend.iam.api.request.UpdateUserAddressRequest;
 import com.lumintra.backend.iam.api.response.UserAddressResponse;
 import com.lumintra.backend.iam.application.AddUserAddressUseCase;
 import com.lumintra.backend.iam.application.ListUserAddressesUseCase;
+import com.lumintra.backend.iam.application.UpdateUserAddressUseCase;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
+import com.lumintra.backend.shared.exception.commerce.AddressNotFoundException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.exception.iam.UserNotFoundException;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
@@ -58,8 +62,20 @@ class UserAddressControllerTest {
             """;
 
     @Autowired private MockMvc mvc;
+    private static final String VALID_UPDATE_BODY =
+            """
+            {
+              "recipientName": "  Nguyen Van B  ",
+              "recipientPhone": "  0912345678  ",
+              "fullAddress": "  456 Le Loi, Ben Thanh, District 1, Ho Chi Minh City  ",
+              "latitude": 10.773123456,
+              "longitude": 106.698765432
+            }
+            """;
+
     @MockitoBean private ListUserAddressesUseCase useCase;
     @MockitoBean private AddUserAddressUseCase addUserAddressUseCase;
+    @MockitoBean private UpdateUserAddressUseCase updateUserAddressUseCase;
     @MockitoBean private JwtTokenProvider tokenProvider;
     @MockitoBean private TokenBlacklistService tokenBlacklistService;
     @MockitoBean private Tracer tracer;
@@ -441,6 +457,276 @@ class UserAddressControllerTest {
                                 .with(user("42").roles("CUSTOMER"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(VALID_ADD_BODY))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.message").value("An unexpected error occurred"));
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID01 [N]: AC01-AC05 CUSTOMER updates owned address and receives 200 OK with preserved isDefault and normalized payload")
+    void updateAddress_asCustomer_returns200WithSafePayload() throws Exception {
+        Instant createdAt = Instant.parse("2026-11-12T02:00:00Z");
+        Instant updatedAt = Instant.parse("2026-11-12T03:00:00Z");
+        UserAddressResponse updated =
+                new UserAddressResponse(
+                        10L,
+                        "Nguyen Van B",
+                        "0912345678",
+                        "456 Le Loi, Ben Thanh, District 1, Ho Chi Minh City",
+                        new BigDecimal("10.7731235"),
+                        new BigDecimal("106.6987654"),
+                        true,
+                        createdAt,
+                        updatedAt);
+        when(updateUserAddressUseCase.execute(
+                        eq("42"), eq(10L), any(UpdateUserAddressRequest.class)))
+                .thenReturn(updated);
+
+        mvc.perform(
+                        put(PATH + "/10")
+                                .with(user("42").roles("CUSTOMER"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_UPDATE_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.addressId").value(10))
+                .andExpect(jsonPath("$.data.recipientName").value("Nguyen Van B"))
+                .andExpect(jsonPath("$.data.recipientPhone").value("0912345678"))
+                .andExpect(
+                        jsonPath("$.data.fullAddress")
+                                .value("456 Le Loi, Ben Thanh, District 1, Ho Chi Minh City"))
+                .andExpect(jsonPath("$.data.latitude").value(10.7731235))
+                .andExpect(jsonPath("$.data.longitude").value(106.6987654))
+                .andExpect(jsonPath("$.data.isDefault").value(true))
+                .andExpect(jsonPath("$.data.createdAt").value("2026-11-12T02:00:00Z"))
+                .andExpect(jsonPath("$.data.updatedAt").value("2026-11-12T03:00:00Z"))
+                .andExpect(jsonPath("$.data.customerId").doesNotExist())
+                .andExpect(jsonPath("$.data.default").doesNotExist())
+                .andExpect(jsonPath("$.meta").doesNotExist());
+
+        verify(updateUserAddressUseCase)
+                .execute(
+                        "42",
+                        10L,
+                        new UpdateUserAddressRequest(
+                                "Nguyen Van B",
+                                "0912345678",
+                                "456 Le Loi, Ben Thanh, District 1, Ho Chi Minh City",
+                                new BigDecimal("10.773123456"),
+                                new BigDecimal("106.698765432")));
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID02 [A]: AC02 & AC04 ignores client customerId, addressId, and isDefault tampering on PUT")
+    void updateAddress_ignoresExtraCustomerIdAddressIdAndIsDefault() throws Exception {
+        Instant timestamp = Instant.parse("2026-11-12T03:00:00Z");
+        when(updateUserAddressUseCase.execute(
+                        eq("42"), eq(10L), any(UpdateUserAddressRequest.class)))
+                .thenReturn(
+                        new UserAddressResponse(
+                                10L,
+                                "Nguyen Van B",
+                                "0912345678",
+                                "456 Le Loi, District 1, HCMC",
+                                new BigDecimal("10.7731235"),
+                                new BigDecimal("106.6987654"),
+                                true,
+                                timestamp,
+                                timestamp));
+
+        mvc.perform(
+                        put(PATH + "/10?customerId=99")
+                                .with(user("42").roles("CUSTOMER"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "addressId": 999,
+                                          "customerId": 99,
+                                          "isDefault": false,
+                                          "recipientName": "Nguyen Van B",
+                                          "recipientPhone": "0912345678",
+                                          "fullAddress": "456 Le Loi, District 1, HCMC",
+                                          "latitude": 10.7731235,
+                                          "longitude": 106.6987654
+                                        }
+                                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.addressId").value(10))
+                .andExpect(jsonPath("$.data.isDefault").value(true));
+
+        verify(updateUserAddressUseCase)
+                .execute(
+                        "42",
+                        10L,
+                        new UpdateUserAddressRequest(
+                                "Nguyen Van B",
+                                "0912345678",
+                                "456 Le Loi, District 1, HCMC",
+                                new BigDecimal("10.7731235"),
+                                new BigDecimal("106.6987654")));
+        verify(updateUserAddressUseCase, never()).execute(eq("99"), any(), any());
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID03 [B]: AC02 non-numeric or non-positive path id returns 400 VALIDATION_FAILED")
+    void updateAddress_invalidPathId_returns400() throws Exception {
+        for (String badPath : new String[] {PATH + "/abc", PATH + "/0", PATH + "/-1"}) {
+            mvc.perform(
+                            put(badPath)
+                                    .with(user("42").roles("CUSTOMER"))
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(VALID_UPDATE_BODY))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.details[0].field").value("id"));
+        }
+
+        verifyNoInteractions(updateUserAddressUseCase);
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID04 [A]: AC03 invalid body fields, >255 fullAddress, out-of-range coords or malformed JSON return 400 VALIDATION_FAILED")
+    void updateAddress_invalidPayloadOrMalformedJson_returns400() throws Exception {
+        String tooLongAddress =
+                "{\"recipientName\":\"Binh\",\"recipientPhone\":\"0912345678\",\"fullAddress\":\""
+                        + "A".repeat(256)
+                        + "\",\"latitude\":10.77,\"longitude\":106.70}";
+        String outOfRangeLng =
+                """
+                {
+                  "recipientName": "Binh",
+                  "recipientPhone": "0912345678",
+                  "fullAddress": "456 Le Loi",
+                  "latitude": 10.77,
+                  "longitude": 180.5
+                }
+                """;
+        String badPhone =
+                """
+                {
+                  "recipientName": "Binh",
+                  "recipientPhone": "abc",
+                  "fullAddress": "456 Le Loi",
+                  "latitude": 10.77,
+                  "longitude": 106.70
+                }
+                """;
+
+        for (String payload : new String[] {tooLongAddress, outOfRangeLng, badPhone, "{"}) {
+            mvc.perform(
+                            put(PATH + "/10")
+                                    .with(user("42").roles("CUSTOMER"))
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(payload))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
+
+        verifyNoInteractions(updateUserAddressUseCase);
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID05 [A]: AC01 anonymous/invalid Bearer returns 401 UNAUTHORIZED and invalid subject maps to 401 INVALID_CREDENTIALS")
+    void updateAddress_unauthenticatedOrInvalidSubject_returns401() throws Exception {
+        mvc.perform(
+                        put(PATH + "/10")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_UPDATE_BODY))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        mvc.perform(
+                        put(PATH + "/10")
+                                .header("Authorization", "Bearer invalid-jwt")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_UPDATE_BODY))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(updateUserAddressUseCase);
+
+        when(updateUserAddressUseCase.execute(eq("invalid-subject"), eq(10L), any()))
+                .thenThrow(new InvalidCredentialsException("Invalid authenticated account."));
+
+        mvc.perform(
+                        put(PATH + "/10")
+                                .with(user("invalid-subject").roles("CUSTOMER"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_UPDATE_BODY))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID06 [A]: AC01 EMPLOYEE roles (ADMIN, MANAGER, STAFF, DESIGNER) are rejected with 403 FORBIDDEN")
+    void updateAddress_employeeRoles_returns403() throws Exception {
+        for (String role : new String[] {"ADMIN", "MANAGER", "STAFF", "DESIGNER"}) {
+            mvc.perform(
+                            put(PATH + "/10")
+                                    .with(user("7").roles(role))
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(VALID_UPDATE_BODY))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+
+        verifyNoInteractions(updateUserAddressUseCase);
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID07 [A]: AC01 & AC02 maps missing/foreign address to 404 ADDRESS_NOT_FOUND, missing account to 404 USER_NOT_FOUND, and inactive account to 403")
+    void updateAddress_missingAddressOrAccountStatusErrors_map404And403() throws Exception {
+        when(updateUserAddressUseCase.execute(eq("42"), eq(99L), any()))
+                .thenThrow(new AddressNotFoundException("Delivery address not found."));
+        mvc.perform(
+                        put(PATH + "/99")
+                                .with(user("42").roles("CUSTOMER"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_UPDATE_BODY))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ADDRESS_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Delivery address not found."));
+
+        when(updateUserAddressUseCase.execute(eq("404"), eq(10L), any()))
+                .thenThrow(new UserNotFoundException("Account not found."));
+        mvc.perform(
+                        put(PATH + "/10")
+                                .with(user("404").roles("CUSTOMER"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_UPDATE_BODY))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+
+        when(updateUserAddressUseCase.execute(eq("403"), eq(10L), any()))
+                .thenThrow(new AccessDeniedException("Account is not active."));
+        mvc.perform(
+                        put(PATH + "/10")
+                                .with(user("403").roles("CUSTOMER"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_UPDATE_BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID08 [A]: AC05 unexpected database failure returns safe 500 without leaking internal SQL details")
+    void updateAddress_databaseFailure_returns500() throws Exception {
+        when(updateUserAddressUseCase.execute(anyString(), eq(10L), any()))
+                .thenThrow(new DataAccessResourceFailureException("sensitive SQL error details"));
+
+        mvc.perform(
+                        put(PATH + "/10")
+                                .with(user("42").roles("CUSTOMER"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_UPDATE_BODY))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
                 .andExpect(jsonPath("$.message").value("An unexpected error occurred"));

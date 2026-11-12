@@ -253,4 +253,67 @@ class UserAddressRepositoryQueryTest {
                 .extracting(UserAddressEntity::isDefault)
                 .isEqualTo(true);
     }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID01 [N]: AC02 & AC04 findByAddressIdAndCustomerId updates persisted details, refreshes updatedAt, and preserves isDefault")
+    void findByAddressIdAndCustomerId_updatesDetailsAndPreservesDefaultAndTimestamps() {
+        Instant initialTimestamp = Instant.parse("2026-11-01T01:00:00Z");
+        UserAddressEntity target =
+                persistAddress(42L, "Old Name", true, initialTimestamp, initialTimestamp);
+        UserAddressEntity secondary =
+                persistAddress(42L, "Secondary", false, initialTimestamp, initialTimestamp);
+        entityManager.clear();
+
+        UserAddressEntity loaded =
+                userAddressRepository
+                        .findByAddressIdAndCustomerId(target.getAddressId(), 42L)
+                        .orElseThrow();
+        loaded.updateDetails(
+                "Updated Name",
+                "+84912345678",
+                "456 Le Loi, Ben Thanh, District 1, Ho Chi Minh City",
+                new BigDecimal("10.7731235"),
+                new BigDecimal("106.6987654"));
+        userAddressRepository.saveAndFlush(loaded);
+        entityManager.clear();
+
+        UserAddressEntity reloaded =
+                userAddressRepository.findById(target.getAddressId()).orElseThrow();
+        assertThat(reloaded.getCustomerId()).isEqualTo(42L);
+        assertThat(reloaded.getRecipientName()).isEqualTo("Updated Name");
+        assertThat(reloaded.getRecipientPhone()).isEqualTo("+84912345678");
+        assertThat(reloaded.getFullAddress())
+                .isEqualTo("456 Le Loi, Ben Thanh, District 1, Ho Chi Minh City");
+        assertThat(reloaded.getLatitude()).isEqualByComparingTo("10.7731235");
+        assertThat(reloaded.getLongitude()).isEqualByComparingTo("106.6987654");
+        assertThat(reloaded.isDefault()).isTrue();
+        assertThat(reloaded.getCreatedAt()).isEqualTo(initialTimestamp);
+        assertThat(reloaded.getUpdatedAt()).isAfter(initialTimestamp);
+
+        UserAddressEntity reloadedSecondary =
+                userAddressRepository.findById(secondary.getAddressId()).orElseThrow();
+        assertThat(reloadedSecondary.isDefault()).isFalse();
+        assertThat(reloadedSecondary.getRecipientName()).isEqualTo("Secondary");
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-24 UTCID02 [A]: AC02 findByAddressIdAndCustomerId returns empty for missing or foreign customer addressId")
+    void findByAddressIdAndCustomerId_missingOrForeignOwner_returnsEmpty() {
+        UserAddressEntity foreignAddress =
+                persistAddress(
+                        99L,
+                        "Foreign Customer",
+                        true,
+                        Instant.parse("2026-11-10T01:00:00Z"),
+                        Instant.parse("2026-11-10T01:00:00Z"));
+        entityManager.clear();
+
+        assertThat(
+                        userAddressRepository.findByAddressIdAndCustomerId(
+                                foreignAddress.getAddressId(), 42L))
+                .isEmpty();
+        assertThat(userAddressRepository.findByAddressIdAndCustomerId(999999L, 42L)).isEmpty();
+    }
 }
