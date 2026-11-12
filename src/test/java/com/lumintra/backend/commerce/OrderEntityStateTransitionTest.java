@@ -20,8 +20,7 @@ class OrderEntityStateTransitionTest {
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STAFF_TRANSITIONS = Map.of(
             OrderStatus.PENDING_PAYMENT, Set.of(OrderStatus.CANCELED),
-            OrderStatus.DELIVERY_FAILED, Set.of(OrderStatus.PROCESSING),
-            OrderStatus.DELIVERED, Set.of(OrderStatus.COMPLETED)
+            OrderStatus.DELIVERY_FAILED, Set.of(OrderStatus.PROCESSING)
     );
 
     private OrderEntity orderWithStatus(OrderStatus status) {
@@ -48,14 +47,10 @@ class OrderEntityStateTransitionTest {
         OrderEntity failed = orderWithStatus(OrderStatus.DELIVERY_FAILED);
         failed.transitionStatusByStaff(OrderStatus.PROCESSING);
         assertThat(failed.getStatus()).isEqualTo(OrderStatus.PROCESSING);
-
-        OrderEntity delivered = orderWithStatus(OrderStatus.DELIVERED);
-        delivered.transitionStatusByStaff(OrderStatus.COMPLETED);
-        assertThat(delivered.getStatus()).isEqualTo(OrderStatus.COMPLETED);
     }
 
     @Test
-    @DisplayName("COM-12 UTCID02 [A]: OrderEntity rejects all disallowed staff state transitions without mutating current status")
+    @DisplayName("COM-12 UTCID02 [A]: OrderEntity rejects all disallowed staff state transitions including DELIVERED->COMPLETED without mutating current status")
     void validateStaffTransition_disallowedTransitions_throwsWithoutMutatingStatus() {
         for (OrderStatus current : OrderStatus.values()) {
             Set<OrderStatus> allowedTargets = ALLOWED_STAFF_TRANSITIONS.getOrDefault(current, Set.of());
@@ -83,25 +78,23 @@ class OrderEntityStateTransitionTest {
     }
 
     @Test
-    @DisplayName("COM-12 UTCID03 [N]: Request validator accepts PROCESSING, COMPLETED, CANCELED, and normalizes CANCELLED alias")
+    @DisplayName("COM-12 UTCID03 [N]: Request validator accepts PROCESSING, CANCELED, and normalizes CANCELLED alias")
     void requestNormalization_validTargetsAndCancelledAlias_normalizeCleanly() {
         StaffTargetOrderStatusValidator validator = new StaffTargetOrderStatusValidator();
 
         assertThat(validator.isValid("PROCESSING", null)).isTrue();
-        assertThat(validator.isValid("COMPLETED", null)).isTrue();
         assertThat(validator.isValid("CANCELED", null)).isTrue();
         assertThat(validator.isValid("CANCELLED", null)).isTrue();
-        assertThat(validator.isValid(" COMPLETED ", null)).isTrue();
+        assertThat(validator.isValid(" PROCESSING ", null)).isTrue();
 
         assertThat(new UpdateStaffOrderStatusRequest("PROCESSING").toOrderStatus()).isEqualTo(OrderStatus.PROCESSING);
-        assertThat(new UpdateStaffOrderStatusRequest("COMPLETED").toOrderStatus()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(new UpdateStaffOrderStatusRequest("CANCELED").toOrderStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(new UpdateStaffOrderStatusRequest("CANCELLED").toOrderStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(new UpdateStaffOrderStatusRequest(" CANCELLED ").toOrderStatus()).isEqualTo(OrderStatus.CANCELED);
     }
 
     @Test
-    @DisplayName("COM-12 UTCID04 [B]: Request validator delegates blank/null to @NotBlank and rejects disallowed status strings")
+    @DisplayName("COM-12 UTCID04 [B]: Request validator delegates blank/null to @NotBlank and rejects disallowed status strings including COMPLETED")
     void requestValidator_nullBlankOrDisallowedValues_behavesCorrectly() {
         StaffTargetOrderStatusValidator validator = new StaffTargetOrderStatusValidator();
 
@@ -109,10 +102,38 @@ class OrderEntityStateTransitionTest {
         assertThat(validator.isValid("", null)).isTrue();
         assertThat(validator.isValid("   ", null)).isTrue();
 
+        assertThat(validator.isValid("COMPLETED", null)).isFalse();
+        assertThat(validator.isValid(" COMPLETED ", null)).isFalse();
         assertThat(validator.isValid("SHIPPING", null)).isFalse();
         assertThat(validator.isValid("DELIVERED", null)).isFalse();
         assertThat(validator.isValid("PENDING_PAYMENT", null)).isFalse();
         assertThat(validator.isValid("processing", null)).isFalse();
         assertThat(validator.isValid("UNKNOWN", null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("COM-15 UTCID01 [N]: OrderEntity permits customer delivery confirmation only from DELIVERED")
+    void validateCustomerConfirmDelivery_whenDelivered_succeedsWithoutMutatingEntity() {
+        OrderEntity delivered = orderWithStatus(OrderStatus.DELIVERED);
+        assertThat(delivered.canCustomerConfirmDelivery()).isTrue();
+        delivered.validateCustomerConfirmDelivery();
+        assertThat(delivered.getStatus()).isEqualTo(OrderStatus.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("COM-15 UTCID02 [A]: OrderEntity rejects customer delivery confirmation for all non-DELIVERED statuses")
+    void validateCustomerConfirmDelivery_nonDeliveredStatuses_throwsWithoutMutatingStatus() {
+        for (OrderStatus status : OrderStatus.values()) {
+            if (status == OrderStatus.DELIVERED) {
+                continue;
+            }
+            OrderEntity entity = orderWithStatus(status);
+            assertThat(entity.canCustomerConfirmDelivery()).isFalse();
+            assertThatThrownBy(entity::validateCustomerConfirmDelivery)
+                    .isInstanceOf(OrderStatusTransitionException.class)
+                    .hasMessageContaining(status.name())
+                    .hasMessageContaining("Only DELIVERED orders can be confirmed.");
+            assertThat(entity.getStatus()).isEqualTo(status);
+        }
     }
 }

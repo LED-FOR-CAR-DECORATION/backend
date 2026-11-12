@@ -2,6 +2,7 @@ package com.lumintra.backend.commerce.infrastructure.persistence.mapper;
 
 import com.lumintra.backend.commerce.api.response.AhamoveWebhookResponse;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
+import com.lumintra.backend.commerce.api.response.ConfirmOrderDeliveryResponse;
 import com.lumintra.backend.commerce.api.response.DispatchOrderResponse;
 import com.lumintra.backend.commerce.api.response.OrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.OrderListResponse;
@@ -410,6 +411,17 @@ public class OrderMapper {
                 .orderStatus(orderStatus)
                 .message(message)
                 .build();
+    }
+
+    public ConfirmOrderDeliveryResponse toConfirmOrderDeliveryResponse(
+            Long orderId,
+            OrderStatus previousStatus,
+            OrderStatus status,
+            Instant updatedAt) {
+        if (orderId == null || status == null) {
+            return null;
+        }
+        return new ConfirmOrderDeliveryResponse(orderId, previousStatus, status, updatedAt);
     }
 
     public DispatchOrderResponse toDispatchOrderResponse(

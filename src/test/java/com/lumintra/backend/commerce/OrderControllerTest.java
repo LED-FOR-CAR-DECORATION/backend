@@ -4,9 +4,11 @@ import com.lumintra.backend.commerce.api.controller.OrderController;
 import com.lumintra.backend.commerce.api.request.CheckoutRequest;
 import com.lumintra.backend.commerce.api.request.OrderFilterRequest;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
+import com.lumintra.backend.commerce.api.response.ConfirmOrderDeliveryResponse;
 import com.lumintra.backend.commerce.api.response.OrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.OrderListResponse;
 import com.lumintra.backend.commerce.application.CheckoutOrderUseCase;
+import com.lumintra.backend.commerce.application.ConfirmOrderDeliveryUseCase;
 import com.lumintra.backend.commerce.application.GetOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListOrdersUseCase;
 import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
@@ -22,6 +24,7 @@ import com.lumintra.backend.shared.exception.commerce.DeliveryAddressRequiredExc
 import com.lumintra.backend.shared.exception.commerce.InsufficientStockException;
 import com.lumintra.backend.shared.exception.commerce.InvalidCartItemException;
 import com.lumintra.backend.shared.exception.commerce.OrderNotFoundException;
+import com.lumintra.backend.shared.exception.commerce.OrderStatusTransitionException;
 import com.lumintra.backend.shared.exception.commerce.ProductAlreadyOwnedException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
@@ -68,6 +71,9 @@ class OrderControllerTest {
 
     @MockitoBean
     private GetOrderDetailUseCase getOrderDetailUseCase;
+
+    @MockitoBean
+    private ConfirmOrderDeliveryUseCase confirmOrderDeliveryUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -585,5 +591,98 @@ class OrderControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.user("not-a-number").roles("CUSTOMER")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+    }
+
+    @Test
+    @DisplayName("COM-15 UTCID01 [N]: POST /api/orders/{id}/confirm-delivery as CUSTOMER returns 200 OK with ConfirmOrderDeliveryResponse")
+    void confirmDelivery_asCustomer_returns200WithUpdatedStatus() throws Exception {
+        Instant updatedAt = Instant.parse("2026-11-12T14:25:00Z");
+        ConfirmOrderDeliveryResponse response = new ConfirmOrderDeliveryResponse(
+                102L,
+                OrderStatus.DELIVERED,
+                OrderStatus.COMPLETED,
+                updatedAt
+        );
+
+        when(confirmOrderDeliveryUseCase.execute(42L, 102L)).thenReturn(response);
+
+        mockMvc.perform(post("/api/orders/102/confirm-delivery")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderId").value(102))
+                .andExpect(jsonPath("$.data.previousStatus").value("DELIVERED"))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.updatedAt").value("2026-11-12T14:25:00Z"))
+                .andExpect(jsonPath("$.meta").doesNotExist());
+
+        verify(confirmOrderDeliveryUseCase).execute(42L, 102L);
+    }
+
+    @Test
+    @DisplayName("COM-15 UTCID02 [B]: POST /api/orders/{id}/confirm-delivery rejects non-numeric and non-positive ids with 400 VALIDATION_FAILED")
+    void confirmDelivery_invalidPathId_returns400ValidationFailed() throws Exception {
+        for (String badId : new String[]{"abc", "0", "-5"}) {
+            mockMvc.perform(post("/api/orders/" + badId + "/confirm-delivery")
+                            .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.details[0].field").value("id"));
+        }
+
+        verifyNoInteractions(confirmOrderDeliveryUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-15 UTCID03 [A]: POST /api/orders/{id}/confirm-delivery denies unauthenticated (401), non-CUSTOMER roles (403), and non-numeric principal (401)")
+    void confirmDelivery_unauthorizedAndForbidden_returns401And403() throws Exception {
+        mockMvc.perform(post("/api/orders/102/confirm-delivery"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        for (String role : new String[]{"STAFF", "MANAGER", "ADMIN", "DESIGNER"}) {
+            mockMvc.perform(post("/api/orders/102/confirm-delivery")
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles(role)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+
+        mockMvc.perform(post("/api/orders/102/confirm-delivery")
+                        .with(SecurityMockMvcRequestPostProcessors.user("not-a-number").roles("CUSTOMER")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+
+        verifyNoInteractions(confirmOrderDeliveryUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-15 UTCID04 [A]: POST /api/orders/{id}/confirm-delivery maps 404 ORDER_NOT_FOUND, 409 INVALID_ORDER_STATUS_TRANSITION, and 500 INTERNAL_SERVER_ERROR")
+    void confirmDelivery_useCaseExceptions_mapToExpectedErrorResponses() throws Exception {
+        when(confirmOrderDeliveryUseCase.execute(42L, 999L))
+                .thenThrow(new OrderNotFoundException("Order not found."));
+
+        mockMvc.perform(post("/api/orders/999/confirm-delivery")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Order not found."));
+
+        when(confirmOrderDeliveryUseCase.execute(42L, 102L))
+                .thenThrow(new OrderStatusTransitionException(
+                        "Cannot confirm delivery for order with status SHIPPING. Only DELIVERED orders can be confirmed."));
+
+        mockMvc.perform(post("/api/orders/102/confirm-delivery")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_ORDER_STATUS_TRANSITION"))
+                .andExpect(jsonPath("$.message").value(
+                        "Cannot confirm delivery for order with status SHIPPING. Only DELIVERED orders can be confirmed."));
+
+        when(confirmOrderDeliveryUseCase.execute(42L, 109L))
+                .thenThrow(new IllegalStateException("DB unreachable"));
+
+        mockMvc.perform(post("/api/orders/109/confirm-delivery")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
     }
 }

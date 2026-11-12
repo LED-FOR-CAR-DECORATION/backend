@@ -220,7 +220,7 @@ public class StaffOrderController {
 
     @Operation(
             summary = "Update order fulfillment status",
-            description = "Manually transitions an order across staff-permitted lifecycle transitions: PENDING_PAYMENT -> CANCELED (accepts CANCELLED alias and restores LED hardware stocks), DELIVERY_FAILED -> PROCESSING, and DELIVERED -> COMPLETED."
+            description = "Manually transitions an order across staff-permitted lifecycle transitions: PENDING_PAYMENT -> CANCELED (accepts CANCELLED alias and restores LED hardware stocks) and DELIVERY_FAILED -> PROCESSING."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {
@@ -246,7 +246,7 @@ public class StaffOrderController {
                                               "details": [
                                                 {
                                                   "field": "status",
-                                                  "message": "status must be one of PROCESSING, COMPLETED, CANCELED, or CANCELLED"
+                                                  "message": "status must be one of PROCESSING, CANCELED, or CANCELLED"
                                                 }
                                               ]
                                             }

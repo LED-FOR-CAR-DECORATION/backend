@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface StaffTargetOrderStatus {
 
-    String message() default "status must be one of PROCESSING, COMPLETED, CANCELED, or CANCELLED";
+    String message() default "status must be one of PROCESSING, CANCELED, or CANCELLED";
 
     Class<?>[] groups() default {};
 
