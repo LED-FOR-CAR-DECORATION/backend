@@ -64,7 +64,11 @@ public class SecurityConfig {
                                 "/api/auth/refresh"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/commerce/webhooks/ahamove").permitAll()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/commerce/webhooks/ahamove",
+                                "/api/payments/webhooks/sepay"
+                        ).permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",

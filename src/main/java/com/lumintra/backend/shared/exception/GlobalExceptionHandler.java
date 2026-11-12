@@ -183,11 +183,19 @@ public class GlobalExceptionHandler {
                         .message(error.getDefaultMessage())
                         .build())
                 .toList();
+        String failedFields = details.stream()
+                .map(detail -> detail.getField() + ":" + detail.getMessage())
+                .reduce((a, b) -> a + "; " + b)
+                .orElse("none");
+        log.debug("Request validation failed [fields={}]", failedFields);
         return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST, details);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        Throwable cause = ex.getMostSpecificCause();
+        String causeType = cause != null ? cause.getClass().getSimpleName() : ex.getClass().getSimpleName();
+        log.debug("Unreadable HTTP request body [causeType={}]", causeType);
         return buildErrorResponse("VALIDATION_FAILED", "Malformed JSON request or invalid field value", HttpStatus.BAD_REQUEST);
     }
 

@@ -1,7 +1,11 @@
 package com.lumintra.backend.payment.api.controller;
 
+import com.lumintra.backend.payment.api.request.SePayWebhookRequest;
 import com.lumintra.backend.payment.api.response.PaymentSessionResponse;
+import com.lumintra.backend.payment.api.response.SePayWebhookAckResponse;
+import com.lumintra.backend.payment.api.response.SePayWebhookResponse;
 import com.lumintra.backend.payment.application.GetPaymentSessionUseCase;
+import com.lumintra.backend.payment.application.ProcessSePayWebhookUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -12,24 +16,30 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/payments")
 @RequiredArgsConstructor
-@Tag(name = "Payment", description = "SePay VietQR payment session retrieval and live status polling APIs")
+@Tag(name = "Payment", description = "SePay VietQR payment session retrieval, live status polling, and webhook APIs")
 public class PaymentController {
 
     private final GetPaymentSessionUseCase getPaymentSessionUseCase;
+    private final ProcessSePayWebhookUseCase processSePayWebhookUseCase;
 
     @Operation(
             summary = "Get SePay payment session and poll status",
@@ -163,6 +173,92 @@ public class PaymentController {
         Long customerId = extractCustomerId(authentication);
         PaymentSessionResponse response = getPaymentSessionUseCase.execute(customerId, paymentCode);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Process SePay payment webhook",
+            description = "Public webhook endpoint authenticated via the Apikey header (Authorization: Apikey <key> or Apikey header). Enforces idempotency via sepay_tx_id, atomically marks the matching pending payment transaction SUCCEEDED, and publishes PaymentSucceededEvent."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Webhook accepted (processed, ignored as duplicate/non-pending/underpaid, or unmatched transfer)"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad request: malformed JSON payload or missing required webhook fields (id, transferType, transferAmount)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Validation Failed",
+                                    value = """
+                                            {
+                                              "code": "VALIDATION_FAILED",
+                                              "message": "Invalid request payload",
+                                              "status": 400,
+                                              "timestamp": "2026-11-12T16:45:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": [
+                                                {
+                                                  "field": "id",
+                                                  "message": "id must not be null"
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing or invalid SePay Apikey webhook credential",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Unauthorized Error",
+                                    value = """
+                                            {
+                                              "code": "UNAUTHORIZED",
+                                              "message": "Authentication is required.",
+                                              "status": 401,
+                                              "timestamp": "2026-11-12T16:45:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Internal Server Error",
+                                    value = """
+                                            {
+                                              "code": "INTERNAL_SERVER_ERROR",
+                                              "message": "An unexpected error occurred",
+                                              "status": 500,
+                                              "timestamp": "2026-11-12T16:45:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
+    @PostMapping("/webhooks/sepay")
+    public ResponseEntity<SePayWebhookAckResponse> handleSePayWebhook(
+            @RequestHeader HttpHeaders headers,
+            @Valid @RequestBody SePayWebhookRequest request) {
+        SePayWebhookResponse response = processSePayWebhookUseCase.execute(headers, request);
+        return ResponseEntity.ok(SePayWebhookAckResponse.ok(response));
     }
 
     private Long extractCustomerId(Authentication authentication) {

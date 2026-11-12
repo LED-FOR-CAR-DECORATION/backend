@@ -15,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,5 +73,40 @@ class PaymentTransactionRepositoryTest {
 
         assertThat(byOrderId).isPresent();
         assertThat(byOrderId.get().getTransactionCode()).isEqualTo("LUMORD102SECOND22");
+    }
+
+    @Test
+    @DisplayName("PAY-02 [N]: markAsSucceededIfPending transitions PENDING row to SUCCESS with paidAt and rejects second update")
+    void markAsSucceededIfPending_updatesPendingOnce() {
+        PaymentTransactionEntity pending = PaymentTransactionEntity.createPending(
+                205L,
+                "SEPAY",
+                "LMTORD205TESTCODE",
+                new BigDecimal("500000.00")
+        );
+        entityManager.persist(pending);
+        entityManager.flush();
+        Long paymentId = pending.getPaymentId();
+        entityManager.clear();
+
+        Instant paidAt = Instant.parse("2026-11-13T01:02:03Z");
+        int firstUpdate = repository.markAsSucceededIfPending(
+                paymentId,
+                PaymentTransactionEntity.DB_STATUS_SUCCESS,
+                paidAt
+        );
+        int secondUpdate = repository.markAsSucceededIfPending(
+                paymentId,
+                PaymentTransactionEntity.DB_STATUS_SUCCESS,
+                paidAt.plusSeconds(10)
+        );
+        entityManager.clear();
+
+        PaymentTransactionEntity reloaded = entityManager.find(PaymentTransactionEntity.class, paymentId);
+        assertThat(firstUpdate).isEqualTo(1);
+        assertThat(secondUpdate).isZero();
+        assertThat(reloaded.getStatus()).isEqualTo(PaymentTransactionEntity.DB_STATUS_SUCCESS);
+        assertThat(reloaded.getPaymentStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(reloaded.getPaidAt()).isEqualTo(paidAt);
     }
 }
