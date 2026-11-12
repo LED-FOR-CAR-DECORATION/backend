@@ -2,10 +2,12 @@ package com.lumintra.backend.iam.api.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.lumintra.backend.iam.api.request.AddUserAddressRequest;
 import com.lumintra.backend.iam.api.response.UserAddressResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.Authentication;
@@ -40,6 +42,40 @@ class UserAddressSwaggerTest {
                         "updatedAt");
 
         for (var field : UserAddressResponse.class.getDeclaredFields()) {
+            assertThat(field.getAnnotation(Schema.class)).isNotNull();
+        }
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-23 UTCID01 [N]: AC01-AC05 POST addAddress documents Bearer auth and 201/400/401/403/404/500 codes")
+    void addAddressContract_documentsExpectedResponses() throws Exception {
+        var method =
+                UserAddressController.class.getMethod(
+                        "addAddress", Authentication.class, AddUserAddressRequest.class);
+        assertThat(method.getAnnotation(Operation.class)).isNotNull();
+        assertThat(method.getAnnotation(SecurityRequirement.class).name()).isEqualTo("bearerAuth");
+        assertThat(method.getAnnotation(ApiResponses.class)).isNotNull();
+        assertThat(method.getAnnotation(ApiResponses.class).value())
+                .extracting(v -> v.responseCode())
+                .containsExactlyInAnyOrder("201", "400", "401", "403", "404", "500");
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-23 UTCID02 [N]: AC02 & AC03 AddUserAddressRequest defines safe allowlist without customerId")
+    void addAddressRequest_safeAllowlistAnnotatedWithSchema() {
+        assertThat(AddUserAddressRequest.class.getRecordComponents())
+                .extracting(c -> c.getName())
+                .containsExactly(
+                        "recipientName",
+                        "recipientPhone",
+                        "fullAddress",
+                        "latitude",
+                        "longitude",
+                        "isDefault");
+
+        for (var field : AddUserAddressRequest.class.getDeclaredFields()) {
             assertThat(field.getAnnotation(Schema.class)).isNotNull();
         }
     }
