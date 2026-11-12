@@ -14,4 +14,8 @@ public interface CustomerLookupService {
     Optional<CustomerProfileSnapshot> findProfileByCustomerId(Long customerId);
 
     Map<Long, CustomerProfileSnapshot> findProfilesByCustomerIds(Collection<Long> customerIds);
+
+    Optional<CustomerProfileSnapshot> findProfileByEmail(String email);
+
+    Optional<CustomerProfileSnapshot> findFirstProfile();
 }

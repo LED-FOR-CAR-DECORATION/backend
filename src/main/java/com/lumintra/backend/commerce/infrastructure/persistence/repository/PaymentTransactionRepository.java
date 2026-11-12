@@ -25,4 +25,10 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
             ORDER BY pt.createdAt DESC, pt.paymentId DESC
             """)
     List<PaymentSummaryRow> findSummaryRowsByOrderIds(@Param("orderIds") Collection<Long> orderIds);
+
+    boolean existsByTransactionCode(String transactionCode);
+
+    boolean existsByTransactionCodeEndingWith(String suffix);
+
+    List<PaymentTransactionEntity> findByTransactionCodeStartingWith(String prefix);
 }

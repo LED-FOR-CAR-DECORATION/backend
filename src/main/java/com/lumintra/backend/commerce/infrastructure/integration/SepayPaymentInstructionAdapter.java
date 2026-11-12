@@ -23,8 +23,14 @@ public class SepayPaymentInstructionAdapter implements PaymentInstructionPort {
     private final SePayProperties sePayProperties;
 
     @Override
-    public SepayPaymentInstructions buildInstructions(Long orderId, BigDecimal amount, Instant expiresAt) {
-        String paymentContent = sePayProperties.normalizedPaymentPrefix() + orderId;
+    public SepayPaymentInstructions buildInstructions(
+            Long orderId,
+            String transactionCode,
+            BigDecimal amount,
+            Instant expiresAt) {
+        String paymentContent = (transactionCode != null && !transactionCode.isBlank())
+                ? transactionCode.trim()
+                : sePayProperties.normalizedPaymentPrefix() + orderId;
         SePayQrDetails qrDetails = paymentGatewayPort.buildQrDetails(paymentContent, amount);
 
         return new SepayPaymentInstructions(

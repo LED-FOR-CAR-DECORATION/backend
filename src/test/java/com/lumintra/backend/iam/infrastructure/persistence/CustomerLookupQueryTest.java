@@ -105,4 +105,44 @@ class CustomerLookupQueryTest {
                         "single@example.com"
                 ));
     }
+
+    @Test
+    @DisplayName("N: CustomerLookupService resolves customer profile by email and handles fallback to first customer profile")
+    void findProfileByEmail_and_findFirstProfile_workCorrectly() {
+        UserAccountEntity account1 = UserAccountEntity.createOAuthCustomerAccount("first@example.com", null);
+        entityManager.persist(account1);
+        CustomerEntity customer1 = CustomerEntity.createOAuthCustomer(account1, "First User", null);
+        entityManager.persist(customer1);
+
+        UserAccountEntity account2 = UserAccountEntity.createOAuthCustomerAccount("second@example.com", null);
+        entityManager.persist(account2);
+        CustomerEntity customer2 = CustomerEntity.createOAuthCustomer(account2, "Second User", null);
+        customer2.setPhone("0988776655");
+        entityManager.persist(customer2);
+
+        UserAccountEntity employeeAccount = UserAccountEntity.createInternalAccount("employee@example.com", "hash");
+        entityManager.persist(employeeAccount);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        CustomerLookupServiceImpl service = new CustomerLookupServiceImpl(customerRepository);
+
+        // findProfileByEmail
+        assertThat(service.findProfileByEmail(null)).isEmpty();
+        assertThat(service.findProfileByEmail("   ")).isEmpty();
+        assertThat(service.findProfileByEmail("nonexistent@example.com")).isEmpty();
+        assertThat(service.findProfileByEmail("employee@example.com")).isEmpty();
+        assertThat(service.findProfileByEmail("second@example.com"))
+                .contains(new CustomerProfileSnapshot(
+                        account2.getAccountId(),
+                        "Second User",
+                        "0988776655",
+                        "second@example.com"
+                ));
+
+        // findFirstProfile
+        assertThat(service.findFirstProfile()).isPresent();
+        assertThat(service.findFirstProfile().get().email()).isEqualTo("first@example.com");
+    }
 }
