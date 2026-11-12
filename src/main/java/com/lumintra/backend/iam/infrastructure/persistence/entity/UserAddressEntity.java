@@ -94,6 +94,19 @@ public class UserAddressEntity {
         return entity;
     }
 
+    public void updateDetails(
+            String recipientName,
+            String recipientPhone,
+            String fullAddress,
+            BigDecimal latitude,
+            BigDecimal longitude) {
+        this.recipientName = recipientName;
+        this.recipientPhone = recipientPhone;
+        this.fullAddress = fullAddress;
+        this.latitude = latitude;
+        this.longitude = longitude;
+    }
+
     public boolean isOwnedBy(Long userId) {
         return userId != null && Objects.equals(this.customerId, userId);
     }
