@@ -3,6 +3,7 @@ package com.lumintra.backend.shared.exception;
 import com.lumintra.backend.shared.exception.commerce.*;
 import com.lumintra.backend.shared.exception.iam.*;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
+import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -36,6 +37,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidPriceRangeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidPriceRangeException(InvalidPriceRangeException ex) {
         return buildErrorResponse("INVALID_PRICE_RANGE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleProductNotFoundException(ProductNotFoundException ex) {
+        return buildErrorResponse("PRODUCT_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     // Commerce exceptions

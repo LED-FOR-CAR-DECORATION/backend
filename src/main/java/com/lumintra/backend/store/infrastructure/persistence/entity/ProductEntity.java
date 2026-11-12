@@ -102,4 +102,8 @@ public class ProductEntity {
         entity.setCreatedAt(createdAt);
         return entity;
     }
+
+    public boolean isPubliclyViewable() {
+        return status == ProductStatus.PUBLISHED || status == ProductStatus.ARCHIVED;
+    }
 }
