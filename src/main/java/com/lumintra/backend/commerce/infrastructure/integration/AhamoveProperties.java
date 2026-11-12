@@ -1,6 +1,7 @@
 package com.lumintra.backend.commerce.infrastructure.integration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 import java.math.BigDecimal;
 import java.util.Locale;
@@ -12,11 +13,58 @@ public record AhamoveProperties(
         String apiKey,
         String mobile,
         String paymentMethod,
-        Pickup pickup
+        Pickup pickup,
+        Webhook webhook
 ) {
     private static final String DEFAULT_BASE_URL = "https://partner-apistg.ahamove.com/v3";
     private static final String DEFAULT_PAYMENT_METHOD = "BALANCE";
+    private static final String DEFAULT_WEBHOOK_HEADER_NAME = "X-Api-Key";
     private static final Set<String> SUPPORTED_PAYMENT_METHODS = Set.of("BALANCE", "CASH", "CASH_BY_RECIPIENT");
+
+    @ConstructorBinding
+    public AhamoveProperties {
+    }
+
+    public AhamoveProperties(
+            String baseUrl,
+            String apiKey,
+            String mobile,
+            String paymentMethod,
+            Pickup pickup) {
+        this(baseUrl, apiKey, mobile, paymentMethod, pickup, null);
+    }
+
+    public record Webhook(
+            Boolean requireAuth,
+            String headerName,
+            String token
+    ) {
+        @ConstructorBinding
+        public Webhook {
+        }
+
+        public Webhook(String headerName, String token) {
+            this(true, headerName, token);
+        }
+    }
+
+    public boolean isWebhookAuthRequired() {
+        return webhook == null || webhook.requireAuth() == null || webhook.requireAuth();
+    }
+
+    public String normalizedWebhookHeaderName() {
+        if (webhook == null || webhook.headerName() == null || webhook.headerName().isBlank()) {
+            return DEFAULT_WEBHOOK_HEADER_NAME;
+        }
+        return webhook.headerName().trim();
+    }
+
+    public String resolvedWebhookToken() {
+        if (webhook == null || webhook.token() == null || webhook.token().isBlank()) {
+            return null;
+        }
+        return webhook.token().trim();
+    }
 
     public record Pickup(
             String name,

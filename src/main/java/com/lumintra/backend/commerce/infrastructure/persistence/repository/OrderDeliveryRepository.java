@@ -19,6 +19,8 @@ public interface OrderDeliveryRepository extends JpaRepository<OrderDeliveryEnti
 
     Optional<OrderDeliveryEntity> findByOrder_OrderId(Long orderId);
 
+    Optional<OrderDeliveryEntity> findFirstByTrackingNumberOrderByDeliveryIdDesc(String trackingNumber);
+
     @Query("""
             SELECT new com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderDeliverySummaryRow(
                 d.order.orderId,
@@ -49,5 +51,25 @@ public interface OrderDeliveryRepository extends JpaRepository<OrderDeliveryEnti
             @Param("trackingNumber") String trackingNumber,
             @Param("trackingUrl") String trackingUrl,
             @Param("carrierFee") BigDecimal carrierFee,
+            @Param("updatedAt") Instant updatedAt);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE OrderDeliveryEntity d
+            SET d.deliveryStatus = :targetStatus,
+                d.trackingUrl = COALESCE(:trackingUrl, d.trackingUrl),
+                d.carrierFee = COALESCE(:carrierFee, d.carrierFee),
+                d.deliveredAt = COALESCE(:deliveredAt, d.deliveredAt),
+                d.updatedAt = :updatedAt
+            WHERE d.deliveryId = :deliveryId
+              AND d.deliveryStatus IN :allowedStatuses
+            """)
+    int updateWebhookDeliveryStatusIfAllowed(
+            @Param("deliveryId") Long deliveryId,
+            @Param("allowedStatuses") Collection<DeliveryStatus> allowedStatuses,
+            @Param("targetStatus") DeliveryStatus targetStatus,
+            @Param("trackingUrl") String trackingUrl,
+            @Param("carrierFee") BigDecimal carrierFee,
+            @Param("deliveredAt") Instant deliveredAt,
             @Param("updatedAt") Instant updatedAt);
 }

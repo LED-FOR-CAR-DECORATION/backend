@@ -1,5 +1,6 @@
 package com.lumintra.backend.commerce.infrastructure.persistence.mapper;
 
+import com.lumintra.backend.commerce.api.response.AhamoveWebhookResponse;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
 import com.lumintra.backend.commerce.api.response.DispatchOrderResponse;
 import com.lumintra.backend.commerce.api.response.OrderDetailResponse;
@@ -394,6 +395,21 @@ public class OrderMapper {
             return null;
         }
         return new StaffOrderStatusResponse(orderId, previousStatus, status, updatedAt);
+    }
+
+    public AhamoveWebhookResponse toAhamoveWebhookResponse(
+            String trackingNumber,
+            String outcome,
+            DeliveryStatus deliveryStatus,
+            OrderStatus orderStatus,
+            String message) {
+        return AhamoveWebhookResponse.builder()
+                .trackingNumber(trackingNumber)
+                .outcome(outcome)
+                .deliveryStatus(deliveryStatus)
+                .orderStatus(orderStatus)
+                .message(message)
+                .build();
     }
 
     public DispatchOrderResponse toDispatchOrderResponse(
