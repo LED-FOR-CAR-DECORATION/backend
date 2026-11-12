@@ -116,7 +116,7 @@ public class OrderEntity {
         return switch (this.status) {
             case PENDING_PAYMENT -> targetStatus == OrderStatus.CANCELED;
             case DELIVERY_FAILED -> targetStatus == OrderStatus.PROCESSING;
-            case DELIVERED -> targetStatus == OrderStatus.COMPLETED;
+            // DELIVERED -> COMPLETED is handled by customer delivery confirmation (COM-15)
             default -> false;
         };
     }
@@ -131,6 +131,18 @@ public class OrderEntity {
     public void transitionStatusByStaff(OrderStatus targetStatus) {
         validateStaffTransition(targetStatus);
         this.status = targetStatus;
+    }
+
+    public boolean canCustomerConfirmDelivery() {
+        return this.status == OrderStatus.DELIVERED;
+    }
+
+    public void validateCustomerConfirmDelivery() {
+        if (!canCustomerConfirmDelivery()) {
+            throw new OrderStatusTransitionException(
+                    "Cannot confirm delivery for order with status " + this.status
+                            + ". Only DELIVERED orders can be confirmed.");
+        }
     }
 
     public boolean canDispatchToCarrier() {

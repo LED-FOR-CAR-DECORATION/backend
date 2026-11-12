@@ -100,23 +100,9 @@ class UpdateStaffOrderStatusUseCaseTest {
     }
 
     @Test
-    @DisplayName("COM-12 UTCID01 [N]: Active staff transitions DELIVERED->COMPLETED and DELIVERY_FAILED->PROCESSING without touching LED stock")
-    void execute_deliveredToCompletedAndFailedToProcessing_succeedsWithoutStockChanges() {
+    @DisplayName("COM-12 UTCID01 [N]: Active staff transitions DELIVERY_FAILED->PROCESSING without touching LED stock")
+    void execute_deliveryFailedToProcessing_succeedsWithoutStockChanges() {
         when(internalEmployeeAccessService.requireActiveEmployeeAccountId("7", ALLOWED_ROLES)).thenReturn(7L);
-
-        OrderEntity deliveredOrder = sampleOrder(102L, OrderStatus.DELIVERED, OrderType.PHYSICAL);
-        when(orderRepository.findById(102L)).thenReturn(Optional.of(deliveredOrder));
-        when(orderRepository.updateStatusIfCurrent(
-                eq(102L), eq(OrderStatus.DELIVERED), eq(OrderStatus.COMPLETED), any(Instant.class)))
-                .thenReturn(1);
-
-        StaffOrderStatusResponse completedResponse = useCase.execute(
-                "7", 102L, new UpdateStaffOrderStatusRequest("COMPLETED"));
-
-        assertThat(completedResponse.orderId()).isEqualTo(102L);
-        assertThat(completedResponse.previousStatus()).isEqualTo(OrderStatus.DELIVERED);
-        assertThat(completedResponse.status()).isEqualTo(OrderStatus.COMPLETED);
-        assertThat(completedResponse.updatedAt()).isNotNull();
 
         OrderEntity failedOrder = sampleOrder(103L, OrderStatus.DELIVERY_FAILED, OrderType.MIXED);
         when(orderRepository.findById(103L)).thenReturn(Optional.of(failedOrder));
@@ -239,16 +225,23 @@ class UpdateStaffOrderStatusUseCaseTest {
     }
 
     @Test
-    @DisplayName("COM-12 UTCID04 [A]: Disallowed transitions and concurrent status conflicts throw OrderStatusTransitionException before stock restoration")
+    @DisplayName("COM-12 UTCID04 [A]: Disallowed transitions (including DELIVERED->COMPLETED) and concurrent status conflicts throw OrderStatusTransitionException before stock restoration")
     void execute_invalidTransitionOrConcurrentConflict_throwsTransitionExceptionWithoutRestoringStock() {
         when(internalEmployeeAccessService.requireActiveEmployeeAccountId("7", ALLOWED_ROLES)).thenReturn(7L);
+
+        OrderEntity deliveredOrder = sampleOrder(102L, OrderStatus.DELIVERED, OrderType.PHYSICAL);
+        when(orderRepository.findById(102L)).thenReturn(Optional.of(deliveredOrder));
+
+        assertThatThrownBy(() -> useCase.execute("7", 102L, new UpdateStaffOrderStatusRequest("COMPLETED")))
+                .isInstanceOf(OrderStatusTransitionException.class)
+                .hasMessage("Cannot transition order status from DELIVERED to COMPLETED.");
 
         OrderEntity processingOrder = sampleOrder(107L, OrderStatus.PROCESSING, OrderType.PHYSICAL);
         when(orderRepository.findById(107L)).thenReturn(Optional.of(processingOrder));
 
-        assertThatThrownBy(() -> useCase.execute("7", 107L, new UpdateStaffOrderStatusRequest("COMPLETED")))
+        assertThatThrownBy(() -> useCase.execute("7", 107L, new UpdateStaffOrderStatusRequest("CANCELED")))
                 .isInstanceOf(OrderStatusTransitionException.class)
-                .hasMessage("Cannot transition order status from PROCESSING to COMPLETED.");
+                .hasMessage("Cannot transition order status from PROCESSING to CANCELED.");
 
         OrderEntity pendingOrder = sampleOrder(108L, OrderStatus.PENDING_PAYMENT, OrderType.PHYSICAL);
         when(orderRepository.findById(108L)).thenReturn(Optional.of(pendingOrder));
@@ -269,13 +262,13 @@ class UpdateStaffOrderStatusUseCaseTest {
         when(internalEmployeeAccessService.requireActiveEmployeeAccountId("7", ALLOWED_ROLES))
                 .thenThrow(new AccessDeniedException("Authorized internal role is required."));
 
-        assertThatThrownBy(() -> useCase.execute("7", 102L, new UpdateStaffOrderStatusRequest("COMPLETED")))
+        assertThatThrownBy(() -> useCase.execute("7", 102L, new UpdateStaffOrderStatusRequest("PROCESSING")))
                 .isInstanceOf(AccessDeniedException.class);
 
         when(internalEmployeeAccessService.requireActiveEmployeeAccountId("bad", ALLOWED_ROLES))
                 .thenThrow(new InvalidCredentialsException("Invalid authenticated account."));
 
-        assertThatThrownBy(() -> useCase.execute("bad", 102L, new UpdateStaffOrderStatusRequest("COMPLETED")))
+        assertThatThrownBy(() -> useCase.execute("bad", 102L, new UpdateStaffOrderStatusRequest("PROCESSING")))
                 .isInstanceOf(InvalidCredentialsException.class);
 
         verifyNoInteractions(orderRepository, orderItemRepository, productLookupService, bundleLookupService, ledInventoryService);
@@ -283,14 +276,14 @@ class UpdateStaffOrderStatusUseCaseTest {
         when(internalEmployeeAccessService.requireActiveEmployeeAccountId("8", ALLOWED_ROLES)).thenReturn(8L);
         when(orderRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.execute("8", 999L, new UpdateStaffOrderStatusRequest("COMPLETED")))
+        assertThatThrownBy(() -> useCase.execute("8", 999L, new UpdateStaffOrderStatusRequest("PROCESSING")))
                 .isInstanceOf(OrderNotFoundException.class)
                 .hasMessage("Order not found.");
 
         when(orderRepository.findById(109L))
                 .thenThrow(new IllegalStateException("PostgreSQL timeout"));
 
-        assertThatThrownBy(() -> useCase.execute("8", 109L, new UpdateStaffOrderStatusRequest("COMPLETED")))
+        assertThatThrownBy(() -> useCase.execute("8", 109L, new UpdateStaffOrderStatusRequest("PROCESSING")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("PostgreSQL timeout");
     }

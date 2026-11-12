@@ -9,8 +9,8 @@ import jakarta.validation.constraints.NotBlank;
 public record UpdateStaffOrderStatusRequest(
         @Schema(
                 description = "Target order status allowed for manual staff transitions (CANCELLED normalizes to CANCELED)",
-                example = "COMPLETED",
-                allowableValues = {"PROCESSING", "COMPLETED", "CANCELED", "CANCELLED"},
+                example = "PROCESSING",
+                allowableValues = {"PROCESSING", "CANCELED", "CANCELLED"},
                 requiredMode = Schema.RequiredMode.REQUIRED
         )
         @NotBlank(message = "status is required")

@@ -10,10 +10,10 @@ public record StaffOrderStatusResponse(
         @Schema(description = "Unique order identifier", example = "102", requiredMode = Schema.RequiredMode.REQUIRED)
         Long orderId,
 
-        @Schema(description = "Order status prior to this transition", example = "DELIVERED", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Order status prior to this transition", example = "DELIVERY_FAILED", requiredMode = Schema.RequiredMode.REQUIRED)
         OrderStatus previousStatus,
 
-        @Schema(description = "Updated order status persisted after transition", example = "COMPLETED", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Updated order status persisted after transition", example = "PROCESSING", requiredMode = Schema.RequiredMode.REQUIRED)
         OrderStatus status,
 
         @Schema(description = "ISO-8601 UTC timestamp when the transition was recorded", example = "2026-11-12T06:55:00Z", requiredMode = Schema.RequiredMode.REQUIRED)

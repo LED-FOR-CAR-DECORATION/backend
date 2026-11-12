@@ -422,38 +422,26 @@ class StaffOrderControllerTest {
     }
 
     @Test
-    @DisplayName("COM-12 UTCID01 [N]: STAFF, MANAGER, and ADMIN receive 200 OK for COMPLETED, PROCESSING, CANCELED, and CANCELLED alias")
+    @DisplayName("COM-12 UTCID01 [N]: STAFF, MANAGER, and ADMIN receive 200 OK for PROCESSING, CANCELED, and CANCELLED alias")
     void updateOrderStatus_allowedRolesAndTargets_returns200() throws Exception {
         Instant updatedAt = Instant.parse("2026-11-12T06:55:00Z");
-
-        when(updateStaffOrderStatusUseCase.execute(
-                "7", 102L, new UpdateStaffOrderStatusRequest("COMPLETED")))
-                .thenReturn(new StaffOrderStatusResponse(102L, OrderStatus.DELIVERED, OrderStatus.COMPLETED, updatedAt));
-
-        for (String role : new String[]{"STAFF", "MANAGER", "ADMIN"}) {
-            mockMvc.perform(patch(PATH + "/102/status")
-                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles(role))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"status\":\"COMPLETED\"}"))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.orderId").value(102))
-                    .andExpect(jsonPath("$.data.previousStatus").value("DELIVERED"))
-                    .andExpect(jsonPath("$.data.status").value("COMPLETED"))
-                    .andExpect(jsonPath("$.data.updatedAt").value("2026-11-12T06:55:00Z"))
-                    .andExpect(jsonPath("$.meta").doesNotExist());
-        }
 
         when(updateStaffOrderStatusUseCase.execute(
                 "7", 103L, new UpdateStaffOrderStatusRequest("PROCESSING")))
                 .thenReturn(new StaffOrderStatusResponse(103L, OrderStatus.DELIVERY_FAILED, OrderStatus.PROCESSING, updatedAt));
 
-        mockMvc.perform(patch(PATH + "/103/status")
-                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PROCESSING\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.previousStatus").value("DELIVERY_FAILED"))
-                .andExpect(jsonPath("$.data.status").value("PROCESSING"));
+        for (String role : new String[]{"STAFF", "MANAGER", "ADMIN"}) {
+            mockMvc.perform(patch(PATH + "/103/status")
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles(role))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"PROCESSING\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.orderId").value(103))
+                    .andExpect(jsonPath("$.data.previousStatus").value("DELIVERY_FAILED"))
+                    .andExpect(jsonPath("$.data.status").value("PROCESSING"))
+                    .andExpect(jsonPath("$.data.updatedAt").value("2026-11-12T06:55:00Z"))
+                    .andExpect(jsonPath("$.meta").doesNotExist());
+        }
 
         when(updateStaffOrderStatusUseCase.execute(
                 "7", 104L, new UpdateStaffOrderStatusRequest("CANCELLED")))
@@ -469,13 +457,13 @@ class StaffOrderControllerTest {
     }
 
     @Test
-    @DisplayName("COM-12 UTCID02 [B]: Invalid path id, blank/unsupported target status, and malformed JSON return 400 VALIDATION_FAILED")
+    @DisplayName("COM-12 UTCID02 [B]: Invalid path id, blank/unsupported target status (including COMPLETED), and malformed JSON return 400 VALIDATION_FAILED")
     void updateOrderStatus_invalidPathOrBody_returns400ValidationFailed() throws Exception {
         for (String badId : new String[]{"abc", "0", "-5"}) {
             mockMvc.perform(patch(PATH + "/" + badId + "/status")
                             .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"status\":\"COMPLETED\"}"))
+                            .content("{\"status\":\"PROCESSING\"}"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                     .andExpect(jsonPath("$.details[0].field").value("id"));
@@ -484,6 +472,8 @@ class StaffOrderControllerTest {
         for (String invalidBody : new String[]{
                 "{}",
                 "{\"status\":\"   \"}",
+                "{\"status\":\"COMPLETED\"}",
+                "{\"status\":\" COMPLETED \"}",
                 "{\"status\":\"SHIPPING\"}",
                 "{\"status\":\"DELIVERED\"}",
                 "{\"status\":\"processing\"}"
@@ -512,7 +502,7 @@ class StaffOrderControllerTest {
     void updateOrderStatus_unauthorizedAndForbiddenRoles_returns401And403() throws Exception {
         mockMvc.perform(patch(PATH + "/102/status")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"COMPLETED\"}"))
+                        .content("{\"status\":\"PROCESSING\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 
@@ -520,7 +510,7 @@ class StaffOrderControllerTest {
             mockMvc.perform(patch(PATH + "/102/status")
                             .with(SecurityMockMvcRequestPostProcessors.user("42").roles(role))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"status\":\"COMPLETED\"}"))
+                            .content("{\"status\":\"PROCESSING\"}"))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         }
@@ -537,21 +527,21 @@ class StaffOrderControllerTest {
         mockMvc.perform(patch(PATH + "/999/status")
                         .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"COMPLETED\"}"))
+                        .content("{\"status\":\"PROCESSING\"}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("Order not found."));
 
         when(updateStaffOrderStatusUseCase.execute(eq("7"), eq(102L), any()))
-                .thenThrow(new OrderStatusTransitionException("Cannot transition order status from PROCESSING to COMPLETED."));
+                .thenThrow(new OrderStatusTransitionException("Cannot transition order status from SHIPPING to PROCESSING."));
 
         mockMvc.perform(patch(PATH + "/102/status")
                         .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"COMPLETED\"}"))
+                        .content("{\"status\":\"PROCESSING\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVALID_ORDER_STATUS_TRANSITION"))
-                .andExpect(jsonPath("$.message").value("Cannot transition order status from PROCESSING to COMPLETED."));
+                .andExpect(jsonPath("$.message").value("Cannot transition order status from SHIPPING to PROCESSING."));
 
         when(updateStaffOrderStatusUseCase.execute(eq("8"), eq(102L), any()))
                 .thenThrow(new AccessDeniedException("Active internal account is required."));
@@ -559,7 +549,7 @@ class StaffOrderControllerTest {
         mockMvc.perform(patch(PATH + "/102/status")
                         .with(SecurityMockMvcRequestPostProcessors.user("8").roles("STAFF"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"COMPLETED\"}"))
+                        .content("{\"status\":\"PROCESSING\"}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
@@ -569,7 +559,7 @@ class StaffOrderControllerTest {
         mockMvc.perform(patch(PATH + "/102/status")
                         .with(SecurityMockMvcRequestPostProcessors.user("bad").roles("STAFF"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"COMPLETED\"}"))
+                        .content("{\"status\":\"PROCESSING\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
 
@@ -579,7 +569,7 @@ class StaffOrderControllerTest {
         mockMvc.perform(patch(PATH + "/102/status")
                         .with(SecurityMockMvcRequestPostProcessors.user("9").roles("STAFF"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"COMPLETED\"}"))
+                        .content("{\"status\":\"PROCESSING\"}"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
     }
