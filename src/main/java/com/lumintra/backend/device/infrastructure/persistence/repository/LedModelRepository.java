@@ -19,4 +19,13 @@ public interface LedModelRepository extends JpaRepository<LedModelEntity, Long> 
               AND m.stockQuantity >= :quantity
             """)
     int deductStockIfAvailable(@Param("modelId") Long modelId, @Param("quantity") long quantity);
+
+    @Modifying
+    @Query("""
+            UPDATE LedModelEntity m
+            SET m.stockQuantity = m.stockQuantity + :quantity,
+                m.updatedAt = instant
+            WHERE m.modelId = :modelId
+            """)
+    int restoreStock(@Param("modelId") Long modelId, @Param("quantity") long quantity);
 }
