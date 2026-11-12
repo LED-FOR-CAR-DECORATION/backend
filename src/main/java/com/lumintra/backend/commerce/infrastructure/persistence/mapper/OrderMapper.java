@@ -3,6 +3,7 @@ package com.lumintra.backend.commerce.infrastructure.persistence.mapper;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
 import com.lumintra.backend.commerce.api.response.OrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.OrderListResponse;
+import com.lumintra.backend.commerce.api.response.StaffOrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderListResponse;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.PaymentIntentResult;
@@ -269,6 +270,115 @@ public class OrderMapper {
                 .paymentGateway(payment.getGateway())
                 .status(payment.getStatus())
                 .expiresAt(expiredPendingAt)
+                .build();
+    }
+
+    public StaffOrderDetailResponse toStaffOrderDetailResponse(
+            OrderEntity order,
+            CustomerProfileSnapshot customer,
+            List<OrderItemEntity> items,
+            Map<Long, ProductSnapshot> productsById,
+            Map<Long, String> previewGifUrlsByProductId,
+            OrderDeliveryEntity delivery,
+            PaymentTransactionEntity payment) {
+        if (order == null) {
+            return null;
+        }
+
+        Instant visibleExpiresAt = order.getStatus() == OrderStatus.PENDING_PAYMENT
+                ? order.getExpiresAt()
+                : null;
+
+        StaffOrderDetailResponse.CustomerSummary customerSummary = new StaffOrderDetailResponse.CustomerSummary(
+                order.getCustomerId(),
+                customer != null ? customer.fullName() : null,
+                customer != null ? customer.phone() : null,
+                customer != null ? customer.email() : null
+        );
+
+        List<StaffOrderDetailResponse.OrderItemDetail> itemDetails = items == null
+                ? Collections.emptyList()
+                : items.stream()
+                        .map(item -> toStaffOrderItemDetail(
+                                item,
+                                productsById != null ? productsById.get(item.getProductId()) : null,
+                                previewGifUrlsByProductId
+                        ))
+                        .toList();
+
+        return StaffOrderDetailResponse.builder()
+                .orderId(order.getOrderId())
+                .orderType(order.getOrderType())
+                .status(order.getStatus())
+                .subtotal(order.getSubtotal())
+                .shippingFee(order.getShippingFee())
+                .totalAmount(order.getTotalAmount())
+                .expiresAt(visibleExpiresAt)
+                .createdAt(order.getCreatedAt())
+                .updatedAt(order.getUpdatedAt())
+                .customer(customerSummary)
+                .items(itemDetails)
+                .delivery(toStaffDeliveryDetail(delivery))
+                .payment(toStaffPaymentDetail(payment))
+                .build();
+    }
+
+    private StaffOrderDetailResponse.OrderItemDetail toStaffOrderItemDetail(
+            OrderItemEntity item,
+            ProductSnapshot product,
+            Map<Long, String> previewGifUrlsByProductId) {
+        ProductType productType = product != null ? product.productType() : null;
+        String previewGifUrl = (productType == ProductType.CHARACTER && previewGifUrlsByProductId != null)
+                ? previewGifUrlsByProductId.get(item.getProductId())
+                : null;
+
+        return StaffOrderDetailResponse.OrderItemDetail.builder()
+                .orderItemId(item.getOrderItemId())
+                .productId(item.getProductId())
+                .productName(product != null ? product.productName() : "Unavailable Product")
+                .productType(productType)
+                .thumbnailUrl(product != null ? product.thumbnailUrl() : null)
+                .previewGifUrl(previewGifUrl)
+                .unitPrice(item.getUnitPrice())
+                .quantity(item.getQuantity())
+                .subtotal(item.getSubtotal())
+                .build();
+    }
+
+    private StaffOrderDetailResponse.DeliveryDetail toStaffDeliveryDetail(OrderDeliveryEntity delivery) {
+        if (delivery == null) {
+            return null;
+        }
+
+        return StaffOrderDetailResponse.DeliveryDetail.builder()
+                .carrier(delivery.getCarrier())
+                .recipientName(delivery.getRecipientName())
+                .recipientPhone(delivery.getRecipientPhone())
+                .fullAddress(delivery.getFullAddress())
+                .latitude(delivery.getLatitude())
+                .longitude(delivery.getLongitude())
+                .deliveryStatus(delivery.getDeliveryStatus())
+                .trackingNumber(delivery.getTrackingNumber())
+                .trackingUrl(delivery.getTrackingUrl())
+                .carrierFee(delivery.getCarrierFee())
+                .estimatedDeliveryAt(delivery.getEstimatedDeliveryAt())
+                .deliveredAt(delivery.getDeliveredAt())
+                .build();
+    }
+
+    private StaffOrderDetailResponse.StaffPaymentDetail toStaffPaymentDetail(PaymentTransactionEntity payment) {
+        if (payment == null) {
+            return null;
+        }
+
+        boolean settled = payment.getStatus() == PaymentStatus.SUCCESS;
+
+        return StaffOrderDetailResponse.StaffPaymentDetail.builder()
+                .paymentGateway(payment.getGateway())
+                .status(payment.getStatus())
+                .bankReferenceCode(settled ? payment.getTransactionCode() : null)
+                .paidAmount(settled ? payment.getAmount() : null)
+                .paidAt(settled ? payment.getPaidAt() : null)
                 .build();
     }
 }

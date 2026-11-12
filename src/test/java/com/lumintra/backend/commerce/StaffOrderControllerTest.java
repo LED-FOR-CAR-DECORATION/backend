@@ -2,19 +2,24 @@ package com.lumintra.backend.commerce;
 
 import com.lumintra.backend.commerce.api.controller.StaffOrderController;
 import com.lumintra.backend.commerce.api.request.StaffOrderFilterRequest;
+import com.lumintra.backend.commerce.api.response.StaffOrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderListResponse;
+import com.lumintra.backend.commerce.application.GetStaffOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListStaffOrdersUseCase;
 import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.OrderType;
+import com.lumintra.backend.commerce.domain.model.PaymentGateway;
 import com.lumintra.backend.commerce.domain.model.PaymentStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
+import com.lumintra.backend.shared.exception.commerce.OrderNotFoundException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
+import com.lumintra.backend.store.domain.model.ProductType;
 import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,6 +56,9 @@ class StaffOrderControllerTest {
 
     @MockitoBean
     private ListStaffOrdersUseCase listStaffOrdersUseCase;
+
+    @MockitoBean
+    private GetStaffOrderDetailUseCase getStaffOrderDetailUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -240,6 +248,156 @@ class StaffOrderControllerTest {
                 .thenThrow(new IllegalStateException("DB unreachable"));
 
         mockMvc.perform(get(PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("9").roles("STAFF")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
+
+    @Test
+    @DisplayName("COM-11 UTCID01 [N]: STAFF, MANAGER, and ADMIN receive 200 OK with customer summary, items, snapshotted delivery, and payment reconciliation")
+    void getOrderDetail_allowedRoles_returns200WithFullDetail() throws Exception {
+        Instant createdAt = Instant.parse("2026-11-10T16:45:00Z");
+        Instant updatedAt = Instant.parse("2026-11-10T16:50:00Z");
+        Instant paidAt = Instant.parse("2026-11-10T16:48:12Z");
+
+        StaffOrderDetailResponse response = StaffOrderDetailResponse.builder()
+                .orderId(102L)
+                .orderType(OrderType.MIXED)
+                .status(OrderStatus.PROCESSING)
+                .subtotal(new BigDecimal("250000.00"))
+                .shippingFee(new BigDecimal("0.00"))
+                .totalAmount(new BigDecimal("250000.00"))
+                .expiresAt(null)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt)
+                .customer(new StaffOrderDetailResponse.CustomerSummary(
+                        15L, "Nguyen Van A", "0909111222", "customer@example.com"
+                ))
+                .items(List.of(
+                        StaffOrderDetailResponse.OrderItemDetail.builder()
+                                .orderItemId(1L)
+                                .productId(5L)
+                                .productName("Lumintra LED Matrix v1")
+                                .productType(ProductType.LED)
+                                .thumbnailUrl("https://cdn.lumintra.com/products/led-v1.png")
+                                .previewGifUrl(null)
+                                .unitPrice(new BigDecimal("200000.00"))
+                                .quantity(1)
+                                .subtotal(new BigDecimal("200000.00"))
+                                .build()
+                ))
+                .delivery(StaffOrderDetailResponse.DeliveryDetail.builder()
+                        .carrier("AHAMOVE")
+                        .recipientName("Dang Phuoc Nguyen")
+                        .recipientPhone("0912345678")
+                        .fullAddress("Saigon Hi-Tech Park, Thu Duc City, HCMC")
+                        .latitude(new BigDecimal("10.8411000"))
+                        .longitude(new BigDecimal("106.8099000"))
+                        .deliveryStatus(DeliveryStatus.PENDING)
+                        .trackingNumber("AHV-2026-99881")
+                        .trackingUrl("https://ahamove.com/track/AHV-2026-99881")
+                        .carrierFee(new BigDecimal("32000.00"))
+                        .estimatedDeliveryAt(null)
+                        .deliveredAt(null)
+                        .build())
+                .payment(StaffOrderDetailResponse.StaffPaymentDetail.builder()
+                        .paymentGateway(PaymentGateway.SEPAY)
+                        .status(PaymentStatus.SUCCESS)
+                        .bankReferenceCode("SEPAY-FT263149981")
+                        .paidAmount(new BigDecimal("250000.00"))
+                        .paidAt(paidAt)
+                        .build())
+                .build();
+
+        when(getStaffOrderDetailUseCase.execute("7", 102L)).thenReturn(response);
+
+        for (String role : new String[]{"STAFF", "MANAGER", "ADMIN"}) {
+            mockMvc.perform(get(PATH + "/102")
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles(role)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.orderId").value(102))
+                    .andExpect(jsonPath("$.data.status").value("PROCESSING"))
+                    .andExpect(jsonPath("$.data.expiresAt").doesNotExist())
+                    .andExpect(jsonPath("$.data.customer.customerId").value(15))
+                    .andExpect(jsonPath("$.data.customer.fullName").value("Nguyen Van A"))
+                    .andExpect(jsonPath("$.data.customer.phone").value("0909111222"))
+                    .andExpect(jsonPath("$.data.customer.email").value("customer@example.com"))
+                    .andExpect(jsonPath("$.data.items[0].productName").value("Lumintra LED Matrix v1"))
+                    .andExpect(jsonPath("$.data.delivery.recipientName").value("Dang Phuoc Nguyen"))
+                    .andExpect(jsonPath("$.data.delivery.fullAddress").value("Saigon Hi-Tech Park, Thu Duc City, HCMC"))
+                    .andExpect(jsonPath("$.data.delivery.carrierFee").value(32000.00))
+                    .andExpect(jsonPath("$.data.payment.paymentGateway").value("SEPAY"))
+                    .andExpect(jsonPath("$.data.payment.bankReferenceCode").value("SEPAY-FT263149981"))
+                    .andExpect(jsonPath("$.data.payment.qrCodeUrl").doesNotExist())
+                    .andExpect(jsonPath("$.meta").doesNotExist());
+        }
+
+        verify(getStaffOrderDetailUseCase, times(3)).execute("7", 102L);
+    }
+
+    @Test
+    @DisplayName("COM-11 UTCID02 [B]: Invalid path id rejects with 400 VALIDATION_FAILED without calling use case")
+    void getOrderDetail_invalidPathId_returns400ValidationFailed() throws Exception {
+        for (String badId : new String[]{"abc", "0", "-5"}) {
+            mockMvc.perform(get(PATH + "/" + badId)
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.details[0].field").value("id"));
+        }
+
+        verifyNoInteractions(getStaffOrderDetailUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-11 UTCID03 [A]: Anonymous callers return 401 and CUSTOMER/DESIGNER roles return 403")
+    void getOrderDetail_unauthorizedAndForbiddenRoles_returns401And403() throws Exception {
+        mockMvc.perform(get(PATH + "/102"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        for (String role : new String[]{"CUSTOMER", "DESIGNER"}) {
+            mockMvc.perform(get(PATH + "/102")
+                            .with(SecurityMockMvcRequestPostProcessors.user("42").roles(role)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+
+        verifyNoInteractions(getStaffOrderDetailUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-11 UTCID04 [A]: OrderNotFoundException maps to 404 ORDER_NOT_FOUND and stale/internal errors map to 401/403/500")
+    void getOrderDetail_useCaseExceptions_mapTo404_403_401_and_500() throws Exception {
+        when(getStaffOrderDetailUseCase.execute("7", 999L))
+                .thenThrow(new OrderNotFoundException("Order not found."));
+
+        mockMvc.perform(get(PATH + "/999")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Order not found."));
+
+        when(getStaffOrderDetailUseCase.execute("7", 102L))
+                .thenThrow(new AccessDeniedException("Authorized internal role is required."));
+
+        mockMvc.perform(get(PATH + "/102")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        when(getStaffOrderDetailUseCase.execute("bad", 102L))
+                .thenThrow(new InvalidCredentialsException("Invalid authenticated account."));
+
+        mockMvc.perform(get(PATH + "/102")
+                        .with(SecurityMockMvcRequestPostProcessors.user("bad").roles("STAFF")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+
+        when(getStaffOrderDetailUseCase.execute("9", 102L))
+                .thenThrow(new IllegalStateException("DB timeout"));
+
+        mockMvc.perform(get(PATH + "/102")
                         .with(SecurityMockMvcRequestPostProcessors.user("9").roles("STAFF")))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
