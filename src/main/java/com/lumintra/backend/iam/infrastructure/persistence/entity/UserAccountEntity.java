@@ -7,10 +7,11 @@ import jakarta.persistence.*;
 
 import lombok.Getter;
 import lombok.Setter;
-
+import org.hibernate.annotations.DynamicUpdate;
 import java.time.Instant;
 
 @Entity
+@DynamicUpdate
 @Table(name = "user_account")
 @Getter
 @Setter
@@ -81,5 +82,10 @@ public class UserAccountEntity {
 
     public void verifyEmail() {
         this.setStatus(AccountStatus.ACTIVE);
+    }
+
+    public void softDelete(Instant deletedAt) {
+        this.status = AccountStatus.DELETED;
+        this.updatedAt = deletedAt;
     }
 }

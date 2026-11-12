@@ -48,6 +48,9 @@ public class LoginUseCase {
 
         UserAccountEntity account = userAccountRepository.findByEmail(request.email()).orElse(null);
 
+        if (account != null && account.getStatus() == com.lumintra.backend.iam.domain.model.AccountStatus.DELETED) {
+            throw new InvalidCredentialsException("Invalid email or password");
+        }
         if (account == null || !passwordEncoder.matches(request.password(), account.getPasswordHash())) {
             handleFailedLogin(request.email(), account);
             throw new InvalidCredentialsException("Invalid email or password");
