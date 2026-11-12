@@ -1,5 +1,7 @@
 package com.lumintra.backend.payment.application;
 
+import com.lumintra.backend.commerce.domain.model.OrderPaymentSnapshot;
+import com.lumintra.backend.commerce.domain.service.OrderPaymentLookupService;
 import com.lumintra.backend.payment.api.response.PaymentSessionResponse;
 import com.lumintra.backend.payment.domain.model.CreatePaymentSessionCommand;
 import com.lumintra.backend.payment.domain.model.PaymentSessionMetadata;
@@ -35,6 +37,7 @@ public class CreatePaymentSessionUseCase implements PaymentSessionPort {
     private final PaymentGatewayPort paymentGatewayPort;
     private final PaymentSessionMetadataStore metadataStore;
     private final PaymentSessionMapper paymentSessionMapper;
+    private final OrderPaymentLookupService orderPaymentLookupService;
 
     @Override
     @Transactional
@@ -45,7 +48,17 @@ public class CreatePaymentSessionUseCase implements PaymentSessionPort {
         BigDecimal normalizedAmount = command.amount().setScale(2, RoundingMode.HALF_UP);
         Duration effectiveTtl = resolveTtl(targetType, command.ttl());
         Instant now = Instant.now();
-        Instant expiresAt = now.plus(effectiveTtl);
+
+        OrderPaymentSnapshot orderSnapshot = targetType == PaymentTargetType.ORDER
+                ? orderPaymentLookupService.findByOrderId(command.targetId()).orElse(null)
+                : null;
+
+        Long resolvedCustomerId = command.customerId() != null
+                ? command.customerId()
+                : (orderSnapshot != null ? orderSnapshot.customerId() : null);
+        Instant expiresAt = (orderSnapshot != null && orderSnapshot.expiresAt() != null)
+                ? orderSnapshot.expiresAt()
+                : now.plus(effectiveTtl);
 
         String paymentCode = paymentGatewayPort.generatePaymentCode(targetType, command.targetId());
         SePayQrDetails qrDetails = paymentGatewayPort.buildQrDetails(paymentCode, normalizedAmount);
@@ -61,21 +74,23 @@ public class CreatePaymentSessionUseCase implements PaymentSessionPort {
             saved.setCreatedAt(now);
         }
 
-        PaymentSessionMetadata metadata = new PaymentSessionMetadata(
-                paymentCode,
-                targetType,
-                command.targetId(),
-                command.customerId(),
-                expiresAt
-        );
-        metadataStore.save(metadata, effectiveTtl.plusHours(1));
+        if (resolvedCustomerId != null && resolvedCustomerId > 0) {
+            PaymentSessionMetadata metadata = new PaymentSessionMetadata(
+                    paymentCode,
+                    targetType,
+                    command.targetId(),
+                    resolvedCustomerId,
+                    expiresAt
+            );
+            metadataStore.save(metadata, effectiveTtl.plusHours(1));
+        }
 
         log.info("Created SePay payment session [paymentId={}] [paymentCode={}] [targetType={}] [targetId={}] [customerId={}]",
                 saved.getPaymentId(),
                 paymentCode,
                 targetType,
                 command.targetId(),
-                command.customerId());
+                resolvedCustomerId);
 
         return paymentSessionMapper.toResponse(
                 saved,
@@ -97,8 +112,11 @@ public class CreatePaymentSessionUseCase implements PaymentSessionPort {
         if (command.targetId() == null || command.targetId() <= 0) {
             throw new IllegalArgumentException("Payment targetId must be a positive identifier.");
         }
-        if (command.customerId() == null || command.customerId() <= 0) {
+        if (command.customerId() != null && command.customerId() <= 0) {
             throw new IllegalArgumentException("Payment customerId must be a positive identifier.");
+        }
+        if (command.targetType() != PaymentTargetType.ORDER && command.customerId() == null) {
+            throw new IllegalArgumentException("Payment customerId is required for non-order targets.");
         }
         if (command.amount() == null || command.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Payment amount must be greater than zero.");

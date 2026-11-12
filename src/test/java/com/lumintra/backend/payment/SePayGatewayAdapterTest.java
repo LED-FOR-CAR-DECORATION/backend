@@ -23,7 +23,6 @@ class SePayGatewayAdapterTest {
                 "https://vietqr.app/img/",
                 "TPBank",
                 "10006140844",
-                "10006140844",
                 "NGUYEN QUANG KHANH",
                 "lum",
                 "webhook-secret"
