@@ -1,10 +1,13 @@
 package com.lumintra.backend.commerce.api.controller;
 
+import com.lumintra.backend.commerce.api.request.DispatchOrderRequest;
 import com.lumintra.backend.commerce.api.request.StaffOrderFilterRequest;
 import com.lumintra.backend.commerce.api.request.UpdateStaffOrderStatusRequest;
+import com.lumintra.backend.commerce.api.response.DispatchOrderResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderListResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderStatusResponse;
+import com.lumintra.backend.commerce.application.DispatchOrderUseCase;
 import com.lumintra.backend.commerce.application.GetStaffOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListStaffOrdersUseCase;
 import com.lumintra.backend.commerce.application.UpdateStaffOrderStatusUseCase;
@@ -30,6 +33,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,6 +52,7 @@ public class StaffOrderController {
     private final ListStaffOrdersUseCase listStaffOrdersUseCase;
     private final GetStaffOrderDetailUseCase getStaffOrderDetailUseCase;
     private final UpdateStaffOrderStatusUseCase updateStaffOrderStatusUseCase;
+    private final DispatchOrderUseCase dispatchOrderUseCase;
 
     @Operation(
             summary = "List staff order fulfillment queue",
@@ -312,6 +317,93 @@ public class StaffOrderController {
             @Valid @RequestBody UpdateStaffOrderStatusRequest request) {
         String subject = extractAuthenticatedSubject(authentication);
         StaffOrderStatusResponse response = updateStaffOrderStatusUseCase.execute(subject, id, request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Dispatch physical order to AhaMove",
+            description = "Dispatches an eligible PROCESSING or PARTIALLY_FULFILLED physical order to AhaMove, saves tracking metadata on order_delivery (ASSIGNED), and transitions order status to SHIPPING."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Order dispatched to AhaMove successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid path id, malformed JSON, invalid dispatch fields, or AhaMove 400 validation error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing, expired, or invalid JWT authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: caller is not an active internal STAFF, MANAGER, or ADMIN account",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Not Found: order does not exist or AhaMove service was not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "406",
+                    description = "Not Acceptable: rejected by AhaMove business rules (e.g., NOT_ENOUGH_CREDIT, INVALID_DELIVERY_AREA, INVALID_SERVICE_HOUR)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict: order status/delivery is not eligible for dispatch or duplicate tracking conflict",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "503",
+                    description = "Service Unavailable: AhaMove partner credentials/config missing or AhaMove service unavailable",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    @PostMapping("/{id}/dispatch")
+    public ResponseEntity<ApiResponse<DispatchOrderResponse>> dispatchOrder(
+            Authentication authentication,
+            @Parameter(description = "Numeric purchase order identifier", example = "102")
+            @PathVariable @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody DispatchOrderRequest request) {
+        String subject = extractAuthenticatedSubject(authentication);
+        DispatchOrderResponse response = dispatchOrderUseCase.execute(subject, id, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

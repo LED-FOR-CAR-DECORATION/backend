@@ -110,6 +110,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("INVALID_ORDER_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(CarrierDispatchException.class)
+    public ResponseEntity<ErrorResponse> handleCarrierDispatchException(CarrierDispatchException ex) {
+        return buildErrorResponse(ex.getErrorCode(), ex.getMessage(), ex.getHttpStatus());
+    }
+
     // IAM exceptions
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {

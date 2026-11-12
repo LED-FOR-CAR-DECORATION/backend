@@ -132,4 +132,16 @@ public class OrderEntity {
         validateStaffTransition(targetStatus);
         this.status = targetStatus;
     }
+
+    public boolean canDispatchToCarrier() {
+        return this.status == OrderStatus.PROCESSING || this.status == OrderStatus.PARTIALLY_FULFILLED;
+    }
+
+    public void validateDispatchEligibility() {
+        if (!canDispatchToCarrier()) {
+            throw new OrderStatusTransitionException(
+                    "Cannot dispatch order with status " + this.status
+                            + ". Only PROCESSING or PARTIALLY_FULFILLED orders can be dispatched.");
+        }
+    }
 }

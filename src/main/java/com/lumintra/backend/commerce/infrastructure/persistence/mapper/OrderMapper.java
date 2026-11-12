@@ -1,11 +1,14 @@
 package com.lumintra.backend.commerce.infrastructure.persistence.mapper;
 
+import com.lumintra.backend.commerce.api.response.AhamoveWebhookResponse;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
+import com.lumintra.backend.commerce.api.response.DispatchOrderResponse;
 import com.lumintra.backend.commerce.api.response.OrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.OrderListResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderListResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderStatusResponse;
+import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.PaymentIntentResult;
 import com.lumintra.backend.commerce.domain.model.PaymentStatus;
@@ -392,5 +395,40 @@ public class OrderMapper {
             return null;
         }
         return new StaffOrderStatusResponse(orderId, previousStatus, status, updatedAt);
+    }
+
+    public AhamoveWebhookResponse toAhamoveWebhookResponse(
+            String trackingNumber,
+            String outcome,
+            DeliveryStatus deliveryStatus,
+            OrderStatus orderStatus,
+            String message) {
+        return AhamoveWebhookResponse.builder()
+                .trackingNumber(trackingNumber)
+                .outcome(outcome)
+                .deliveryStatus(deliveryStatus)
+                .orderStatus(orderStatus)
+                .message(message)
+                .build();
+    }
+
+    public DispatchOrderResponse toDispatchOrderResponse(
+            Long orderId,
+            OrderStatus orderStatus,
+            DeliveryStatus deliveryStatus,
+            String trackingNumber,
+            String trackingUrl,
+            java.math.BigDecimal carrierFee) {
+        if (orderId == null || orderStatus == null || deliveryStatus == null) {
+            return null;
+        }
+        return DispatchOrderResponse.builder()
+                .orderId(orderId)
+                .orderStatus(orderStatus)
+                .deliveryStatus(deliveryStatus)
+                .trackingNumber(trackingNumber)
+                .trackingUrl(trackingUrl)
+                .carrierFee(carrierFee)
+                .build();
     }
 }

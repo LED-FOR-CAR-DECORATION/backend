@@ -2,6 +2,7 @@ package com.lumintra.backend.commerce.infrastructure.persistence.entity;
 
 import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
 import com.lumintra.backend.commerce.domain.model.ResolvedShippingAddress;
+import com.lumintra.backend.shared.exception.commerce.OrderStatusTransitionException;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -88,5 +89,19 @@ public class OrderDeliveryEntity {
         entity.setLatitude(shipping.latitude());
         entity.setLongitude(shipping.longitude());
         return entity;
+    }
+
+    public boolean hasActiveShipment() {
+        return this.deliveryStatus == DeliveryStatus.ASSIGNED
+                || this.deliveryStatus == DeliveryStatus.PICKED_UP
+                || this.deliveryStatus == DeliveryStatus.SHIPPING
+                || this.deliveryStatus == DeliveryStatus.DELIVERED;
+    }
+
+    public void validateReadyForDispatch() {
+        if (hasActiveShipment()) {
+            throw new OrderStatusTransitionException(
+                    "Order already has an active shipment in delivery status " + this.deliveryStatus + ".");
+        }
     }
 }
