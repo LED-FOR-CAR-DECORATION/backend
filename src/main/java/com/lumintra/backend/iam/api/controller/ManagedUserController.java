@@ -7,13 +7,11 @@ import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import jakarta.validation.Valid;
@@ -34,17 +32,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/management/admin/users")
 @RequiredArgsConstructor
 @Tag(name = "User Management", description = "Internal account management")
-@SecurityScheme(
-        name = "managementBearerAuth",
-        type = SecuritySchemeType.HTTP,
-        scheme = "bearer",
-        bearerFormat = "JWT")
 public class ManagedUserController {
     private final ListManagedUsersUseCase useCase;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    @SecurityRequirement(name = "managementBearerAuth")
+    @SecurityRequirement(name = "bearerAuth")
     @Operation(
             summary = "List internal users",
             description =

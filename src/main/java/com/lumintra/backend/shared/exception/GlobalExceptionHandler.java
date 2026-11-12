@@ -2,6 +2,7 @@ package com.lumintra.backend.shared.exception;
 
 import com.lumintra.backend.shared.exception.commerce.*;
 import com.lumintra.backend.shared.exception.iam.*;
+import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
@@ -113,6 +114,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CarrierDispatchException.class)
     public ResponseEntity<ErrorResponse> handleCarrierDispatchException(CarrierDispatchException ex) {
         return buildErrorResponse(ex.getErrorCode(), ex.getMessage(), ex.getHttpStatus());
+    }
+
+    // Payment exceptions
+    @ExceptionHandler(PaymentSessionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentSessionNotFound(PaymentSessionNotFoundException ex) {
+        return buildErrorResponse("PAYMENT_SESSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     // IAM exceptions
