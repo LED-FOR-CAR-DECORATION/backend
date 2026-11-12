@@ -116,3 +116,12 @@ jobs:
             TEST_STAFF_PASSWORD=${{ secrets.TEST_STAFF_PASSWORD }}
             TEST_DESIGNER_EMAIL=${{ secrets.TEST_DESIGNER_EMAIL }}
             TEST_DESIGNER_PASSWORD=${{ secrets.TEST_DESIGNER_PASSWORD }}
+
+      - name: Configure Container Resources and Scaling
+        run: |
+          az containerapp update \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --cpu 1.0 \
+            --memory 2.0Gi \
+            --min-replicas 1
