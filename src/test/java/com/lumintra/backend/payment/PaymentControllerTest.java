@@ -3,8 +3,11 @@ package com.lumintra.backend.payment;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.payment.api.controller.PaymentController;
+import com.lumintra.backend.payment.api.request.SePayWebhookRequest;
 import com.lumintra.backend.payment.api.response.PaymentSessionResponse;
+import com.lumintra.backend.payment.api.response.SePayWebhookResponse;
 import com.lumintra.backend.payment.application.GetPaymentSessionUseCase;
+import com.lumintra.backend.payment.application.ProcessSePayWebhookUseCase;
 import com.lumintra.backend.payment.domain.model.PaymentStatus;
 import com.lumintra.backend.payment.domain.model.PaymentTargetType;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
@@ -17,7 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -25,10 +31,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,6 +49,9 @@ class PaymentControllerTest {
 
     @MockitoBean
     private GetPaymentSessionUseCase getPaymentSessionUseCase;
+
+    @MockitoBean
+    private ProcessSePayWebhookUseCase processSePayWebhookUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -171,5 +182,160 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.status").value(401));
 
         verifyNoInteractions(getPaymentSessionUseCase);
+    }
+
+    @Test
+    @DisplayName("PAY-02 [N]: POST /api/payments/webhooks/sepay is public and returns 200 ApiResponse")
+    void processSepayWebhook_validPayload_returns200() throws Exception {
+        SePayWebhookResponse response = new SePayWebhookResponse(
+                92704L,
+                10L,
+                "LMTORD102A1B2C3D4",
+                PaymentTargetType.ORDER,
+                102L,
+                PaymentStatus.SUCCEEDED,
+                "PROCESSED",
+                "Payment marked as SUCCEEDED."
+        );
+        when(processSePayWebhookUseCase.execute(any(HttpHeaders.class), any(SePayWebhookRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/payments/webhooks/sepay")
+                        .header("Authorization", "Apikey valid-secret")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "id": 92704,
+                                  "gateway": "TPBank",
+                                  "transactionDate": "2026-11-13 01:02:03",
+                                  "accountNumber": "10006140844",
+                                  "code": "LMTORD102A1B2C3D4",
+                                  "content": "Chuyen tien LMTORD102A1B2C3D4",
+                                  "transferType": "in",
+                                  "transferAmount": 500000,
+                                  "accumulated": 1500000,
+                                  "referenceCode": "FT263170001",
+                                  "description": "Bank transfer"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.sepayTxId").value(92704))
+                .andExpect(jsonPath("$.data.paymentId").value(10))
+                .andExpect(jsonPath("$.data.paymentCode").value("LMTORD102A1B2C3D4"))
+                .andExpect(jsonPath("$.data.targetType").value("ORDER"))
+                .andExpect(jsonPath("$.data.targetId").value(102))
+                .andExpect(jsonPath("$.data.status").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.data.outcome").value("PROCESSED"));
+
+        verify(processSePayWebhookUseCase).execute(any(HttpHeaders.class), any(SePayWebhookRequest.class));
+    }
+
+    @Test
+    @DisplayName("PAY-02 [A]: POST /api/payments/webhooks/sepay with invalid Apikey returns 401")
+    void processSepayWebhook_invalidApiKey_returns401() throws Exception {
+        when(processSePayWebhookUseCase.execute(any(HttpHeaders.class), any(SePayWebhookRequest.class)))
+                .thenThrow(new BadCredentialsException("Invalid SePay webhook API key."));
+
+        mockMvc.perform(post("/api/payments/webhooks/sepay")
+                        .header("Authorization", "Apikey wrong-secret")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "id": 92704,
+                                  "transferType": "in",
+                                  "transferAmount": 500000
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    @DisplayName("PAY-02 [A]: POST /api/payments/webhooks/sepay with invalid payload returns 400 VALIDATION_FAILED")
+    void processSepayWebhook_invalidPayload_returns400() throws Exception {
+        mockMvc.perform(post("/api/payments/webhooks/sepay")
+                        .header("Authorization", "Apikey valid-secret")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "id": null,
+                                  "transferType": "",
+                                  "transferAmount": 0
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.status").value(400));
+
+        verifyNoInteractions(processSePayWebhookUseCase);
+    }
+
+    @Test
+    @DisplayName("PAY-02 [N]: POST /api/payments/webhooks/sepay accepts SePay doc sample payload (code=null, no description)")
+    void processSepayWebhook_sepayDocSamplePayload_returns200WithTopLevelSuccess() throws Exception {
+        SePayWebhookResponse response = SePayWebhookResponse.builder()
+                .sepayTxId(92704L)
+                .outcome("UNMATCHED")
+                .message("No matching payment transaction found for webhook transfer.")
+                .build();
+        when(processSePayWebhookUseCase.execute(any(HttpHeaders.class), any(SePayWebhookRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/payments/webhooks/sepay")
+                        .header("Authorization", "Apikey valid-secret")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "id": 92704,
+                                  "gateway": "Vietcombank",
+                                  "transactionDate": "2024-07-02 11:08:33",
+                                  "accountNumber": "1017588888",
+                                  "subAccount": "",
+                                  "code": null,
+                                  "content": "NGUYEN VAN A chuyen tien",
+                                  "transferType": "in",
+                                  "transferAmount": 10000,
+                                  "accumulated": 105010000,
+                                  "referenceCode": "FT24012345678"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.sepayTxId").value(92704))
+                .andExpect(jsonPath("$.data.outcome").value("UNMATCHED"));
+
+        verify(processSePayWebhookUseCase).execute(any(HttpHeaders.class), any(SePayWebhookRequest.class));
+    }
+
+    @Test
+    @DisplayName("PAY-02 [B]: POST /api/payments/webhooks/sepay accepts id=0 from SePay dashboard test ping and returns 200")
+    void processSepayWebhook_zeroIdTestPing_returns200() throws Exception {
+        SePayWebhookResponse response = SePayWebhookResponse.builder()
+                .sepayTxId(0L)
+                .outcome("IGNORED")
+                .message("Synthetic SePay test webhook acknowledged without modifying payment state.")
+                .build();
+        when(processSePayWebhookUseCase.execute(any(HttpHeaders.class), any(SePayWebhookRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/payments/webhooks/sepay")
+                        .header("Authorization", "Apikey valid-secret")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "id": 0,
+                                  "gateway": "TPBank",
+                                  "transferType": "in",
+                                  "transferAmount": 10000
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.sepayTxId").value(0))
+                .andExpect(jsonPath("$.data.outcome").value("IGNORED"));
+
+        verify(processSePayWebhookUseCase).execute(any(HttpHeaders.class), any(SePayWebhookRequest.class));
     }
 }

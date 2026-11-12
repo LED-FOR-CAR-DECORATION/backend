@@ -27,6 +27,8 @@ import java.time.Instant;
 public class PaymentTransactionEntity {
 
     public static final String GATEWAY_SEPAY = "SEPAY";
+    public static final String DB_STATUS_PENDING = "PENDING";
+    public static final String DB_STATUS_SUCCESS = "SUCCESS";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

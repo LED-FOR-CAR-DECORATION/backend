@@ -53,9 +53,11 @@ public class CommerceDataSeeder implements ApplicationRunner {
     private static final BigDecimal DEFAULT_PHYSICAL_PRICE = new BigDecimal("250000.00");
     private static final BigDecimal DEFAULT_DIGITAL_PRICE = new BigDecimal("50000.00");
     private static final BigDecimal DEFAULT_SUBSCRIPTION_PRICE = new BigDecimal("99000.00");
+    private static final BigDecimal WEBHOOK_TEST_ORDER_AMOUNT = new BigDecimal("10000.00");
     private static final String LEGACY_SEED_PREFIX = "LMT-SEED-TXN-";
     private static final String LEGACY_SEED_MARKER = "LMT-SEED-TXN-001";
     private static final String SEED_ORDER_MARKER_SUFFIX = "SEED0001";
+    private static final String WEBHOOK_TEST_SEED_MARKER_SUFFIX = "SEED0011";
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -89,6 +91,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
 
         seedShoppingCart(customerId, products);
         seedOrders(customerId, customer, products);
+        seedWebhookTestOrder(customerId, customer, products);
         seedSubscriptionAndOwnership(customerId, products);
 
         log.info("Commerce seed data verification complete.");
@@ -450,6 +453,49 @@ public class CommerceDataSeeder implements ApplicationRunner {
         );
 
         log.info("Seeded 10 representative orders across all lifecycle states [customerId={}]", customerId);
+    }
+
+    private void seedWebhookTestOrder(Long customerId, CustomerProfileSnapshot customer, ProductSeedContext products) {
+        if (paymentTransactionRepository.existsByTransactionCodeEndingWith(WEBHOOK_TEST_SEED_MARKER_SUFFIX)) {
+            log.info("Webhook test order already seeded [marker=*{}]. Skipping.", WEBHOOK_TEST_SEED_MARKER_SUFFIX);
+            return;
+        }
+
+        Instant now = Instant.now();
+        String recipientName = customer.fullName() != null && !customer.fullName().isBlank()
+                ? customer.fullName() : "Test Customer";
+        String recipientPhone = customer.phone() != null && !customer.phone().isBlank()
+                ? customer.phone() : "0901234567";
+
+        // 11. PENDING_PAYMENT (10,000 VND) -> lightweight real-transfer SePay webhook testing
+        OrderEntity webhookTestOrder = createOrder(
+                customerId,
+                OrderType.PHYSICAL,
+                OrderStatus.PENDING_PAYMENT,
+                WEBHOOK_TEST_ORDER_AMOUNT,
+                now.plus(7, ChronoUnit.DAYS),
+                products.physicalId(),
+                1,
+                WEBHOOK_TEST_ORDER_AMOUNT,
+                new ShippingSeed(
+                        recipientName,
+                        recipientPhone,
+                        "123 Le Loi, Ben Nghe, District 1, Ho Chi Minh City",
+                        new BigDecimal("10.7768890"),
+                        new BigDecimal("106.7008060"),
+                        DeliveryStatus.PENDING,
+                        null, null, null, null, null
+                ),
+                new PaymentSeed(
+                        WEBHOOK_TEST_SEED_MARKER_SUFFIX,
+                        PaymentStatus.PENDING,
+                        null
+                )
+        );
+
+        log.info("Seeded 10,000 VND webhook test order [orderId={}] [paymentCode={}]",
+                webhookTestOrder.getOrderId(),
+                buildSeedPaymentCode(webhookTestOrder.getOrderId(), WEBHOOK_TEST_SEED_MARKER_SUFFIX));
     }
 
     private void migrateLegacySeedTransactionCodes() {
