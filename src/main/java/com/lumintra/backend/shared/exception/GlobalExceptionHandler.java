@@ -5,6 +5,7 @@ import com.lumintra.backend.shared.exception.iam.*;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
+import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -38,6 +40,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidPriceRangeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidPriceRangeException(InvalidPriceRangeException ex) {
         return buildErrorResponse("INVALID_PRICE_RANGE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(StoreProductReferenceException.class)
+    public ResponseEntity<ErrorResponse> handleStoreProductReference(StoreProductReferenceException ex) {
+        var status = ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
+                ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND;
+        return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
     }
 
     @ExceptionHandler(ProductNotFoundException.class)
@@ -74,6 +83,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCartItemException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCartItem(InvalidCartItemException ex) {
         return buildErrorResponse("INVALID_CART_ITEM", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(CartItemNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCartItemNotFound(CartItemNotFoundException ex) {
+        return buildErrorResponse("CART_ITEM_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(DeliveryAddressRequiredException.class)
@@ -177,7 +191,7 @@ public class GlobalExceptionHandler {
                             .orElse("parameter");
                     return paramResult.getResolvableErrors().stream()
                             .map(error -> ErrorResponse.ErrorDetail.builder()
-                                    .field(field)
+                                    .field(error instanceof FieldError fieldError ? fieldError.getField() : field)
                                     .message(Optional.ofNullable(error.getDefaultMessage()).orElse("Invalid parameter value"))
                                     .build());
                 })

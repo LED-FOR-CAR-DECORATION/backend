@@ -45,6 +45,12 @@ public class UserAddressEntity {
     @Column(name = "is_default", nullable = false)
     private boolean isDefault = false;
 
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -105,6 +111,16 @@ public class UserAddressEntity {
         this.fullAddress = fullAddress;
         this.latitude = latitude;
         this.longitude = longitude;
+    }
+
+    public void softDelete(Instant deletedAt) {
+        this.isDeleted = true;
+        this.deletedAt = deletedAt != null ? deletedAt : Instant.now();
+        this.isDefault = false;
+    }
+
+    public void markDefault() {
+        this.isDefault = true;
     }
 
     public boolean isOwnedBy(Long userId) {

@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
@@ -201,8 +202,8 @@ class UserAddressRepositoryQueryTest {
                 Instant.parse("2026-11-10T01:00:00Z"));
         entityManager.clear();
 
-        assertThat(userAddressRepository.existsByCustomerId(42L)).isFalse();
-        assertThat(userAddressRepository.existsByCustomerId(99L)).isTrue();
+        assertThat(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(42L)).isFalse();
+        assertThat(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(99L)).isTrue();
     }
 
     @Test
@@ -267,7 +268,7 @@ class UserAddressRepositoryQueryTest {
 
         UserAddressEntity loaded =
                 userAddressRepository
-                        .findByAddressIdAndCustomerId(target.getAddressId(), 42L)
+                        .findByAddressIdAndCustomerIdAndIsDeletedFalse(target.getAddressId(), 42L)
                         .orElseThrow();
         loaded.updateDetails(
                 "Updated Name",
@@ -311,9 +312,210 @@ class UserAddressRepositoryQueryTest {
         entityManager.clear();
 
         assertThat(
-                        userAddressRepository.findByAddressIdAndCustomerId(
+                        userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(
                                 foreignAddress.getAddressId(), 42L))
                 .isEmpty();
-        assertThat(userAddressRepository.findByAddressIdAndCustomerId(999999L, 42L)).isEmpty();
+        assertThat(userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(999999L, 42L)).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-25 UTCID01 [N]: AC03 & AC04 soft-deleted rows are retained in DB but excluded from all active queries")
+    void softDelete_excludesDeletedRowsAcrossAllActiveQueriesAndPreservesDatabaseRow() {
+        Instant initialTimestamp = Instant.parse("2026-11-01T01:00:00Z");
+        Instant deletedAt = Instant.parse("2026-11-12T04:00:00Z");
+
+        UserAddressEntity softDeletedDefault =
+                persistAddress(42L, "Deleted Default", true, initialTimestamp, initialTimestamp);
+        softDeletedDefault.softDelete(deletedAt);
+        userAddressRepository.saveAndFlush(softDeletedDefault);
+
+        UserAddressEntity activeOtherCustomer =
+                persistAddress(99L, "Other Customer", true, initialTimestamp, initialTimestamp);
+        entityManager.clear();
+
+        assertThat(userAddressRepository.findAllByCustomerIdOrdered(42L)).isEmpty();
+        assertThat(
+                        userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(
+                                softDeletedDefault.getAddressId(), 42L))
+                .isEmpty();
+        assertThat(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(42L)).isFalse();
+        assertThat(userAddressRepository.clearDefaultByCustomerId(42L)).isZero();
+
+        UserAddressEntity persistedDeletedRow =
+                userAddressRepository.findById(softDeletedDefault.getAddressId()).orElseThrow();
+        assertThat(persistedDeletedRow.isDeleted()).isTrue();
+        assertThat(persistedDeletedRow.getDeletedAt()).isEqualTo(deletedAt);
+        assertThat(persistedDeletedRow.isDefault()).isFalse();
+
+        assertThat(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(99L)).isTrue();
+        assertThat(
+                        userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(
+                                activeOtherCustomer.getAddressId(), 99L))
+                .isPresent();
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-25 UTCID02 [N]: AC04 deleting default address deterministically promotes newest active address with NULLS LAST tie-breakers")
+    void findActiveByCustomerIdOrdered_selectsNewestPromotionCandidateWithNullsLast() {
+        entityManager
+                .createNativeQuery("ALTER TABLE user_address ALTER COLUMN updated_at SET NULL")
+                .executeUpdate();
+
+        Instant deletedAt = Instant.parse("2026-11-12T05:00:00Z");
+        UserAddressEntity currentDefault =
+                persistAddress(
+                        42L,
+                        "Current Default",
+                        true,
+                        Instant.parse("2026-11-01T01:00:00Z"),
+                        Instant.parse("2026-11-01T01:00:00Z"));
+        UserAddressEntity alreadyDeletedNewer =
+                persistAddress(
+                        42L,
+                        "Already Deleted Newer",
+                        false,
+                        Instant.parse("2026-11-11T01:00:00Z"),
+                        Instant.parse("2026-11-11T01:00:00Z"));
+        alreadyDeletedNewer.softDelete(deletedAt);
+        userAddressRepository.saveAndFlush(alreadyDeletedNewer);
+
+        UserAddressEntity nullUpdatedActive =
+                persistAddress(
+                        42L,
+                        "Null Updated Active",
+                        false,
+                        Instant.parse("2026-11-09T01:00:00Z"),
+                        null);
+        UserAddressEntity olderActive =
+                persistAddress(
+                        42L,
+                        "Older Active",
+                        false,
+                        Instant.parse("2026-11-02T01:00:00Z"),
+                        Instant.parse("2026-11-03T01:00:00Z"));
+        UserAddressEntity newestActive =
+                persistAddress(
+                        42L,
+                        "Newest Active",
+                        false,
+                        Instant.parse("2026-11-04T01:00:00Z"),
+                        Instant.parse("2026-11-08T01:00:00Z"));
+        entityManager.clear();
+
+        UserAddressEntity loadedDefault =
+                userAddressRepository
+                        .findByAddressIdAndCustomerIdAndIsDeletedFalse(
+                                currentDefault.getAddressId(), 42L)
+                        .orElseThrow();
+        loadedDefault.softDelete(deletedAt);
+        userAddressRepository.saveAndFlush(loadedDefault);
+
+        List<UserAddressEntity> candidates =
+                userAddressRepository.findActiveByCustomerIdOrdered(42L, PageRequest.of(0, 1));
+        assertThat(candidates).hasSize(1);
+        assertThat(candidates.getFirst().getAddressId()).isEqualTo(newestActive.getAddressId());
+
+        candidates.getFirst().markDefault();
+        userAddressRepository.saveAndFlush(candidates.getFirst());
+        entityManager.clear();
+
+        List<UserAddressEntity> activeAfterDelete =
+                userAddressRepository.findAllByCustomerIdOrdered(42L);
+        assertThat(activeAfterDelete)
+                .extracting(UserAddressEntity::getAddressId)
+                .containsExactly(
+                        newestActive.getAddressId(),
+                        olderActive.getAddressId(),
+                        nullUpdatedActive.getAddressId());
+        assertThat(activeAfterDelete.getFirst().isDefault()).isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-26 UTCID01 [N]: AC03 clearDefaultByCustomerId (clearAutomatically=true) followed by markDefault and saveAndFlush switches default cleanly without detached entity loss")
+    void setDefaultFlow_clearDefaultThenMarkDefaultAndSaveAndFlush_switchesSingleDefault() {
+        Instant initialTimestamp = Instant.parse("2026-11-01T01:00:00Z");
+        UserAddressEntity oldDefault =
+                persistAddress(42L, "Old Default", true, initialTimestamp, initialTimestamp);
+        UserAddressEntity targetAddress =
+                persistAddress(42L, "New Default Target", false, initialTimestamp, initialTimestamp);
+        UserAddressEntity softDeletedAddress =
+                persistAddress(42L, "Deleted Address", false, initialTimestamp, initialTimestamp);
+        softDeletedAddress.softDelete(Instant.parse("2026-11-10T01:00:00Z"));
+        userAddressRepository.saveAndFlush(softDeletedAddress);
+
+        UserAddressEntity otherCustomerDefault =
+                persistAddress(99L, "Other Customer Default", true, initialTimestamp, initialTimestamp);
+        entityManager.clear();
+
+        UserAddressEntity loadedTarget =
+                userAddressRepository
+                        .findByAddressIdAndCustomerIdAndIsDeletedFalse(
+                                targetAddress.getAddressId(), 42L)
+                        .orElseThrow();
+        int clearedCount = userAddressRepository.clearDefaultByCustomerId(42L);
+        loadedTarget.markDefault();
+        UserAddressEntity saved = userAddressRepository.saveAndFlush(loadedTarget);
+        entityManager.clear();
+
+        assertThat(clearedCount).isEqualTo(1);
+        assertThat(saved.isDefault()).isTrue();
+        assertThat(saved.getUpdatedAt()).isAfter(initialTimestamp);
+
+        UserAddressEntity reloadedOldDefault =
+                userAddressRepository.findById(oldDefault.getAddressId()).orElseThrow();
+        UserAddressEntity reloadedNewDefault =
+                userAddressRepository.findById(targetAddress.getAddressId()).orElseThrow();
+        UserAddressEntity reloadedOtherCustomer =
+                userAddressRepository.findById(otherCustomerDefault.getAddressId()).orElseThrow();
+
+        assertThat(reloadedOldDefault.isDefault()).isFalse();
+        assertThat(reloadedNewDefault.isDefault()).isTrue();
+        assertThat(reloadedNewDefault.getUpdatedAt()).isAfter(initialTimestamp);
+        assertThat(reloadedOtherCustomer.isDefault()).isTrue();
+
+        List<UserAddressEntity> ordered = userAddressRepository.findAllByCustomerIdOrdered(42L);
+        assertThat(ordered)
+                .extracting(UserAddressEntity::getAddressId)
+                .containsExactly(targetAddress.getAddressId(), oldDefault.getAddressId());
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-26 UTCID02 [B]: AC02 & AC03 setDefault flow excludes soft-deleted rows and handles customer with zero prior defaults")
+    void setDefaultFlow_zeroPriorDefaultsAndDeletedRowExclusion_persistsTargetAsOnlyDefault() {
+        Instant initialTimestamp = Instant.parse("2026-11-01T01:00:00Z");
+        UserAddressEntity activeNonDefault =
+                persistAddress(42L, "Active NonDefault", false, initialTimestamp, initialTimestamp);
+        UserAddressEntity softDeleted =
+                persistAddress(42L, "Soft Deleted", false, initialTimestamp, initialTimestamp);
+        softDeleted.softDelete(Instant.parse("2026-11-11T01:00:00Z"));
+        userAddressRepository.saveAndFlush(softDeleted);
+        entityManager.clear();
+
+        assertThat(
+                        userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(
+                                softDeleted.getAddressId(), 42L))
+                .isEmpty();
+
+        UserAddressEntity loaded =
+                userAddressRepository
+                        .findByAddressIdAndCustomerIdAndIsDeletedFalse(
+                                activeNonDefault.getAddressId(), 42L)
+                        .orElseThrow();
+        int clearedCount = userAddressRepository.clearDefaultByCustomerId(42L);
+        loaded.markDefault();
+        UserAddressEntity saved = userAddressRepository.saveAndFlush(loaded);
+        entityManager.clear();
+
+        assertThat(clearedCount).isZero();
+        assertThat(saved.isDefault()).isTrue();
+
+        List<UserAddressEntity> ordered = userAddressRepository.findAllByCustomerIdOrdered(42L);
+        assertThat(ordered).hasSize(1);
+        assertThat(ordered.getFirst().getAddressId()).isEqualTo(activeNonDefault.getAddressId());
+        assertThat(ordered.getFirst().isDefault()).isTrue();
     }
 }

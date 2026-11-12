@@ -53,7 +53,9 @@ public class UpdateUserAddressUseCase {
             throw new AddressNotFoundException("Delivery address not found.");
         }
 
-        UserAddressEntity entity = userAddressRepository.findByAddressIdAndCustomerId(addressId, customerId)
+        UserAddressEntity entity =
+                userAddressRepository
+                        .findByAddressIdAndCustomerIdAndIsDeletedFalse(addressId, customerId)
                 .orElseThrow(() -> {
                     log.warn("Customer address not found or access denied [addressId={}] [customerId={}]",
                             addressId, customerId);

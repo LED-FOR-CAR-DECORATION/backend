@@ -14,7 +14,7 @@ public interface LedModelRepository extends JpaRepository<LedModelEntity, Long> 
     @Query("""
             UPDATE LedModelEntity m
             SET m.stockQuantity = m.stockQuantity - :quantity,
-                m.updatedAt = CURRENT_TIMESTAMP
+                m.updatedAt = instant
             WHERE m.modelId = :modelId
               AND m.stockQuantity >= :quantity
             """)

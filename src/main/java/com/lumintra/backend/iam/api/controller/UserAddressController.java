@@ -4,7 +4,9 @@ import com.lumintra.backend.iam.api.request.AddUserAddressRequest;
 import com.lumintra.backend.iam.api.request.UpdateUserAddressRequest;
 import com.lumintra.backend.iam.api.response.UserAddressResponse;
 import com.lumintra.backend.iam.application.AddUserAddressUseCase;
+import com.lumintra.backend.iam.application.DeleteUserAddressUseCase;
 import com.lumintra.backend.iam.application.ListUserAddressesUseCase;
+import com.lumintra.backend.iam.application.SetDefaultUserAddressUseCase;
 import com.lumintra.backend.iam.application.UpdateUserAddressUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -25,7 +27,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -44,6 +48,8 @@ public class UserAddressController {
     private final ListUserAddressesUseCase listUserAddressesUseCase;
     private final AddUserAddressUseCase addUserAddressUseCase;
     private final UpdateUserAddressUseCase updateUserAddressUseCase;
+    private final DeleteUserAddressUseCase deleteUserAddressUseCase;
+    private final SetDefaultUserAddressUseCase setDefaultUserAddressUseCase;
 
     @GetMapping
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -487,6 +493,318 @@ public class UserAddressController {
         ensureAuthenticated(authentication);
         UserAddressResponse updated =
                 updateUserAddressUseCase.execute(authentication.getName(), id, request);
+        return ResponseEntity.ok(ApiResponse.success(updated));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+            summary = "Soft delete a delivery address for the current customer",
+            description =
+                    "Soft deletes a saved delivery address owned by the authenticated active"
+                            + " CUSTOMER account without breaking existing order references."
+                            + " When deleting the default address, the newest remaining active"
+                            + " address is automatically promoted to default.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "204",
+                description = "Delivery address soft deleted",
+                content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "Invalid address id parameter",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "VALIDATION_FAILED",
+                                                          "message": "Invalid request parameter",
+                                                          "status": 400,
+                                                          "timestamp": "2026-11-12T04:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": [
+                                                            {
+                                                              "field": "id",
+                                                              "message": "id must be greater than 0"
+                                                            }
+                                                          ]
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "Missing, expired, or invalid authentication",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "UNAUTHORIZED",
+                                                          "message": "Authentication is required.",
+                                                          "status": 401,
+                                                          "timestamp": "2026-11-12T04:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "Caller is not an active CUSTOMER account",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "FORBIDDEN",
+                                                          "message": "Access is denied.",
+                                                          "status": 403,
+                                                          "timestamp": "2026-11-12T04:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "Delivery address not found/not owned, or user account not found",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples = {
+                                    @ExampleObject(
+                                            name = "Address Not Found",
+                                            value =
+                                                    """
+                                                    {
+                                                      "code": "ADDRESS_NOT_FOUND",
+                                                      "message": "Delivery address not found.",
+                                                      "status": 404,
+                                                      "timestamp": "2026-11-12T04:00:00Z",
+                                                      "traceId": "trace-123",
+                                                      "details": []
+                                                    }
+                                                    """),
+                                    @ExampleObject(
+                                            name = "User Not Found",
+                                            value =
+                                                    """
+                                                    {
+                                                      "code": "USER_NOT_FOUND",
+                                                      "message": "Account not found.",
+                                                      "status": 404,
+                                                      "timestamp": "2026-11-12T04:00:00Z",
+                                                      "traceId": "trace-123",
+                                                      "details": []
+                                                    }
+                                                    """)
+                                })),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "500",
+                description = "Unexpected storage or server failure",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "INTERNAL_SERVER_ERROR",
+                                                          "message": "An unexpected error occurred",
+                                                          "status": 500,
+                                                          "timestamp": "2026-11-12T04:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """)))
+    })
+    public ResponseEntity<Void> deleteAddress(
+            Authentication authentication,
+            @Parameter(description = "Positive identifier of the saved delivery address", example = "10")
+            @PathVariable @Positive(message = "id must be greater than 0") Long id) {
+        ensureAuthenticated(authentication);
+        deleteUserAddressUseCase.execute(authentication.getName(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/default")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+            summary = "Set a saved delivery address as the current customer's default address",
+            description =
+                    "Marks a saved active delivery address owned by the authenticated active"
+                            + " CUSTOMER account as the default shipping address, clearing any"
+                            + " previous default within a single transaction. Calling on an"
+                            + " address that is already default is idempotent.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "Default address updated inside ApiResponse<UserAddressResponse>",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @ExampleObject(
+                                                name = "Default Address Updated",
+                                                value =
+                                                        """
+                                                        {
+                                                          "data": {
+                                                            "addressId": 10,
+                                                            "recipientName": "Nguyen Van A",
+                                                            "recipientPhone": "0901234567",
+                                                            "fullAddress": "123 Nguyen Hue, Ben Nghe, District 1, Ho Chi Minh City",
+                                                            "latitude": 10.7768891,
+                                                            "longitude": 106.7008066,
+                                                            "isDefault": true,
+                                                            "createdAt": "2026-11-12T02:00:00Z",
+                                                            "updatedAt": "2026-11-12T03:30:00Z"
+                                                          }
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "Invalid address id parameter",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "VALIDATION_FAILED",
+                                                          "message": "Invalid request parameter",
+                                                          "status": 400,
+                                                          "timestamp": "2026-11-12T04:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": [
+                                                            {
+                                                              "field": "id",
+                                                              "message": "id must be greater than 0"
+                                                            }
+                                                          ]
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "Missing, expired, or invalid authentication",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "UNAUTHORIZED",
+                                                          "message": "Authentication is required.",
+                                                          "status": 401,
+                                                          "timestamp": "2026-11-12T04:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "Caller is not an active CUSTOMER account",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "FORBIDDEN",
+                                                          "message": "Access is denied.",
+                                                          "status": 403,
+                                                          "timestamp": "2026-11-12T04:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "Delivery address not found/not owned, or user account not found",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples = {
+                                    @ExampleObject(
+                                            name = "Address Not Found",
+                                            value =
+                                                    """
+                                                    {
+                                                      "code": "ADDRESS_NOT_FOUND",
+                                                      "message": "Delivery address not found.",
+                                                      "status": 404,
+                                                      "timestamp": "2026-11-12T04:00:00Z",
+                                                      "traceId": "trace-123",
+                                                      "details": []
+                                                    }
+                                                    """),
+                                    @ExampleObject(
+                                            name = "User Not Found",
+                                            value =
+                                                    """
+                                                    {
+                                                      "code": "USER_NOT_FOUND",
+                                                      "message": "Account not found.",
+                                                      "status": 404,
+                                                      "timestamp": "2026-11-12T04:00:00Z",
+                                                      "traceId": "trace-123",
+                                                      "details": []
+                                                    }
+                                                    """)
+                                })),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "500",
+                description = "Unexpected storage or server failure",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "INTERNAL_SERVER_ERROR",
+                                                          "message": "An unexpected error occurred",
+                                                          "status": 500,
+                                                          "timestamp": "2026-11-12T04:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """)))
+    })
+    public ResponseEntity<ApiResponse<UserAddressResponse>> setDefaultAddress(
+            Authentication authentication,
+            @Parameter(description = "Positive identifier of the saved delivery address", example = "10")
+            @PathVariable @Positive(message = "id must be greater than 0") Long id) {
+        ensureAuthenticated(authentication);
+        UserAddressResponse updated =
+                setDefaultUserAddressUseCase.execute(authentication.getName(), id);
         return ResponseEntity.ok(ApiResponse.success(updated));
     }
 
