@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -68,6 +69,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCartItemException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCartItem(InvalidCartItemException ex) {
         return buildErrorResponse("INVALID_CART_ITEM", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(CartItemNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCartItemNotFound(CartItemNotFoundException ex) {
+        return buildErrorResponse("CART_ITEM_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(DeliveryAddressRequiredException.class)
@@ -171,7 +177,7 @@ public class GlobalExceptionHandler {
                             .orElse("parameter");
                     return paramResult.getResolvableErrors().stream()
                             .map(error -> ErrorResponse.ErrorDetail.builder()
-                                    .field(field)
+                                    .field(error instanceof FieldError fieldError ? fieldError.getField() : field)
                                     .message(Optional.ofNullable(error.getDefaultMessage()).orElse("Invalid parameter value"))
                                     .build());
                 })
