@@ -1,6 +1,8 @@
 package com.lumintra.backend.iam.api.controller;
 
+import com.lumintra.backend.iam.api.request.AddUserAddressRequest;
 import com.lumintra.backend.iam.api.response.UserAddressResponse;
+import com.lumintra.backend.iam.application.AddUserAddressUseCase;
 import com.lumintra.backend.iam.application.ListUserAddressesUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -11,13 +13,17 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,6 +36,7 @@ import java.util.List;
 public class UserAddressController {
 
     private final ListUserAddressesUseCase listUserAddressesUseCase;
+    private final AddUserAddressUseCase addUserAddressUseCase;
 
     @GetMapping
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -151,13 +158,168 @@ public class UserAddressController {
     })
     public ResponseEntity<ApiResponse<List<UserAddressResponse>>> listAddresses(
             Authentication authentication) {
+        ensureAuthenticated(authentication);
+        List<UserAddressResponse> addresses =
+                listUserAddressesUseCase.execute(authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success(addresses));
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+            summary = "Add a new delivery address for the current customer",
+            description =
+                    "Saves a customer delivery address using recipient contact details, Goong Map"
+                            + " formatted full address, and WGS84 coordinates. The first address is"
+                            + " automatically marked default, and setting isDefault=true clears"
+                            + " existing defaults.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "201",
+                description = "Created address inside ApiResponse<UserAddressResponse>",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @ExampleObject(
+                                                name = "Created Address",
+                                                value =
+                                                        """
+                                                        {
+                                                          "data": {
+                                                            "addressId": 10,
+                                                            "recipientName": "Nguyen Van A",
+                                                            "recipientPhone": "0901234567",
+                                                            "fullAddress": "123 Nguyen Hue, Ben Nghe, District 1, Ho Chi Minh City",
+                                                            "latitude": 10.7768891,
+                                                            "longitude": 106.7008066,
+                                                            "isDefault": true,
+                                                            "createdAt": "2026-11-12T02:00:00Z",
+                                                            "updatedAt": "2026-11-12T02:00:00Z"
+                                                          }
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "Validation failed or malformed JSON payload",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "VALIDATION_FAILED",
+                                                          "message": "Invalid request payload",
+                                                          "status": 400,
+                                                          "timestamp": "2026-11-12T02:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": [
+                                                            {
+                                                              "field": "fullAddress",
+                                                              "message": "fullAddress must not exceed 255 characters"
+                                                            }
+                                                          ]
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "Missing, expired, or invalid authentication",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "UNAUTHORIZED",
+                                                          "message": "Authentication is required.",
+                                                          "status": 401,
+                                                          "timestamp": "2026-11-12T02:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "Caller is not an active CUSTOMER account",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "FORBIDDEN",
+                                                          "message": "Access is denied.",
+                                                          "status": 403,
+                                                          "timestamp": "2026-11-12T02:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "Authenticated user account not found",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "USER_NOT_FOUND",
+                                                          "message": "Account not found.",
+                                                          "status": 404,
+                                                          "timestamp": "2026-11-12T02:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "500",
+                description = "Unexpected storage or server failure",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                schema = @Schema(implementation = ErrorResponse.class),
+                                examples =
+                                        @ExampleObject(
+                                                value =
+                                                        """
+                                                        {
+                                                          "code": "INTERNAL_SERVER_ERROR",
+                                                          "message": "An unexpected error occurred",
+                                                          "status": 500,
+                                                          "timestamp": "2026-11-12T02:00:00Z",
+                                                          "traceId": "trace-123",
+                                                          "details": []
+                                                        }
+                                                        """)))
+    })
+    public ResponseEntity<ApiResponse<UserAddressResponse>> addAddress(
+            Authentication authentication,
+            @Valid @RequestBody AddUserAddressRequest request) {
+        ensureAuthenticated(authentication);
+        UserAddressResponse created =
+                addUserAddressUseCase.execute(authentication.getName(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(created));
+    }
+
+    private void ensureAuthenticated(Authentication authentication) {
         if (authentication == null
                 || !authentication.isAuthenticated()
                 || authentication instanceof AnonymousAuthenticationToken) {
             throw new AuthenticationCredentialsNotFoundException("Authentication is required.");
         }
-        List<UserAddressResponse> addresses =
-                listUserAddressesUseCase.execute(authentication.getName());
-        return ResponseEntity.ok(ApiResponse.success(addresses));
     }
 }

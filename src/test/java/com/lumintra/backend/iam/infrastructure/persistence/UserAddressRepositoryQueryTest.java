@@ -188,4 +188,69 @@ class UserAddressRepositoryQueryTest {
         assertThat(result).isEmpty();
         assertThat(userAddressRepository.findAllByCustomerIdOrdered(99L)).hasSize(1);
     }
+
+    @Test
+    @DisplayName(
+            "IAM-23 UTCID01 [B]: AC04 existsByCustomerId distinguishes customer with no addresses from other customers")
+    void existsByCustomerId_checksStrictCustomerOwnership() {
+        persistAddress(
+                99L,
+                "Other Customer",
+                true,
+                Instant.parse("2026-11-10T01:00:00Z"),
+                Instant.parse("2026-11-10T01:00:00Z"));
+        entityManager.clear();
+
+        assertThat(userAddressRepository.existsByCustomerId(42L)).isFalse();
+        assertThat(userAddressRepository.existsByCustomerId(99L)).isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-23 UTCID02 [N]: AC04 clearDefaultByCustomerId resets only target customer's default flag")
+    void clearDefaultByCustomerId_clearsOnlyTargetCustomerDefaults() {
+        UserAddressEntity customer42OldDefault =
+                persistAddress(
+                        42L,
+                        "Customer 42 Old Default",
+                        true,
+                        Instant.parse("2026-11-01T01:00:00Z"),
+                        Instant.parse("2026-11-01T01:00:00Z"));
+        UserAddressEntity customer99Default =
+                persistAddress(
+                        99L,
+                        "Customer 99 Default",
+                        true,
+                        Instant.parse("2026-11-01T01:00:00Z"),
+                        Instant.parse("2026-11-01T01:00:00Z"));
+        entityManager.clear();
+
+        int clearedCount = userAddressRepository.clearDefaultByCustomerId(42L);
+
+        UserAddressEntity customer42NewDefault =
+                userAddressRepository.saveAndFlush(
+                        UserAddressEntity.create(
+                                42L,
+                                "Customer 42 New Default",
+                                "0901234567",
+                                "45 Le Loi, District 1, HCMC",
+                                new BigDecimal("10.7731000"),
+                                new BigDecimal("106.7012000"),
+                                true));
+        entityManager.clear();
+
+        assertThat(clearedCount).isEqualTo(1);
+        assertThat(userAddressRepository.findById(customer42OldDefault.getAddressId()))
+                .get()
+                .extracting(UserAddressEntity::isDefault)
+                .isEqualTo(false);
+        assertThat(userAddressRepository.findById(customer42NewDefault.getAddressId()))
+                .get()
+                .extracting(UserAddressEntity::isDefault)
+                .isEqualTo(true);
+        assertThat(userAddressRepository.findById(customer99Default.getAddressId()))
+                .get()
+                .extracting(UserAddressEntity::isDefault)
+                .isEqualTo(true);
+    }
 }
