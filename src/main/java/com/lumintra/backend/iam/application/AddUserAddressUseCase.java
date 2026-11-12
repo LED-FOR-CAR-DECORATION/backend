@@ -45,7 +45,8 @@ public class AddUserAddressUseCase {
             throw new AccessDeniedException("Customer account is required.");
         }
 
-        boolean hasExistingAddresses = userAddressRepository.existsByCustomerId(customerId);
+        boolean hasExistingAddresses =
+                userAddressRepository.existsByCustomerIdAndIsDeletedFalse(customerId);
         boolean effectiveIsDefault = !hasExistingAddresses || Boolean.TRUE.equals(request.isDefault());
 
         if (hasExistingAddresses && effectiveIsDefault) {

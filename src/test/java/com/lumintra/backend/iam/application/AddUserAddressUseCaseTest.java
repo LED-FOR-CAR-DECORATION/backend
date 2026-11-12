@@ -71,7 +71,7 @@ class AddUserAddressUseCaseTest {
                         false);
 
         when(userAccountRepository.findById(42L)).thenReturn(Optional.of(activeCustomerAccount));
-        when(userAddressRepository.existsByCustomerId(42L)).thenReturn(false);
+        when(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(42L)).thenReturn(false);
         when(userAddressRepository.saveAndFlush(any(UserAddressEntity.class)))
                 .thenAnswer(
                         invocation -> {
@@ -117,7 +117,7 @@ class AddUserAddressUseCaseTest {
                         true);
 
         when(userAccountRepository.findById(42L)).thenReturn(Optional.of(activeCustomerAccount));
-        when(userAddressRepository.existsByCustomerId(42L)).thenReturn(true);
+        when(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(42L)).thenReturn(true);
         when(userAddressRepository.clearDefaultByCustomerId(42L)).thenReturn(1);
         when(userAddressRepository.saveAndFlush(any(UserAddressEntity.class)))
                 .thenAnswer(
@@ -133,7 +133,7 @@ class AddUserAddressUseCaseTest {
         UserAddressResponse response = useCase.execute("42", request);
 
         InOrder ordered = inOrder(userAddressRepository);
-        ordered.verify(userAddressRepository).existsByCustomerId(42L);
+        ordered.verify(userAddressRepository).existsByCustomerIdAndIsDeletedFalse(42L);
         ordered.verify(userAddressRepository).clearDefaultByCustomerId(42L);
         ordered.verify(userAddressRepository).saveAndFlush(any(UserAddressEntity.class));
 
@@ -157,7 +157,7 @@ class AddUserAddressUseCaseTest {
                         false);
 
         when(userAccountRepository.findById(42L)).thenReturn(Optional.of(activeCustomerAccount));
-        when(userAddressRepository.existsByCustomerId(42L)).thenReturn(true);
+        when(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(42L)).thenReturn(true);
         when(userAddressRepository.saveAndFlush(any(UserAddressEntity.class)))
                 .thenAnswer(
                         invocation -> {
@@ -231,12 +231,35 @@ class AddUserAddressUseCaseTest {
     @DisplayName("IAM-23 UTCID08 [A]: AC05 persistence failure propagates cleanly without swallowing")
     void execute_databaseOutage_propagatesException() {
         when(userAccountRepository.findById(42L)).thenReturn(Optional.of(activeCustomerAccount));
-        when(userAddressRepository.existsByCustomerId(42L)).thenReturn(false);
+        when(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(42L)).thenReturn(false);
         when(userAddressRepository.saveAndFlush(any(UserAddressEntity.class)))
                 .thenThrow(new DataAccessResourceFailureException("PostgreSQL unavailable"));
 
         assertThatThrownBy(() -> useCase.execute("42", sampleRequest(false)))
                 .isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    @DisplayName(
+            "IAM-25 UTCID09 [B]: AC04 when all previous addresses were soft-deleted, newly added address auto-defaults to true")
+    void execute_onlySoftDeletedHistoryAddresses_forcesDefaultTrue() {
+        var request = sampleRequest(false);
+
+        when(userAccountRepository.findById(42L)).thenReturn(Optional.of(activeCustomerAccount));
+        when(userAddressRepository.existsByCustomerIdAndIsDeletedFalse(42L)).thenReturn(false);
+        when(userAddressRepository.saveAndFlush(any(UserAddressEntity.class)))
+                .thenAnswer(
+                        invocation -> {
+                            UserAddressEntity arg = invocation.getArgument(0);
+                            arg.setAddressId(20L);
+                            return arg;
+                        });
+
+        UserAddressResponse response = useCase.execute("42", request);
+
+        assertThat(response.addressId()).isEqualTo(20L);
+        assertThat(response.isDefault()).isTrue();
+        verify(userAddressRepository, never()).clearDefaultByCustomerId(any());
     }
 
     private AddUserAddressRequest sampleRequest(boolean isDefault) {

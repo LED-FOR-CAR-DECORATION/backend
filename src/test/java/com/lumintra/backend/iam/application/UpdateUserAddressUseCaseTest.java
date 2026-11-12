@@ -82,7 +82,7 @@ class UpdateUserAddressUseCaseTest {
                         new BigDecimal("106.698765432"));
 
         when(userAccountRepository.findById(42L)).thenReturn(Optional.of(activeCustomerAccount));
-        when(userAddressRepository.findByAddressIdAndCustomerId(10L, 42L))
+        when(userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(10L, 42L))
                 .thenReturn(Optional.of(existing));
         when(userAddressRepository.saveAndFlush(existing))
                 .thenAnswer(
@@ -130,7 +130,7 @@ class UpdateUserAddressUseCaseTest {
                         false);
 
         when(userAccountRepository.findById(42L)).thenReturn(Optional.of(activeCustomerAccount));
-        when(userAddressRepository.findByAddressIdAndCustomerId(11L, 42L))
+        when(userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(11L, 42L))
                 .thenReturn(Optional.of(existing));
         when(userAddressRepository.saveAndFlush(existing)).thenReturn(existing);
 
@@ -146,7 +146,7 @@ class UpdateUserAddressUseCaseTest {
             "IAM-24 UTCID03 [A]: AC02 missing address or address owned by another customer throws AddressNotFoundException (404)")
     void execute_missingOrForeignAddress_throwsAddressNotFound() {
         when(userAccountRepository.findById(42L)).thenReturn(Optional.of(activeCustomerAccount));
-        when(userAddressRepository.findByAddressIdAndCustomerId(99L, 42L))
+        when(userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(99L, 42L))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute("42", 99L, sampleRequest()))
@@ -236,7 +236,7 @@ class UpdateUserAddressUseCaseTest {
                         new BigDecimal("106.7008060"),
                         true);
         when(userAccountRepository.findById(42L)).thenReturn(Optional.of(activeCustomerAccount));
-        when(userAddressRepository.findByAddressIdAndCustomerId(10L, 42L))
+        when(userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(10L, 42L))
                 .thenReturn(Optional.of(existing));
         when(userAddressRepository.saveAndFlush(any(UserAddressEntity.class)))
                 .thenThrow(new DataAccessResourceFailureException("PostgreSQL unavailable"));
