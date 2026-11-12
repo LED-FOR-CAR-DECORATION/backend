@@ -95,7 +95,7 @@ jobs:
           registryUsername: ${{ secrets.REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.REGISTRY_PASSWORD }}
 
-          environmentVariables: |
+          environmentVariables: >
             SPRING_PROFILES_ACTIVE=dev
             DEV_DB_URL=${{ secrets.DB_URL }}
             DEV_DB_USERNAME=${{ secrets.DB_USERNAME }}

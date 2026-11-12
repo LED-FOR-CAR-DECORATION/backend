@@ -22,7 +22,7 @@ public class UserAddressLookupServiceImpl implements UserAddressLookupService {
         if (addressId == null || customerId == null) {
             return Optional.empty();
         }
-        return userAddressRepository.findByAddressIdAndCustomerId(addressId, customerId)
+        return userAddressRepository.findByAddressIdAndCustomerIdAndIsDeletedFalse(addressId, customerId)
                 .map(this::toSnapshot);
     }
 
