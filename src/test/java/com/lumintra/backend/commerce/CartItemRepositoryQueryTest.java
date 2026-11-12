@@ -16,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -163,5 +164,60 @@ class CartItemRepositoryQueryTest {
         assertThat(remaining).hasSize(1);
         assertThat(remaining.get(0).getCartItemId()).isEqualTo(secondItem.getCartItemId());
         assertThat(remaining.get(0).getProductId()).isEqualTo(30L);
+    }
+
+    @Test
+    @DisplayName("COM-05 UTCID06 [N]: AC04 bulk deleteAllByCartId removes all target cart items only, retains parent cart with refreshed updatedAt, and leaves other customer carts untouched")
+    void deleteAllByCartId_clearsAllTargetCartItemsOnlyAndPreservesOtherCustomerCart() {
+        CartEntity customerCart = cartRepository.save(CartEntity.create(42L));
+        CartEntity otherCart = cartRepository.save(CartEntity.create(99L));
+        cartItemRepository.save(CartItemEntity.create(customerCart, 12L, 2, new BigDecimal("350000.00")));
+        cartItemRepository.save(CartItemEntity.create(customerCart, 30L, 1, new BigDecimal("59000.00")));
+        cartItemRepository.save(CartItemEntity.create(customerCart, 31L, 1, new BigDecimal("99000.00")));
+        CartItemEntity otherItem = cartItemRepository.save(
+                CartItemEntity.create(otherCart, 12L, 4, new BigDecimal("350000.00"))
+        );
+        entityManager.flush();
+
+        Instant oldUpdatedAt = Instant.parse("2026-11-10T01:00:00Z");
+        entityManager.createQuery("UPDATE CartEntity c SET c.updatedAt = :old WHERE c.cartId = :id")
+                .setParameter("old", oldUpdatedAt)
+                .setParameter("id", customerCart.getCartId())
+                .executeUpdate();
+        entityManager.clear();
+
+        CartEntity managedCart = cartRepository.findByCustomerId(42L).orElseThrow();
+        int deletedCount = cartItemRepository.deleteAllByCartId(managedCart.getCartId());
+        managedCart.touch();
+        cartRepository.save(managedCart);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(deletedCount).isEqualTo(3);
+        assertThat(cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(customerCart.getCartId())).isEmpty();
+        CartEntity retainedCart = cartRepository.findByCustomerId(42L).orElseThrow();
+        assertThat(retainedCart.getCartId()).isEqualTo(customerCart.getCartId());
+        assertThat(retainedCart.getUpdatedAt()).isAfter(oldUpdatedAt);
+
+        var otherItems = cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(otherCart.getCartId());
+        assertThat(otherItems).hasSize(1);
+        assertThat(otherItems.get(0).getCartItemId()).isEqualTo(otherItem.getCartItemId());
+        assertThat(otherItems.get(0).getQuantity()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("COM-05 UTCID07 [B]: AC02 & AC04 bulk deleteAllByCartId on empty cart returns 0 and keeps cart intact")
+    void deleteAllByCartId_onEmptyCart_returnsZeroAndKeepsCartIntact() {
+        CartEntity emptyCart = cartRepository.save(CartEntity.create(42L));
+        entityManager.flush();
+        entityManager.clear();
+
+        int deletedCount = cartItemRepository.deleteAllByCartId(emptyCart.getCartId());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(deletedCount).isZero();
+        assertThat(cartRepository.findByCustomerId(42L)).isPresent();
+        assertThat(cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(emptyCart.getCartId())).isEmpty();
     }
 }

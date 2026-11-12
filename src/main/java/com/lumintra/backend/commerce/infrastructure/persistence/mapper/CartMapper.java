@@ -8,12 +8,17 @@ import com.lumintra.backend.store.domain.model.ProductSnapshot;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 @Component
 public class CartMapper {
+
+    public CartResponse toEmptyCartResponse(Instant updatedAt) {
+        return new CartResponse(null, Collections.emptyList(), updatedAt);
+    }
 
     public CartResponse toCartResponse(
             CartEntity cart,

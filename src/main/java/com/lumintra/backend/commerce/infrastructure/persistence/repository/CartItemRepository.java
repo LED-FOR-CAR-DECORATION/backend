@@ -2,6 +2,7 @@ package com.lumintra.backend.commerce.infrastructure.persistence.repository;
 
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.CartItemEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -29,4 +30,11 @@ public interface CartItemRepository extends JpaRepository<CartItemEntity, Long> 
             @Param("cartItemId") Long cartItemId,
             @Param("customerId") Long customerId
     );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            DELETE FROM CartItemEntity ci
+            WHERE ci.cart.cartId = :cartId
+            """)
+    int deleteAllByCartId(@Param("cartId") Long cartId);
 }

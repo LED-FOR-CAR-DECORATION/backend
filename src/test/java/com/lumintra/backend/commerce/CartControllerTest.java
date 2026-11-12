@@ -5,6 +5,7 @@ import com.lumintra.backend.commerce.api.request.AddCartItemRequest;
 import com.lumintra.backend.commerce.api.request.UpdateCartItemQuantityRequest;
 import com.lumintra.backend.commerce.api.response.CartResponse;
 import com.lumintra.backend.commerce.application.AddCartItemUseCase;
+import com.lumintra.backend.commerce.application.ClearCartUseCase;
 import com.lumintra.backend.commerce.application.RemoveCartItemUseCase;
 import com.lumintra.backend.commerce.application.UpdateCartItemQuantityUseCase;
 import com.lumintra.backend.commerce.application.ViewCartUseCase;
@@ -34,6 +35,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -64,6 +66,9 @@ class CartControllerTest {
 
     @MockitoBean
     private RemoveCartItemUseCase removeCartItemUseCase;
+
+    @MockitoBean
+    private ClearCartUseCase clearCartUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -551,5 +556,75 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
 
         verifyNoInteractions(removeCartItemUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-05 UTCID01 [N]: DELETE /api/cart as CUSTOMER with existing cart returns 200 OK with retained cartId and empty items")
+    void clearCart_asCustomerWithExistingCart_returns200WithEmptyItemsAndRetainedCartId() throws Exception {
+        Instant updatedAt = Instant.parse("2026-11-11T17:00:00Z");
+        when(clearCartUseCase.execute(42L))
+                .thenReturn(new CartResponse(101L, List.of(), updatedAt));
+
+        mockMvc.perform(delete("/api/cart")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cartId").value(101))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.data.updatedAt").value("2026-11-11T17:00:00Z"))
+                .andExpect(jsonPath("$.meta").doesNotExist());
+
+        verify(clearCartUseCase).execute(42L);
+    }
+
+    @Test
+    @DisplayName("COM-05 UTCID02 [B]: DELETE /api/cart as CUSTOMER without cart returns 200 OK with null cartId and empty items")
+    void clearCart_asCustomerWithoutCart_returns200WithNullCartIdAndEmptyItems() throws Exception {
+        Instant updatedAt = Instant.parse("2026-11-11T17:00:00Z");
+        when(clearCartUseCase.execute(42L))
+                .thenReturn(new CartResponse(null, List.of(), updatedAt));
+
+        mockMvc.perform(delete("/api/cart")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cartId").value(nullValue()))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.data.updatedAt").value("2026-11-11T17:00:00Z"))
+                .andExpect(jsonPath("$.meta").doesNotExist());
+
+        verify(clearCartUseCase).execute(42L);
+    }
+
+    @Test
+    @DisplayName("COM-05 UTCID03 [A]: DELETE /api/cart enforces CUSTOMER role and valid numeric principal")
+    void clearCart_unauthorizedForbiddenAndInvalidPrincipal_return401And403() throws Exception {
+        mockMvc.perform(delete("/api/cart"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(delete("/api/cart")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        mockMvc.perform(delete("/api/cart")
+                        .with(SecurityMockMvcRequestPostProcessors.user("not-a-number").roles("CUSTOMER")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+
+        verifyNoInteractions(clearCartUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-05 UTCID04 [A]: DELETE /api/cart returns safe 500 INTERNAL_SERVER_ERROR on unexpected infrastructure failure")
+    void clearCart_unexpectedUseCaseError_returns500ErrorResponse() throws Exception {
+        when(clearCartUseCase.execute(42L)).thenThrow(new RuntimeException("Database unavailable"));
+
+        mockMvc.perform(delete("/api/cart")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.status").value(500));
     }
 }
