@@ -1,6 +1,9 @@
 package com.lumintra.backend.commerce;
 
 import com.lumintra.backend.commerce.api.controller.OrderController;
+import com.lumintra.backend.commerce.api.request.CancelOrderRequest;
+import com.lumintra.backend.commerce.api.response.CancelOrderResponse;
+import com.lumintra.backend.commerce.application.CancelOrderUseCase;
 import com.lumintra.backend.commerce.api.request.CheckoutRequest;
 import com.lumintra.backend.commerce.api.request.OrderFilterRequest;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
@@ -74,6 +77,9 @@ class OrderControllerTest {
 
     @MockitoBean
     private ConfirmOrderDeliveryUseCase confirmOrderDeliveryUseCase;
+
+    @MockitoBean
+    private CancelOrderUseCase cancelOrderUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -681,6 +687,129 @@ class OrderControllerTest {
                 .thenThrow(new IllegalStateException("DB unreachable"));
 
         mockMvc.perform(post("/api/orders/109/confirm-delivery")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
+
+    @Test
+    @DisplayName("COM-09 UTCID01 [N]: POST /api/orders/{id}/cancel as CUSTOMER returns 200 OK with CancelOrderResponse (with and without body)")
+    void cancel_asCustomer_returns200OkWithSummary() throws Exception {
+        Instant updatedAt = Instant.parse("2026-11-13T10:00:00Z");
+        CancelOrderResponse response = new CancelOrderResponse(
+                101L,
+                OrderStatus.PENDING_PAYMENT,
+                OrderStatus.CANCELED,
+                updatedAt
+        );
+
+        when(cancelOrderUseCase.execute(eq(42L), eq(101L), any())).thenReturn(response);
+
+        // Subcase 1: POST without request body
+        mockMvc.perform(post("/api/orders/101/cancel")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderId").value(101))
+                .andExpect(jsonPath("$.data.previousStatus").value("PENDING_PAYMENT"))
+                .andExpect(jsonPath("$.data.status").value("CANCELED"))
+                .andExpect(jsonPath("$.data.updatedAt").value("2026-11-13T10:00:00Z"))
+                .andExpect(jsonPath("$.meta").doesNotExist());
+
+        // Subcase 2: POST with valid JSON body containing reason
+        CancelOrderResponse refundedResponse = new CancelOrderResponse(
+                102L,
+                OrderStatus.PROCESSING,
+                OrderStatus.REFUNDED,
+                updatedAt
+        );
+        when(cancelOrderUseCase.execute(eq(42L), eq(102L), any())).thenReturn(refundedResponse);
+
+        mockMvc.perform(post("/api/orders/102/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\": \"Found a better alternative\"}")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderId").value(102))
+                .andExpect(jsonPath("$.data.previousStatus").value("PROCESSING"))
+                .andExpect(jsonPath("$.data.status").value("REFUNDED"))
+                .andExpect(jsonPath("$.data.updatedAt").value("2026-11-13T10:00:00Z"));
+
+        verify(cancelOrderUseCase).execute(eq(42L), eq(101L), any());
+        verify(cancelOrderUseCase).execute(eq(42L), eq(102L), any());
+    }
+
+    @Test
+    @DisplayName("COM-09 UTCID02 [B]: POST /api/orders/{id}/cancel rejects invalid path ID (non-numeric, <= 0) and excessive reason with 400 VALIDATION_FAILED")
+    void cancel_invalidPathIdOrBody_returns400ValidationFailed() throws Exception {
+        for (String badId : new String[]{"abc", "0", "-5"}) {
+            mockMvc.perform(post("/api/orders/" + badId + "/cancel")
+                            .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.details[0].field").value("id"));
+        }
+
+        String longReason = "a".repeat(501);
+        mockMvc.perform(post("/api/orders/101/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\": \"" + longReason + "\"}")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details[0].field").value("reason"));
+
+        verifyNoInteractions(cancelOrderUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-09 UTCID03 [A]: POST /api/orders/{id}/cancel denies unauthenticated (401), non-CUSTOMER roles (403), and non-numeric principal (401)")
+    void cancel_unauthorizedAndForbidden_returns401And403() throws Exception {
+        mockMvc.perform(post("/api/orders/101/cancel"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        for (String role : new String[]{"STAFF", "MANAGER", "ADMIN", "DESIGNER"}) {
+            mockMvc.perform(post("/api/orders/101/cancel")
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles(role)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+
+        mockMvc.perform(post("/api/orders/101/cancel")
+                        .with(SecurityMockMvcRequestPostProcessors.user("not-a-number").roles("CUSTOMER")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+
+        verifyNoInteractions(cancelOrderUseCase);
+    }
+
+    @Test
+    @DisplayName("COM-09 UTCID04 [A]: POST /api/orders/{id}/cancel maps 404 ORDER_NOT_FOUND, 409 INVALID_ORDER_STATUS_TRANSITION, and 500 INTERNAL_SERVER_ERROR")
+    void cancel_useCaseExceptions_mapToExpectedErrorResponses() throws Exception {
+        when(cancelOrderUseCase.execute(eq(42L), eq(999L), any()))
+                .thenThrow(new OrderNotFoundException("Order not found."));
+
+        mockMvc.perform(post("/api/orders/999/cancel")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Order not found."));
+
+        when(cancelOrderUseCase.execute(eq(42L), eq(101L), any()))
+                .thenThrow(new OrderStatusTransitionException(
+                        "Cannot cancel order with status SHIPPING. Only PENDING_PAYMENT or PROCESSING orders can be cancelled."));
+
+        mockMvc.perform(post("/api/orders/101/cancel")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_ORDER_STATUS_TRANSITION"))
+                .andExpect(jsonPath("$.message").value(
+                        "Cannot cancel order with status SHIPPING. Only PENDING_PAYMENT or PROCESSING orders can be cancelled."));
+
+        when(cancelOrderUseCase.execute(eq(42L), eq(102L), any()))
+                .thenThrow(new IllegalStateException("Database connection pool exhausted"));
+
+        mockMvc.perform(post("/api/orders/102/cancel")
                         .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER")))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));

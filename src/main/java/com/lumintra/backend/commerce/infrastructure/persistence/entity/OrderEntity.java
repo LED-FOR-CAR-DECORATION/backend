@@ -156,4 +156,28 @@ public class OrderEntity {
                             + ". Only PROCESSING or PARTIALLY_FULFILLED orders can be dispatched.");
         }
     }
+
+    public boolean canCustomerCancel() {
+        return this.status == OrderStatus.PENDING_PAYMENT || this.status == OrderStatus.PROCESSING;
+    }
+
+    public OrderStatus resolveCustomerCancelTargetStatus() {
+        if (this.status == OrderStatus.PENDING_PAYMENT) {
+            return OrderStatus.CANCELED;
+        }
+        if (this.status == OrderStatus.PROCESSING) {
+            return OrderStatus.REFUNDED;
+        }
+        throw new OrderStatusTransitionException(
+                "Cannot cancel order with status " + this.status
+                        + ". Only PENDING_PAYMENT or PROCESSING orders can be cancelled.");
+    }
+
+    public void validateCustomerCancel() {
+        if (!canCustomerCancel()) {
+            throw new OrderStatusTransitionException(
+                    "Cannot cancel order with status " + this.status
+                            + ". Only PENDING_PAYMENT or PROCESSING orders can be cancelled.");
+        }
+    }
 }

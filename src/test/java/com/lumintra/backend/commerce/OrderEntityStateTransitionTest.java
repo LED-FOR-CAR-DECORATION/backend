@@ -136,4 +136,41 @@ class OrderEntityStateTransitionTest {
             assertThat(entity.getStatus()).isEqualTo(status);
         }
     }
+
+    @Test
+    @DisplayName("COM-09 UTCID01 [N]: OrderEntity permits customer cancel for PENDING_PAYMENT (resolves CANCELED) and PROCESSING (resolves REFUNDED)")
+    void validateCustomerCancel_allowedStatuses_succeedsAndResolvesCorrectTarget() {
+        OrderEntity pending = orderWithStatus(OrderStatus.PENDING_PAYMENT);
+        assertThat(pending.canCustomerCancel()).isTrue();
+        pending.validateCustomerCancel();
+        assertThat(pending.resolveCustomerCancelTargetStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(pending.getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
+
+        OrderEntity processing = orderWithStatus(OrderStatus.PROCESSING);
+        assertThat(processing.canCustomerCancel()).isTrue();
+        processing.validateCustomerCancel();
+        assertThat(processing.resolveCustomerCancelTargetStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(processing.getStatus()).isEqualTo(OrderStatus.PROCESSING);
+    }
+
+    @Test
+    @DisplayName("COM-09 UTCID02 [A]: OrderEntity rejects customer cancel for all non-cancellable statuses")
+    void validateCustomerCancel_disallowedStatuses_throwsWithoutMutatingStatus() {
+        for (OrderStatus status : OrderStatus.values()) {
+            if (status == OrderStatus.PENDING_PAYMENT || status == OrderStatus.PROCESSING) {
+                continue;
+            }
+            OrderEntity entity = orderWithStatus(status);
+            assertThat(entity.canCustomerCancel()).isFalse();
+            assertThatThrownBy(entity::validateCustomerCancel)
+                    .isInstanceOf(OrderStatusTransitionException.class)
+                    .hasMessageContaining(status.name())
+                    .hasMessageContaining("Only PENDING_PAYMENT or PROCESSING orders can be cancelled.");
+            assertThatThrownBy(entity::resolveCustomerCancelTargetStatus)
+                    .isInstanceOf(OrderStatusTransitionException.class)
+                    .hasMessageContaining(status.name())
+                    .hasMessageContaining("Only PENDING_PAYMENT or PROCESSING orders can be cancelled.");
+            assertThat(entity.getStatus()).isEqualTo(status);
+        }
+    }
 }
