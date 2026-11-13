@@ -22,6 +22,6 @@ public class LedModelCreationServiceImpl implements LedModelCreationService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void createForProduct(
             long productId, String modelName, Map<String, Object> spec, long stockQuantity) {
-        entityManager.persist(LedModelEntity.create(productId, modelName, spec, stockQuantity));
+        entityManager.persist(LedModelEntity.createForProduct(productId, modelName, spec, stockQuantity));
     }
 }
