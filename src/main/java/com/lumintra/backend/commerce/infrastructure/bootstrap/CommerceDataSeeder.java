@@ -1,5 +1,6 @@
 package com.lumintra.backend.commerce.infrastructure.bootstrap;
 
+import com.lumintra.backend.character.domain.service.CharacterLookupService;
 import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.OrderType;
@@ -44,15 +45,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Component
-@Order(2)
+@Order(3)
 @RequiredArgsConstructor
 public class CommerceDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(CommerceDataSeeder.class);
 
-    private static final BigDecimal DEFAULT_PHYSICAL_PRICE = new BigDecimal("250000.00");
-    private static final BigDecimal DEFAULT_DIGITAL_PRICE = new BigDecimal("50000.00");
-    private static final BigDecimal DEFAULT_SUBSCRIPTION_PRICE = new BigDecimal("99000.00");
     private static final BigDecimal WEBHOOK_TEST_ORDER_AMOUNT = new BigDecimal("10000.00");
     private static final String LEGACY_SEED_PREFIX = "LMT-SEED-TXN-";
     private static final String LEGACY_SEED_MARKER = "LMT-SEED-TXN-001";
@@ -69,6 +67,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
     private final OwnedCharacterRepository ownedCharacterRepository;
     private final CustomerLookupService customerLookupService;
     private final ProductLookupService productLookupService;
+    private final CharacterLookupService characterLookupService;
 
     @Value("${app.seed.test-customer-email:customer123@gmail.com}")
     private String customerEmail;
@@ -84,10 +83,14 @@ public class CommerceDataSeeder implements ApplicationRunner {
             return;
         }
 
+        ProductSeedContext products = resolveProducts();
+        if (products == null) {
+            log.warn("Required Store products (LED, CHARACTER, SUBSCRIPTION) not found in database. Skipping Commerce seed data.");
+            return;
+        }
+
         Long customerId = customer.customerId();
         log.info("Resolved customer for Commerce seeding [customerId={}] [email={}]", customerId, customer.email());
-
-        ProductSeedContext products = resolveProducts();
 
         seedShoppingCart(customerId, products);
         seedOrders(customerId, customer, products);
@@ -106,41 +109,50 @@ public class CommerceDataSeeder implements ApplicationRunner {
     private ProductSeedContext resolveProducts() {
         List<ProductSnapshot> allProducts = productLookupService.findAllSnapshots();
 
-        ProductSnapshot physical = allProducts.stream()
-                .filter(p -> p.productType() == ProductType.LED && p.status() == ProductStatus.PUBLISHED)
-                .findFirst()
-                .or(() -> allProducts.stream().filter(p -> p.productType() == ProductType.LED).findFirst())
-                .orElse(null);
+        ProductSnapshot physical = findPreferredProduct(allProducts, ProductType.LED);
+        ProductSnapshot digital = findPreferredProduct(allProducts, ProductType.CHARACTER);
+        ProductSnapshot subscription = findPreferredProduct(allProducts, ProductType.SUBSCRIPTION);
 
-        ProductSnapshot digital = allProducts.stream()
-                .filter(p -> p.productType() == ProductType.CHARACTER && p.status() == ProductStatus.PUBLISHED)
-                .findFirst()
-                .or(() -> allProducts.stream().filter(p -> p.productType() == ProductType.CHARACTER).findFirst())
-                .orElse(null);
+        if (!isValidSeedProduct(physical) || !isValidSeedProduct(digital) || !isValidSeedProduct(subscription)) {
+            return null;
+        }
 
-        ProductSnapshot subscription = allProducts.stream()
-                .filter(p -> p.productType() == ProductType.SUBSCRIPTION && p.status() == ProductStatus.PUBLISHED)
-                .findFirst()
-                .or(() -> allProducts.stream().filter(p -> p.productType() == ProductType.SUBSCRIPTION).findFirst())
-                .orElse(null);
-
-        Long physicalId = physical != null ? physical.productId() : 1L;
-        BigDecimal physicalPrice = physical != null && physical.basePrice() != null
-                ? physical.basePrice() : DEFAULT_PHYSICAL_PRICE;
-
-        Long digitalId = digital != null ? digital.productId() : 2L;
-        BigDecimal digitalPrice = digital != null && digital.basePrice() != null
-                ? digital.basePrice() : DEFAULT_DIGITAL_PRICE;
-
-        Long subscriptionId = subscription != null ? subscription.productId() : 3L;
-        BigDecimal subscriptionPrice = subscription != null && subscription.basePrice() != null
-                ? subscription.basePrice() : DEFAULT_SUBSCRIPTION_PRICE;
+        Long ownedCharacterVersionId = resolveOwnedCharacterVersionId(allProducts, digital.productId());
 
         return new ProductSeedContext(
-                physicalId, physicalPrice,
-                digitalId, digitalPrice,
-                subscriptionId, subscriptionPrice
+                physical.productId(), physical.basePrice(),
+                digital.productId(), digital.basePrice(),
+                subscription.productId(), subscription.basePrice(),
+                ownedCharacterVersionId
         );
+    }
+
+    private ProductSnapshot findPreferredProduct(List<ProductSnapshot> allProducts, ProductType type) {
+        return allProducts.stream()
+                .filter(p -> p.productType() == type && p.status() == ProductStatus.PUBLISHED)
+                .findFirst()
+                .or(() -> allProducts.stream().filter(p -> p.productType() == type).findFirst())
+                .orElse(null);
+    }
+
+    private boolean isValidSeedProduct(ProductSnapshot product) {
+        return product != null && product.productId() != null && product.basePrice() != null;
+    }
+
+    private Long resolveOwnedCharacterVersionId(List<ProductSnapshot> allProducts, Long cartDigitalProductId) {
+        return allProducts.stream()
+                .filter(p -> p.productType() == ProductType.CHARACTER
+                        && p.productId() != null
+                        && !p.productId().equals(cartDigitalProductId)
+                        && p.status() == ProductStatus.ARCHIVED)
+                .findFirst()
+                .or(() -> allProducts.stream()
+                        .filter(p -> p.productType() == ProductType.CHARACTER
+                                && p.productId() != null
+                                && !p.productId().equals(cartDigitalProductId))
+                        .reduce((first, second) -> second))
+                .flatMap(candidate -> characterLookupService.findVersionIdByProductId(candidate.productId()))
+                .orElse(null);
     }
 
     private void seedShoppingCart(Long customerId, ProductSeedContext products) {
@@ -530,11 +542,16 @@ public class CommerceDataSeeder implements ApplicationRunner {
                     customerId, products.subscriptionId());
         }
 
-        // Seed an owned character (version 99L) so customer character library is populated without conflicting with cart checkout
-        if (!ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(customerId, 99L)) {
-            OwnedCharacterEntity owned = OwnedCharacterEntity.create(customerId, 99L, null);
+        Long ownedVersionId = products.ownedCharacterVersionId();
+        if (ownedVersionId == null) {
+            log.info("No separate seeded character version available for owned library. Skipping owned character seeding.");
+            return;
+        }
+
+        if (!ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(customerId, ownedVersionId)) {
+            OwnedCharacterEntity owned = OwnedCharacterEntity.create(customerId, ownedVersionId, null);
             ownedCharacterRepository.save(owned);
-            log.info("Seeded active owned character [customerId={}] [versionId=99]", customerId);
+            log.info("Seeded active owned character [customerId={}] [versionId={}]", customerId, ownedVersionId);
         }
     }
 
@@ -639,7 +656,8 @@ public class CommerceDataSeeder implements ApplicationRunner {
     private record ProductSeedContext(
             Long physicalId, BigDecimal physicalPrice,
             Long digitalId, BigDecimal digitalPrice,
-            Long subscriptionId, BigDecimal subscriptionPrice
+            Long subscriptionId, BigDecimal subscriptionPrice,
+            Long ownedCharacterVersionId
     ) {}
 
     private record ItemSeed(Long productId, int quantity, BigDecimal unitPrice) {}

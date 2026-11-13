@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface SubscriptionDetailRepository extends JpaRepository<SubscriptionDetailEntity, Long> {
     Optional<SubscriptionDetailEntity> findByProductId(Long productId);
+
+    Optional<SubscriptionDetailEntity> findByPlanCode(String planCode);
 }
