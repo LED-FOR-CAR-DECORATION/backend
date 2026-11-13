@@ -16,6 +16,7 @@ import org.springframework.test.context.ContextConfiguration;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -108,5 +109,64 @@ class PaymentTransactionRepositoryTest {
         assertThat(reloaded.getStatus()).isEqualTo(PaymentTransactionEntity.DB_STATUS_SUCCESS);
         assertThat(reloaded.getPaymentStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(reloaded.getPaidAt()).isEqualTo(paidAt);
+    }
+
+    @Test
+    @DisplayName("PAY-03 [N]: findAllPendingTransactions returns only PENDING rows ordered ASC and markAsExpiredIfPending expires once")
+    void findAllPendingTransactionsAndMarkAsExpiredIfPending_worksAtomically() {
+        PaymentTransactionEntity firstPending = PaymentTransactionEntity.createPending(
+                301L,
+                "SEPAY",
+                "LMTORD301FIRST111",
+                new BigDecimal("100000.00")
+        );
+        entityManager.persist(firstPending);
+
+        PaymentTransactionEntity succeeded = PaymentTransactionEntity.createPending(
+                302L,
+                "SEPAY",
+                "LMTORD302PAID2222",
+                new BigDecimal("200000.00")
+        );
+        succeeded.setStatus(PaymentTransactionEntity.DB_STATUS_SUCCESS);
+        entityManager.persist(succeeded);
+
+        PaymentTransactionEntity secondPending = PaymentTransactionEntity.createPending(
+                303L,
+                "SEPAY",
+                "LMTORD303SECOND33",
+                new BigDecimal("300000.00")
+        );
+        entityManager.persist(secondPending);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        List<PaymentTransactionEntity> pendingRows = repository.findAllPendingTransactions();
+        assertThat(pendingRows)
+                .extracting(PaymentTransactionEntity::getTransactionCode)
+                .containsExactly("LMTORD301FIRST111", "LMTORD303SECOND33");
+
+        int firstExpire = repository.markAsExpiredIfPending(
+                firstPending.getPaymentId(),
+                PaymentTransactionEntity.DB_STATUS_EXPIRED
+        );
+        int secondExpire = repository.markAsExpiredIfPending(
+                firstPending.getPaymentId(),
+                PaymentTransactionEntity.DB_STATUS_EXPIRED
+        );
+        entityManager.clear();
+
+        PaymentTransactionEntity expiredReloaded = entityManager.find(
+                PaymentTransactionEntity.class,
+                firstPending.getPaymentId()
+        );
+        assertThat(firstExpire).isEqualTo(1);
+        assertThat(secondExpire).isZero();
+        assertThat(expiredReloaded.getStatus()).isEqualTo(PaymentTransactionEntity.DB_STATUS_EXPIRED);
+        assertThat(expiredReloaded.getPaymentStatus()).isEqualTo(PaymentStatus.EXPIRED);
+        assertThat(repository.findAllPendingTransactions())
+                .extracting(PaymentTransactionEntity::getTransactionCode)
+                .containsExactly("LMTORD303SECOND33");
     }
 }
