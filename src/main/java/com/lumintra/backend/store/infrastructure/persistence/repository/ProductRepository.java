@@ -18,6 +18,8 @@ import java.util.Optional;
 public interface ProductRepository extends JpaRepository<ProductEntity, Long>,
         JpaSpecificationExecutor<ProductEntity> {
 
+    Optional<ProductEntity> findFirstByProductName(String productName);
+
     @EntityGraph(attributePaths = "tags")
     Optional<ProductEntity> findWithTagsByProductIdAndStatusIn(Long productId, Collection<ProductStatus> statuses);
     @Lock(LockModeType.PESSIMISTIC_WRITE)

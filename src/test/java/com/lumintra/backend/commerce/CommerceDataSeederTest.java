@@ -1,5 +1,6 @@
 package com.lumintra.backend.commerce;
 
+import com.lumintra.backend.character.domain.service.CharacterLookupService;
 import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.OrderType;
@@ -91,6 +92,9 @@ class CommerceDataSeederTest {
     private ProductLookupService productLookupService;
 
     @Mock
+    private CharacterLookupService characterLookupService;
+
+    @Mock
     private ApplicationArguments applicationArguments;
 
     @InjectMocks
@@ -100,6 +104,9 @@ class CommerceDataSeederTest {
     private ArgumentCaptor<OrderEntity> orderCaptor;
 
     @Captor
+    private ArgumentCaptor<OrderItemEntity> orderItemCaptor;
+
+    @Captor
     private ArgumentCaptor<OrderDeliveryEntity> deliveryCaptor;
 
     @Captor
@@ -107,6 +114,12 @@ class CommerceDataSeederTest {
 
     @Captor
     private ArgumentCaptor<CartItemEntity> cartItemCaptor;
+
+    @Captor
+    private ArgumentCaptor<OwnedCharacterEntity> ownedCharacterCaptor;
+
+    @Captor
+    private ArgumentCaptor<CustomerSubscriptionEntity> subscriptionCaptor;
 
     private static final String TEST_EMAIL = "customer123@gmail.com";
     private static final Long TEST_CUSTOMER_ID = 10L;
@@ -127,10 +140,13 @@ class CommerceDataSeederTest {
                 101L, "Lumintra LED Matrix", ProductType.LED, "thumb1", new BigDecimal("300000.00"), ProductStatus.PUBLISHED);
         ProductSnapshot digital = new ProductSnapshot(
                 202L, "Cyberpunk Cat", ProductType.CHARACTER, "thumb2", new BigDecimal("60000.00"), ProductStatus.PUBLISHED);
+        ProductSnapshot archivedChar = new ProductSnapshot(
+                203L, "Classic Mascot", ProductType.CHARACTER, "thumb2b", new BigDecimal("40000.00"), ProductStatus.ARCHIVED);
         ProductSnapshot subscription = new ProductSnapshot(
                 303L, "Lumintra Pro", ProductType.SUBSCRIPTION, "thumb3", new BigDecimal("120000.00"), ProductStatus.PUBLISHED);
 
-        given(productLookupService.findAllSnapshots()).willReturn(List.of(physical, digital, subscription));
+        given(productLookupService.findAllSnapshots()).willReturn(List.of(physical, digital, archivedChar, subscription));
+        given(characterLookupService.findVersionIdByProductId(203L)).willReturn(Optional.of(505L));
 
         CartEntity cart = CartEntity.create(TEST_CUSTOMER_ID);
         ReflectionTestUtils.setField(cart, "cartId", 1L);
@@ -148,7 +164,7 @@ class CommerceDataSeederTest {
         });
 
         given(customerSubscriptionRepository.existsByCustomerIdAndStatus(TEST_CUSTOMER_ID, "ACTIVE")).willReturn(false);
-        given(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(TEST_CUSTOMER_ID, 99L)).willReturn(false);
+        given(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(TEST_CUSTOMER_ID, 505L)).willReturn(false);
 
         seeder.run(applicationArguments);
 
@@ -247,9 +263,17 @@ class CommerceDataSeederTest {
         assertThat(payments.get(10).getAmount()).isEqualByComparingTo("10000.00");
         assertThat(payments.get(10).getStatus()).isEqualTo(PaymentStatus.PENDING);
 
-        // Verify digital ownership
-        verify(customerSubscriptionRepository).save(any(CustomerSubscriptionEntity.class));
-        verify(ownedCharacterRepository).save(any(OwnedCharacterEntity.class));
+        // Verify order items reference real seeded products (12 items across 11 orders)
+        verify(orderItemRepository, times(12)).save(orderItemCaptor.capture());
+        List<OrderItemEntity> orderItems = orderItemCaptor.getAllValues();
+        assertThat(orderItems).allSatisfy(item ->
+                assertThat(item.getProductId()).isIn(101L, 202L));
+
+        // Verify digital ownership and subscription reference real seeded entities
+        verify(customerSubscriptionRepository).save(subscriptionCaptor.capture());
+        assertThat(subscriptionCaptor.getValue().getProductId()).isEqualTo(303L);
+        verify(ownedCharacterRepository).save(ownedCharacterCaptor.capture());
+        assertThat(ownedCharacterCaptor.getValue().getVersionId()).isEqualTo(505L);
     }
 
     @Test
@@ -258,12 +282,12 @@ class CommerceDataSeederTest {
         CustomerProfileSnapshot customer = new CustomerProfileSnapshot(
                 TEST_CUSTOMER_ID, "Nguyen Van A", "0901234567", TEST_EMAIL);
         given(customerLookupService.findProfileByEmail(TEST_EMAIL)).willReturn(Optional.of(customer));
-        given(productLookupService.findAllSnapshots()).willReturn(Collections.emptyList());
+        given(productLookupService.findAllSnapshots()).willReturn(defaultSeedProducts());
 
         CartEntity cart = CartEntity.create(TEST_CUSTOMER_ID);
         given(cartRepository.findByCustomerId(TEST_CUSTOMER_ID)).willReturn(Optional.of(cart));
         given(cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(any())).willReturn(List.of(
-                CartItemEntity.create(cart, 1L, 1, new BigDecimal("250000.00"))));
+                CartItemEntity.create(cart, 101L, 1, new BigDecimal("250000.00"))));
 
         PaymentTransactionEntity legacy1 = PaymentTransactionEntity.of(
                 1L, 1L, PaymentGateway.SEPAY, "LMT-SEED-TXN-001", new BigDecimal("250000.00"), PaymentStatus.PENDING);
@@ -275,7 +299,6 @@ class CommerceDataSeederTest {
         given(paymentTransactionRepository.findByTransactionCodeStartingWith("LMT-SEED-TXN-"))
                 .willReturn(List.of(legacy1, legacy10));
         given(customerSubscriptionRepository.existsByCustomerIdAndStatus(TEST_CUSTOMER_ID, "ACTIVE")).willReturn(true);
-        given(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(TEST_CUSTOMER_ID, 99L)).willReturn(true);
 
         seeder.run(applicationArguments);
 
@@ -291,18 +314,17 @@ class CommerceDataSeederTest {
         CustomerProfileSnapshot customer = new CustomerProfileSnapshot(
                 TEST_CUSTOMER_ID, "Nguyen Van A", "0901234567", TEST_EMAIL);
         given(customerLookupService.findProfileByEmail(TEST_EMAIL)).willReturn(Optional.of(customer));
-        given(productLookupService.findAllSnapshots()).willReturn(Collections.emptyList());
+        given(productLookupService.findAllSnapshots()).willReturn(defaultSeedProducts());
 
         CartEntity cart = CartEntity.create(TEST_CUSTOMER_ID);
         given(cartRepository.findByCustomerId(TEST_CUSTOMER_ID)).willReturn(Optional.of(cart));
         given(cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(any())).willReturn(List.of(
-                CartItemEntity.create(cart, 1L, 1, new BigDecimal("250000.00"))));
+                CartItemEntity.create(cart, 101L, 1, new BigDecimal("250000.00"))));
 
         given(paymentTransactionRepository.existsByTransactionCode("LMT-SEED-TXN-001")).willReturn(false);
         given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0001")).willReturn(true);
         given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0011")).willReturn(true);
         given(customerSubscriptionRepository.existsByCustomerIdAndStatus(TEST_CUSTOMER_ID, "ACTIVE")).willReturn(true);
-        given(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(TEST_CUSTOMER_ID, 99L)).willReturn(true);
 
         seeder.run(applicationArguments);
 
@@ -319,20 +341,19 @@ class CommerceDataSeederTest {
         CustomerProfileSnapshot customer = new CustomerProfileSnapshot(
                 TEST_CUSTOMER_ID, "Nguyen Van A", "0901234567", TEST_EMAIL);
         given(customerLookupService.findProfileByEmail(TEST_EMAIL)).willReturn(Optional.of(customer));
-        given(productLookupService.findAllSnapshots()).willReturn(Collections.emptyList());
+        given(productLookupService.findAllSnapshots()).willReturn(defaultSeedProducts());
 
         CartEntity cart = CartEntity.create(TEST_CUSTOMER_ID);
         ReflectionTestUtils.setField(cart, "cartId", 1L);
         given(cartRepository.findByCustomerId(TEST_CUSTOMER_ID)).willReturn(Optional.of(cart));
 
-        CartItemEntity existing = CartItemEntity.create(cart, 1L, 2, new BigDecimal("250000.00"));
+        CartItemEntity existing = CartItemEntity.create(cart, 101L, 2, new BigDecimal("250000.00"));
         given(cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(1L)).willReturn(List.of(existing));
 
         given(paymentTransactionRepository.existsByTransactionCode("LMT-SEED-TXN-001")).willReturn(false);
         given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0001")).willReturn(true);
         given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0011")).willReturn(true);
         given(customerSubscriptionRepository.existsByCustomerIdAndStatus(TEST_CUSTOMER_ID, "ACTIVE")).willReturn(true);
-        given(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(TEST_CUSTOMER_ID, 99L)).willReturn(true);
 
         seeder.run(applicationArguments);
 
@@ -361,7 +382,7 @@ class CommerceDataSeederTest {
                 99L, "Fallback Customer", "0999999999", "fallback@example.com");
         given(customerLookupService.findProfileByEmail(TEST_EMAIL)).willReturn(Optional.empty());
         given(customerLookupService.findFirstProfile()).willReturn(Optional.of(fallbackCustomer));
-        given(productLookupService.findAllSnapshots()).willReturn(Collections.emptyList());
+        given(productLookupService.findAllSnapshots()).willReturn(defaultSeedProducts());
 
         CartEntity cart = CartEntity.create(99L);
         ReflectionTestUtils.setField(cart, "cartId", 5L);
@@ -372,7 +393,6 @@ class CommerceDataSeederTest {
         given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0001")).willReturn(true);
         given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0011")).willReturn(true);
         given(customerSubscriptionRepository.existsByCustomerIdAndStatus(99L, "ACTIVE")).willReturn(true);
-        given(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(99L, 99L)).willReturn(true);
 
         seeder.run(applicationArguments);
 
@@ -380,35 +400,39 @@ class CommerceDataSeederTest {
     }
 
     @Test
-    @DisplayName("B: When store has no products, uses sensible default IDs and prices")
-    void run_storeHasNoProducts_usesFallbackProductDefaults() {
+    @DisplayName("A: When store has no seeded products, skips commerce seeding instead of using fake fallback IDs")
+    void run_storeHasNoProducts_skipsSeedingSafely() {
         CustomerProfileSnapshot customer = new CustomerProfileSnapshot(
                 TEST_CUSTOMER_ID, "Nguyen Van A", "0901234567", TEST_EMAIL);
         given(customerLookupService.findProfileByEmail(TEST_EMAIL)).willReturn(Optional.of(customer));
         given(productLookupService.findAllSnapshots()).willReturn(Collections.emptyList());
 
-        given(cartRepository.findByCustomerId(TEST_CUSTOMER_ID)).willReturn(Optional.empty());
-        CartEntity newCart = CartEntity.create(TEST_CUSTOMER_ID);
-        ReflectionTestUtils.setField(newCart, "cartId", 2L);
-        given(cartRepository.save(any(CartEntity.class))).willReturn(newCart);
-        given(cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(2L)).willReturn(Collections.emptyList());
+        seeder.run(applicationArguments);
 
-        given(paymentTransactionRepository.existsByTransactionCode("LMT-SEED-TXN-001")).willReturn(false);
-        given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0001")).willReturn(true);
-        given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0011")).willReturn(true);
-        given(customerSubscriptionRepository.existsByCustomerIdAndStatus(TEST_CUSTOMER_ID, "ACTIVE")).willReturn(true);
-        given(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(TEST_CUSTOMER_ID, 99L)).willReturn(true);
+        verifyNoInteractions(cartRepository);
+        verifyNoInteractions(cartItemRepository);
+        verifyNoInteractions(orderRepository);
+        verifyNoInteractions(orderItemRepository);
+        verifyNoInteractions(orderDeliveryRepository);
+        verifyNoInteractions(paymentTransactionRepository);
+        verifyNoInteractions(customerSubscriptionRepository);
+        verifyNoInteractions(ownedCharacterRepository);
+    }
+
+    @Test
+    @DisplayName("B: When only partial store product types exist, skips commerce seeding safely")
+    void run_partialStoreProductsMissingRequiredTypes_skipsSeedingSafely() {
+        CustomerProfileSnapshot customer = new CustomerProfileSnapshot(
+                TEST_CUSTOMER_ID, "Nguyen Van A", "0901234567", TEST_EMAIL);
+        given(customerLookupService.findProfileByEmail(TEST_EMAIL)).willReturn(Optional.of(customer));
+        given(productLookupService.findAllSnapshots()).willReturn(List.of(
+                new ProductSnapshot(101L, "LED Only", ProductType.LED, "thumb", new BigDecimal("250000.00"), ProductStatus.PUBLISHED)
+        ));
 
         seeder.run(applicationArguments);
 
-        verify(cartItemRepository, times(3)).save(cartItemCaptor.capture());
-        List<CartItemEntity> items = cartItemCaptor.getAllValues();
-        assertThat(items.get(0).getProductId()).isEqualTo(1L);
-        assertThat(items.get(0).getUnitPrice()).isEqualByComparingTo("250000.00");
-        assertThat(items.get(1).getProductId()).isEqualTo(2L);
-        assertThat(items.get(1).getUnitPrice()).isEqualByComparingTo("50000.00");
-        assertThat(items.get(2).getProductId()).isEqualTo(3L);
-        assertThat(items.get(2).getUnitPrice()).isEqualByComparingTo("99000.00");
+        verifyNoInteractions(cartRepository);
+        verifyNoInteractions(orderRepository);
     }
 
     @Test
@@ -422,8 +446,12 @@ class CommerceDataSeederTest {
                 10L, "Draft LED", ProductType.LED, "thumb", new BigDecimal("100000.00"), ProductStatus.UNPUBLISHED);
         ProductSnapshot pubLed = new ProductSnapshot(
                 20L, "Published LED", ProductType.LED, "thumb", new BigDecimal("200000.00"), ProductStatus.PUBLISHED);
+        ProductSnapshot digital = new ProductSnapshot(
+                30L, "Published Character", ProductType.CHARACTER, "thumb2", new BigDecimal("50000.00"), ProductStatus.PUBLISHED);
+        ProductSnapshot subscription = new ProductSnapshot(
+                40L, "Published Subscription", ProductType.SUBSCRIPTION, "thumb3", new BigDecimal("99000.00"), ProductStatus.PUBLISHED);
 
-        given(productLookupService.findAllSnapshots()).willReturn(List.of(unpubLed, pubLed));
+        given(productLookupService.findAllSnapshots()).willReturn(List.of(unpubLed, pubLed, digital, subscription));
 
         given(cartRepository.findByCustomerId(TEST_CUSTOMER_ID)).willReturn(Optional.empty());
         CartEntity newCart = CartEntity.create(TEST_CUSTOMER_ID);
@@ -435,7 +463,6 @@ class CommerceDataSeederTest {
         given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0001")).willReturn(true);
         given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0011")).willReturn(true);
         given(customerSubscriptionRepository.existsByCustomerIdAndStatus(TEST_CUSTOMER_ID, "ACTIVE")).willReturn(true);
-        given(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(TEST_CUSTOMER_ID, 99L)).willReturn(true);
 
         seeder.run(applicationArguments);
 
@@ -444,6 +471,7 @@ class CommerceDataSeederTest {
         // Should select pubLed (ID 20) instead of unpubLed (ID 10)
         assertThat(items.get(0).getProductId()).isEqualTo(20L);
         assertThat(items.get(0).getUnitPrice()).isEqualByComparingTo("200000.00");
+        verify(ownedCharacterRepository, never()).save(any(OwnedCharacterEntity.class));
     }
 
     @Test
@@ -452,13 +480,13 @@ class CommerceDataSeederTest {
         CustomerProfileSnapshot customer = new CustomerProfileSnapshot(
                 TEST_CUSTOMER_ID, "Nguyen Van A", "0901234567", TEST_EMAIL);
         given(customerLookupService.findProfileByEmail(TEST_EMAIL)).willReturn(Optional.of(customer));
-        given(productLookupService.findAllSnapshots()).willReturn(Collections.emptyList());
+        given(productLookupService.findAllSnapshots()).willReturn(defaultSeedProducts());
 
         CartEntity cart = CartEntity.create(TEST_CUSTOMER_ID);
         ReflectionTestUtils.setField(cart, "cartId", 4L);
         given(cartRepository.findByCustomerId(TEST_CUSTOMER_ID)).willReturn(Optional.of(cart));
         given(cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(4L)).willReturn(List.of(
-                CartItemEntity.create(cart, 1L, 1, new BigDecimal("250000.00"))));
+                CartItemEntity.create(cart, 101L, 1, new BigDecimal("250000.00"))));
 
         given(paymentTransactionRepository.existsByTransactionCode("LMT-SEED-TXN-001")).willReturn(false);
         given(paymentTransactionRepository.existsByTransactionCodeEndingWith("SEED0001")).willReturn(true);
@@ -469,7 +497,6 @@ class CommerceDataSeederTest {
             return o;
         });
         given(customerSubscriptionRepository.existsByCustomerIdAndStatus(TEST_CUSTOMER_ID, "ACTIVE")).willReturn(true);
-        given(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(TEST_CUSTOMER_ID, 99L)).willReturn(true);
 
         seeder.run(applicationArguments);
 
@@ -478,10 +505,24 @@ class CommerceDataSeederTest {
         assertThat(seededOrder.getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
         assertThat(seededOrder.getTotalAmount()).isEqualByComparingTo("10000.00");
 
+        verify(orderItemRepository, times(1)).save(orderItemCaptor.capture());
+        assertThat(orderItemCaptor.getValue().getProductId()).isEqualTo(101L);
+
         verify(paymentTransactionRepository, times(1)).save(paymentCaptor.capture());
         PaymentTransactionEntity seededPayment = paymentCaptor.getValue();
         assertThat(seededPayment.getTransactionCode()).isEqualTo("LMTORD111SEED0011");
         assertThat(seededPayment.getAmount()).isEqualByComparingTo("10000.00");
         assertThat(seededPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+
+    private List<ProductSnapshot> defaultSeedProducts() {
+        return List.of(
+                new ProductSnapshot(101L, "Lumintra Matrix 64x64 Pro", ProductType.LED, "thumb1",
+                        new BigDecimal("250000.00"), ProductStatus.PUBLISHED),
+                new ProductSnapshot(202L, "Cyberpunk Cat", ProductType.CHARACTER, "thumb2",
+                        new BigDecimal("50000.00"), ProductStatus.PUBLISHED),
+                new ProductSnapshot(303L, "Lumintra All-Access VIP Pass", ProductType.SUBSCRIPTION, "thumb3",
+                        new BigDecimal("99000.00"), ProductStatus.PUBLISHED)
+        );
     }
 }
