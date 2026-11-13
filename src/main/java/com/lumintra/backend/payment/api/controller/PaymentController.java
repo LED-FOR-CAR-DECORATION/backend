@@ -5,6 +5,7 @@ import com.lumintra.backend.payment.api.response.PaymentSessionResponse;
 import com.lumintra.backend.payment.api.response.SePayWebhookAckResponse;
 import com.lumintra.backend.payment.api.response.SePayWebhookResponse;
 import com.lumintra.backend.payment.application.GetPaymentSessionUseCase;
+import com.lumintra.backend.payment.application.MockPaymentSuccessUseCase;
 import com.lumintra.backend.payment.application.ProcessSePayWebhookUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
@@ -40,6 +41,7 @@ public class PaymentController {
 
     private final GetPaymentSessionUseCase getPaymentSessionUseCase;
     private final ProcessSePayWebhookUseCase processSePayWebhookUseCase;
+    private final MockPaymentSuccessUseCase mockPaymentSuccessUseCase;
 
     @Operation(
             summary = "Get SePay payment session and poll status",
@@ -57,7 +59,7 @@ public class PaymentController {
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(
-                                    name = "Validation Failed",
+                                     name = "Validation Failed",
                                     value = """
                                             {
                                               "code": "VALIDATION_FAILED",
@@ -259,6 +261,42 @@ public class PaymentController {
             @Valid @RequestBody SePayWebhookRequest request) {
         SePayWebhookResponse response = processSePayWebhookUseCase.execute(headers, request);
         return ResponseEntity.ok(SePayWebhookAckResponse.ok(response));
+    }
+
+    @Operation(
+            summary = "Simulate mock payment success (development/testing)",
+            description = "Simulates successful SePay payment for a given payment code without requiring actual bank transfer. Atomically marks transaction as SUCCEEDED and triggers PaymentSucceededEvent."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Mock payment succeeded"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad request: blank or invalid paymentCode parameter",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Payment session not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            )
+    })
+    @PostMapping("/mock-success/{paymentCode}")
+    public ResponseEntity<ApiResponse<PaymentSessionResponse>> mockPaymentSuccess(
+            @Parameter(description = "Unique SePay transfer payment code", example = "LUMORD102A1B2C3D4", required = true)
+            @PathVariable("paymentCode")
+            @NotBlank(message = "Payment code must not be blank")
+            @Size(max = 100, message = "Payment code must not exceed 100 characters")
+            String paymentCode) {
+        PaymentSessionResponse response = mockPaymentSuccessUseCase.execute(paymentCode);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     private Long extractCustomerId(Authentication authentication) {
