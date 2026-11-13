@@ -141,7 +141,7 @@ class AuthControllerSwaggerTest {
     }
 
     @Test
-    @DisplayName("login endpoint should have documented @ApiResponses for 200, 400, 401, 423, and 500")
+    @DisplayName("login endpoint should have documented @ApiResponses for 200, 400, 401, 403, 423, and 500")
     void loginEndpointShouldHaveDocumentedApiResponses() throws NoSuchMethodException {
         Method loginMethod = AuthController.class.getMethod("login", LoginRequest.class);
         ApiResponses apiResponses = loginMethod.getAnnotation(ApiResponses.class);
@@ -154,10 +154,11 @@ class AuthControllerSwaggerTest {
                                 r -> r
                         ));
 
-        assertThat(responseMap).containsKeys("200", "400", "401", "423", "500");
+        assertThat(responseMap).containsKeys("200", "400", "401", "403", "423", "500");
         assertThat(responseMap.get("200").description()).contains("successfully");
         assertThat(responseMap.get("400").description()).contains("Validation failed");
         assertThat(responseMap.get("401").description()).contains("Unauthorized");
+        assertThat(responseMap.get("403").description()).contains("not verified");
         assertThat(responseMap.get("423").description()).contains("Locked");
         assertThat(responseMap.get("500").description()).contains("Internal server error");
     }
