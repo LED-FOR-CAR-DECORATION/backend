@@ -67,7 +67,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/commerce/webhooks/ahamove",
-                                "/api/payments/webhooks/sepay"
+                                "/api/payments/webhooks/sepay",
+                                "/api/payments/mock-success/**"
                         ).permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",

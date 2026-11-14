@@ -180,4 +180,31 @@ public class OrderEntity {
                             + ". Only PENDING_PAYMENT or PROCESSING orders can be cancelled.");
         }
     }
+
+    public OrderStatus resolvePaymentSuccessTargetStatus() {
+        if (this.orderType == OrderType.DIGITAL) {
+            return OrderStatus.COMPLETED;
+        }
+        if (this.orderType == OrderType.MIXED) {
+            return OrderStatus.PARTIALLY_FULFILLED;
+        }
+        return OrderStatus.PROCESSING;
+    }
+
+    public boolean canMarkPaid() {
+        return this.status == OrderStatus.PENDING_PAYMENT;
+    }
+
+    public void validatePaymentSuccessTransition() {
+        if (!canMarkPaid()) {
+            throw new OrderStatusTransitionException(
+                    "Cannot mark order as paid from status " + this.status
+                            + ". Only PENDING_PAYMENT orders can transition to paid status.");
+        }
+    }
+
+    public void markPaid() {
+        validatePaymentSuccessTransition();
+        this.status = resolvePaymentSuccessTargetStatus();
+    }
 }

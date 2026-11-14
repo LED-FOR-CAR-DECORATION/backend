@@ -7,6 +7,7 @@ import com.lumintra.backend.payment.api.request.SePayWebhookRequest;
 import com.lumintra.backend.payment.api.response.PaymentSessionResponse;
 import com.lumintra.backend.payment.api.response.SePayWebhookResponse;
 import com.lumintra.backend.payment.application.GetPaymentSessionUseCase;
+import com.lumintra.backend.payment.application.MockPaymentSuccessUseCase;
 import com.lumintra.backend.payment.application.ProcessSePayWebhookUseCase;
 import com.lumintra.backend.payment.domain.model.PaymentStatus;
 import com.lumintra.backend.payment.domain.model.PaymentTargetType;
@@ -52,6 +53,9 @@ class PaymentControllerTest {
 
     @MockitoBean
     private ProcessSePayWebhookUseCase processSePayWebhookUseCase;
+
+    @MockitoBean
+    private MockPaymentSuccessUseCase mockPaymentSuccessUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -337,5 +341,52 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.data.outcome").value("IGNORED"));
 
         verify(processSePayWebhookUseCase).execute(any(HttpHeaders.class), any(SePayWebhookRequest.class));
+    }
+
+    @Test
+    @DisplayName("PAY-MOCK [N]: POST /api/payments/mock-success/{paymentCode} is public and returns 200 with updated session")
+    void mockPaymentSuccess_validCode_returns200Ok() throws Exception {
+        String code = "LUMORD102A1B2C3D4";
+        PaymentSessionResponse sessionResponse = PaymentSessionResponse.builder()
+                .paymentId(5001L)
+                .paymentCode(code)
+                .targetType(PaymentTargetType.ORDER)
+                .targetId(102L)
+                .gateway("SEPAY")
+                .bankName("TPBank")
+                .accountNumber("10006140844")
+                .accountName("NGUYEN QUANG KHANH")
+                .amount(new BigDecimal("250000.00"))
+                .status(PaymentStatus.SUCCEEDED)
+                .paidAt(Instant.parse("2026-11-13T10:00:00Z"))
+                .createdAt(Instant.parse("2026-11-12T16:45:00Z"))
+                .build();
+
+        when(mockPaymentSuccessUseCase.execute(code)).thenReturn(sessionResponse);
+
+        mockMvc.perform(post("/api/payments/mock-success/{paymentCode}", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentId").value(5001))
+                .andExpect(jsonPath("$.data.paymentCode").value(code))
+                .andExpect(jsonPath("$.data.status").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.data.targetType").value("ORDER"))
+                .andExpect(jsonPath("$.data.targetId").value(102));
+
+        verify(mockPaymentSuccessUseCase).execute(code);
+    }
+
+    @Test
+    @DisplayName("PAY-MOCK [A]: POST /api/payments/mock-success/{paymentCode} when code not found returns 404")
+    void mockPaymentSuccess_notFound_returns404() throws Exception {
+        String code = "NONEXISTENT";
+        when(mockPaymentSuccessUseCase.execute(code))
+                .thenThrow(new PaymentSessionNotFoundException("Payment session not found."));
+
+        mockMvc.perform(post("/api/payments/mock-success/{paymentCode}", code))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PAYMENT_SESSION_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404));
+
+        verify(mockPaymentSuccessUseCase).execute(code);
     }
 }
