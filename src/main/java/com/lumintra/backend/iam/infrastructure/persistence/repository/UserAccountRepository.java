@@ -19,6 +19,10 @@ public interface UserAccountRepository extends JpaRepository<UserAccountEntity, 
     Optional<UserAccountEntity> findForManagementUpdate(@Param("id") long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select account from UserAccountEntity account where account.accountId = :id")
+    Optional<UserAccountEntity> findForDeletion(@Param("id") long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select account from UserAccountEntity account where account.email = :email")
     Optional<UserAccountEntity> findForEmailVerification(@Param("email") String email);
 }

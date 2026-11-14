@@ -1,6 +1,7 @@
 package com.lumintra.backend.notification.infrastructure.integration;
 import com.lumintra.backend.notification.domain.service.PasswordResetEmailProvider;
 import com.lumintra.backend.shared.exception.iam.PasswordResetUnavailableException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,8 @@ import java.util.List;
 public class PasswordResetEmailClient implements PasswordResetEmailProvider {
     private final RestClient client;
     private final String sender;
+
+    @Autowired
     public PasswordResetEmailClient(@Value("${resend.api.key}") String key, @Value("${resend.from.email}") String sender) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(3)); factory.setReadTimeout(Duration.ofSeconds(3));

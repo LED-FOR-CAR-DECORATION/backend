@@ -1,0 +1,14 @@
+# Ignore local build outputs
+target/
+
+# Ignore Git and GitHub Actions workflows
+.git/
+.github/
+
+# Ignore IDE and AI agent configurations
+.cursor/
+.agents/
+
+# Ignore documentation
+AGENTS.md
+README.md

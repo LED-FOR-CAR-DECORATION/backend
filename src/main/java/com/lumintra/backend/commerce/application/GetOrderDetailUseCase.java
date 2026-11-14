@@ -82,7 +82,11 @@ public class GetOrderDetailUseCase {
 
         Instant now = Instant.now();
         SepayPaymentInstructions paymentInstructions = shouldBuildActivePaymentInstructions(order, payment, now)
-                ? paymentInstructionPort.buildInstructions(order.getOrderId(), order.getTotalAmount(), order.getExpiresAt())
+                ? paymentInstructionPort.buildInstructions(
+                        order.getOrderId(),
+                        payment.getTransactionCode(),
+                        order.getTotalAmount(),
+                        order.getExpiresAt())
                 : null;
 
         OrderDetailResponse response = orderMapper.toOrderDetailResponse(

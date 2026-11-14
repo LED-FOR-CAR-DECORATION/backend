@@ -1,8 +1,13 @@
 package com.lumintra.backend.shared.exception;
 
 import com.lumintra.backend.shared.exception.commerce.*;
+import com.lumintra.backend.shared.exception.device.*;
 import com.lumintra.backend.shared.exception.iam.*;
+import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
+import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
+import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
+import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -14,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -36,6 +42,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidPriceRangeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidPriceRangeException(InvalidPriceRangeException ex) {
         return buildErrorResponse("INVALID_PRICE_RANGE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(StoreProductReferenceException.class)
+    public ResponseEntity<ErrorResponse> handleStoreProductReference(StoreProductReferenceException ex) {
+        var status = ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
+                ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND;
+        return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
+    }
+
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleProductNotFoundException(ProductNotFoundException ex) {
+        return buildErrorResponse("PRODUCT_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(StoreProductTagNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleStoreProductTagNotFound(StoreProductTagNotFoundException ex) {
+        return buildErrorResponse("TAG_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     // Commerce exceptions
@@ -64,6 +87,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("INVALID_CART_ITEM", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(CartItemNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCartItemNotFound(CartItemNotFoundException ex) {
+        return buildErrorResponse("CART_ITEM_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
     @ExceptionHandler(DeliveryAddressRequiredException.class)
     public ResponseEntity<ErrorResponse> handleDeliveryAddressRequired(DeliveryAddressRequiredException ex) {
         return buildErrorResponse("DELIVERY_ADDRESS_REQUIRED", ex.getMessage(), HttpStatus.BAD_REQUEST);
@@ -77,6 +105,47 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleOrderNotFound(OrderNotFoundException ex) {
         return buildErrorResponse("ORDER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(LedInstanceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleLedInstanceNotFound(LedInstanceNotFoundException ex) {
+        return buildErrorResponse("LED_INSTANCE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidDeviceQrException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidDeviceQr(InvalidDeviceQrException ex) {
+        return buildErrorResponse("INVALID_DEVICE_QR", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DeviceAlreadyBoundException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceAlreadyBound(DeviceAlreadyBoundException ex) {
+        return buildErrorResponse("DEVICE_ALREADY_BOUND", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(DeviceOwnershipMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceOwnershipMismatch(DeviceOwnershipMismatchException ex) {
+        return buildErrorResponse("DEVICE_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(OrderNotDeliveredYetException.class)
+    public ResponseEntity<ErrorResponse> handleOrderNotDeliveredYet(OrderNotDeliveredYetException ex) {
+        return buildErrorResponse("ORDER_NOT_DELIVERED_YET", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(OrderStatusTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleOrderStatusTransition(OrderStatusTransitionException ex) {
+        return buildErrorResponse("INVALID_ORDER_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(CarrierDispatchException.class)
+    public ResponseEntity<ErrorResponse> handleCarrierDispatchException(CarrierDispatchException ex) {
+        return buildErrorResponse(ex.getErrorCode(), ex.getMessage(), ex.getHttpStatus());
+    }
+
+    // Payment exceptions
+    @ExceptionHandler(PaymentSessionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentSessionNotFound(PaymentSessionNotFoundException ex) {
+        return buildErrorResponse("PAYMENT_SESSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     // IAM exceptions
@@ -93,6 +162,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountLockedException.class)
     public ResponseEntity<ErrorResponse> handleAccountLocked(AccountLockedException ex) {
         return buildErrorResponse("ACCOUNT_LOCKED", ex.getMessage(), HttpStatus.LOCKED);
+    }
+
+    @ExceptionHandler(AccountNotVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleAccountNotVerified(AccountNotVerifiedException ex) {
+        return buildErrorResponse("ACCOUNT_NOT_VERIFIED", ex.getMessage(), HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
@@ -145,11 +219,19 @@ public class GlobalExceptionHandler {
                         .message(error.getDefaultMessage())
                         .build())
                 .toList();
+        String failedFields = details.stream()
+                .map(detail -> detail.getField() + ":" + detail.getMessage())
+                .reduce((a, b) -> a + "; " + b)
+                .orElse("none");
+        log.debug("Request validation failed [fields={}]", failedFields);
         return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST, details);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        Throwable cause = ex.getMostSpecificCause();
+        String causeType = cause != null ? cause.getClass().getSimpleName() : ex.getClass().getSimpleName();
+        log.debug("Unreadable HTTP request body [causeType={}]", causeType);
         return buildErrorResponse("VALIDATION_FAILED", "Malformed JSON request or invalid field value", HttpStatus.BAD_REQUEST);
     }
 
@@ -170,7 +252,7 @@ public class GlobalExceptionHandler {
                             .orElse("parameter");
                     return paramResult.getResolvableErrors().stream()
                             .map(error -> ErrorResponse.ErrorDetail.builder()
-                                    .field(field)
+                                    .field(error instanceof FieldError fieldError ? fieldError.getField() : field)
                                     .message(Optional.ofNullable(error.getDefaultMessage()).orElse("Invalid parameter value"))
                                     .build());
                 })

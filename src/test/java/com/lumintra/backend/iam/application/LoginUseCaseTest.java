@@ -4,8 +4,12 @@ import com.lumintra.backend.iam.api.request.LoginRequest;
 import com.lumintra.backend.iam.api.response.LoginResponse;
 import com.lumintra.backend.iam.domain.event.StaffAccountLockedEvent;
 import com.lumintra.backend.iam.domain.event.StaffLoginSuccessEvent;
+import com.lumintra.backend.iam.domain.event.VerificationEmailResentEvent;
+import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
+import com.lumintra.backend.iam.domain.model.OtpPurpose;
 import com.lumintra.backend.iam.domain.service.LoginAttemptService;
+import com.lumintra.backend.iam.domain.service.OtpService;
 import com.lumintra.backend.iam.domain.service.RefreshTokenService;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.EmployeeEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.entity.RoleEntity;
@@ -14,7 +18,10 @@ import com.lumintra.backend.iam.infrastructure.persistence.repository.EmployeeRe
 import com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.iam.AccountLockedException;
+import com.lumintra.backend.shared.exception.iam.AccountNotVerifiedException;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
+import com.lumintra.backend.shared.exception.iam.MaxResendAttemptsException;
+import com.lumintra.backend.shared.exception.iam.ResendCooldownException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -29,7 +36,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -62,6 +71,8 @@ class LoginUseCaseTest {
     @Mock
     private RefreshTokenService refreshTokenService;
 
+    @Mock
+    private OtpService otpService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -86,6 +97,7 @@ class LoginUseCaseTest {
         customer.setEmail("customer@example.com");
         customer.setPasswordHash("$2a$10$hashedPassword");
         customer.setAccountType(AccountType.CUSTOMER);
+        customer.setStatus(AccountStatus.ACTIVE);
 
         when(loginAttemptService.isAccountLocked("customer@example.com")).thenReturn(false);
         when(userAccountRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
@@ -117,6 +129,7 @@ class LoginUseCaseTest {
         employeeAccount.setEmail("admin@lumintra.com");
         employeeAccount.setPasswordHash("$2a$10$hashedPassword");
         employeeAccount.setAccountType(AccountType.EMPLOYEE);
+        employeeAccount.setStatus(AccountStatus.ACTIVE);
 
         RoleEntity role = new RoleEntity();
         role.setRoleName("ADMIN");
@@ -254,5 +267,175 @@ class LoginUseCaseTest {
         assertThat(violations).isNotEmpty();
         assertThat(violations).extracting(ConstraintViolation::getMessage)
                 .contains("Email is required", "Password is required");
+    }
+
+    @Test
+    @DisplayName("UTCID09 [N]: Login normalizes uppercase and whitespace email before lookup and lockout checks")
+    void login_normalizesUppercaseAndWhitespaceEmail() {
+        LoginRequest request = new LoginRequest("  Customer.Upper@Example.COM  ", "P@ssword123");
+        assertThat(request.email()).isEqualTo("customer.upper@example.com");
+        assertThat(validator.validate(request)).isEmpty();
+
+        UserAccountEntity customer = new UserAccountEntity();
+        customer.setAccountId(106L);
+        customer.setEmail("customer.upper@example.com");
+        customer.setPasswordHash("$2a$10$hashedPassword");
+        customer.setAccountType(AccountType.CUSTOMER);
+        customer.setStatus(AccountStatus.ACTIVE);
+
+        when(loginAttemptService.isAccountLocked("customer.upper@example.com")).thenReturn(false);
+        when(userAccountRepository.findByEmail("customer.upper@example.com")).thenReturn(Optional.of(customer));
+        when(passwordEncoder.matches("P@ssword123", "$2a$10$hashedPassword")).thenReturn(true);
+        when(tokenProvider.createAccessToken(106L, "customer.upper@example.com", List.of("ROLE_CUSTOMER")))
+                .thenReturn("access-token-normalized");
+        when(tokenProvider.createRefreshToken(106L)).thenReturn("refresh-token-normalized");
+
+        LoginResponse response = loginUseCase.execute(request);
+
+        assertThat(response.getAccessToken()).isEqualTo("access-token-normalized");
+        verify(loginAttemptService).isAccountLocked("customer.upper@example.com");
+        verify(userAccountRepository).findByEmail("customer.upper@example.com");
+        verify(loginAttemptService).resetAttempts("customer.upper@example.com");
+    }
+
+    @Test
+    @DisplayName("UTCID10 [A]: Pending verification customer account is blocked and dispatches verification email")
+    void login_pendingVerificationCustomer_blocksAndSendsEmail() {
+        LoginRequest request = new LoginRequest("Pending.User@Example.com", "P@ssword123");
+
+        UserAccountEntity account = UserAccountEntity.createCustomerAccount(
+                "pending.user@example.com",
+                "$2a$10$hashedPassword"
+        );
+        account.setAccountId(107L);
+
+        when(loginAttemptService.isAccountLocked("pending.user@example.com")).thenReturn(false);
+        when(userAccountRepository.findByEmail("pending.user@example.com")).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("P@ssword123", "$2a$10$hashedPassword")).thenReturn(true);
+        when(otpService.generateOtpForResend("pending.user@example.com", OtpPurpose.EMAIL_VERIFICATION))
+                .thenReturn("654321");
+
+        assertThatThrownBy(() -> loginUseCase.execute(request))
+                .isInstanceOf(AccountNotVerifiedException.class)
+                .hasMessage("Account email is not verified. Please verify your email.");
+
+        verify(loginAttemptService).resetAttempts("pending.user@example.com");
+        verify(otpService).generateOtpForResend("pending.user@example.com", OtpPurpose.EMAIL_VERIFICATION);
+
+        ArgumentCaptor<VerificationEmailResentEvent> eventCaptor =
+                ArgumentCaptor.forClass(VerificationEmailResentEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().email()).isEqualTo("pending.user@example.com");
+        assertThat(eventCaptor.getValue().otp()).isEqualTo("654321");
+
+        verifyNoInteractions(tokenProvider, refreshTokenService);
+    }
+
+    @Test
+    @DisplayName("UTCID11 [A]: Pending verification customer with wrong password fails without sending verification email")
+    void login_pendingVerificationCustomerWrongPassword_doesNotSendEmail() {
+        LoginRequest request = new LoginRequest("pending@example.com", "WrongPassword");
+
+        UserAccountEntity account = UserAccountEntity.createCustomerAccount(
+                "pending@example.com",
+                "$2a$10$hashedPassword"
+        );
+        account.setAccountId(108L);
+
+        when(loginAttemptService.isAccountLocked("pending@example.com")).thenReturn(false);
+        when(userAccountRepository.findByEmail("pending@example.com")).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("WrongPassword", "$2a$10$hashedPassword")).thenReturn(false);
+        when(loginAttemptService.registerFailedAttempt("pending@example.com")).thenReturn(1);
+
+        assertThatThrownBy(() -> loginUseCase.execute(request))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessage("Invalid email or password");
+
+        verify(loginAttemptService).registerFailedAttempt("pending@example.com");
+        verifyNoInteractions(otpService, eventPublisher, tokenProvider, refreshTokenService);
+    }
+
+    @Test
+    @DisplayName("UTCID12 [A]: Pending verification customer still blocked when resend cooldown or max attempts is active")
+    void login_pendingVerificationCustomerCooldownOrMaxResend_stillBlocksLogin() {
+        LoginRequest request = new LoginRequest("cooldown@example.com", "P@ssword123");
+
+        UserAccountEntity account = UserAccountEntity.createCustomerAccount(
+                "cooldown@example.com",
+                "$2a$10$hashedPassword"
+        );
+        account.setAccountId(109L);
+
+        when(loginAttemptService.isAccountLocked("cooldown@example.com")).thenReturn(false);
+        when(userAccountRepository.findByEmail("cooldown@example.com")).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("P@ssword123", "$2a$10$hashedPassword")).thenReturn(true);
+        when(otpService.generateOtpForResend("cooldown@example.com", OtpPurpose.EMAIL_VERIFICATION))
+                .thenThrow(new ResendCooldownException("Please wait 60 seconds before requesting another email."))
+                .thenThrow(new MaxResendAttemptsException("Maximum resend attempts reached for this email."));
+
+        assertThatThrownBy(() -> loginUseCase.execute(request))
+                .isInstanceOf(AccountNotVerifiedException.class)
+                .hasMessage("Account email is not verified. Please verify your email.");
+
+        assertThatThrownBy(() -> loginUseCase.execute(request))
+                .isInstanceOf(AccountNotVerifiedException.class)
+                .hasMessage("Account email is not verified. Please verify your email.");
+
+        verifyNoInteractions(eventPublisher, tokenProvider, refreshTokenService);
+    }
+
+    @Test
+    @DisplayName("UTCID13 [A]: Suspended account is blocked with InvalidCredentialsException")
+    void login_suspendedAccount_throwsInvalidCredentials() {
+        LoginRequest request = new LoginRequest("suspended@example.com", "P@ssword123");
+
+        UserAccountEntity account = new UserAccountEntity();
+        account.setAccountId(110L);
+        account.setEmail("suspended@example.com");
+        account.setPasswordHash("$2a$10$hashedPassword");
+        account.setAccountType(AccountType.CUSTOMER);
+        account.setStatus(AccountStatus.SUSPENDED);
+
+        when(loginAttemptService.isAccountLocked("suspended@example.com")).thenReturn(false);
+        when(userAccountRepository.findByEmail("suspended@example.com")).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("P@ssword123", "$2a$10$hashedPassword")).thenReturn(true);
+
+        assertThatThrownBy(() -> loginUseCase.execute(request))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessage("Account is suspended or deleted.");
+
+        verifyNoInteractions(otpService, eventPublisher, tokenProvider, refreshTokenService);
+    }
+
+    @Test
+    @DisplayName("UTCID14 [A]: Deleted account is blocked with InvalidCredentialsException without password match")
+    void login_deletedAccount_throwsInvalidCredentials() {
+        LoginRequest request = new LoginRequest("deleted@example.com", "P@ssword123");
+
+        UserAccountEntity account = new UserAccountEntity();
+        account.setAccountId(111L);
+        account.setEmail("deleted@example.com");
+        account.setPasswordHash("$2a$10$hashedPassword");
+        account.setAccountType(AccountType.CUSTOMER);
+        account.setStatus(AccountStatus.DELETED);
+
+        when(loginAttemptService.isAccountLocked("deleted@example.com")).thenReturn(false);
+        when(userAccountRepository.findByEmail("deleted@example.com")).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> loginUseCase.execute(request))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessage("Invalid email or password");
+
+        verifyNoInteractions(passwordEncoder, otpService, eventPublisher, tokenProvider, refreshTokenService);
+    }
+
+    @Test
+    @DisplayName("UTCID15 [B]: LoginUseCase.execute configures noRollbackFor AccountNotVerifiedException so verification email event commits")
+    void loginExecute_doesNotRollbackOnAccountNotVerifiedException() throws NoSuchMethodException {
+        Method executeMethod = LoginUseCase.class.getMethod("execute", LoginRequest.class);
+        Transactional transactional = executeMethod.getAnnotation(Transactional.class);
+
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.noRollbackFor()).contains(AccountNotVerifiedException.class);
     }
 }

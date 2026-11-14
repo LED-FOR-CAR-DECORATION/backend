@@ -174,7 +174,19 @@ class VerifyEmailUseCaseTest {
     }
 
     @Test
-    @DisplayName("A: Verification cannot reactivate a manually suspended account")
+    @DisplayName("A: Verification cannot reactivate a soft-deleted account")
+    void deletedAccountCannotBeVerified() {
+        String email = "deleted@example.test";
+        var account = new UserAccountEntity();
+        account.setStatus(AccountStatus.DELETED);
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.of(account));
+        assertThatThrownBy(() -> verifyEmailUseCase.execute(new VerifyEmailRequest(email, "123456")))
+                .isInstanceOf(UserNotFoundException.class);
+        verifyNoInteractions(otpService);
+    }
+
+    @Test
+    @DisplayName("A: Verification cannot reactivate a suspended account")
     void suspendedAccountCannotBeVerified() {
         String email = "suspended@example.test";
         var account = new UserAccountEntity();

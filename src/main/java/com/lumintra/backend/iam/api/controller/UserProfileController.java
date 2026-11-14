@@ -23,11 +23,6 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
 @Tag(name = "User Profile", description = "Authenticated account profile")
-@io.swagger.v3.oas.annotations.security.SecurityScheme(
-        name = "bearerAuth",
-        type = io.swagger.v3.oas.annotations.enums.SecuritySchemeType.HTTP,
-        scheme = "bearer",
-        bearerFormat = "JWT")
 public class UserProfileController {
     private final GetCurrentProfileUseCase useCase;
 

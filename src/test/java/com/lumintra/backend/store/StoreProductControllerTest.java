@@ -6,6 +6,7 @@ import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.store.api.controller.StoreProductController;
 import com.lumintra.backend.store.api.request.ProductFilterRequest;
 import com.lumintra.backend.store.api.response.ProductListResponse;
+import com.lumintra.backend.store.application.GetProductDetailUseCase;
 import com.lumintra.backend.store.application.ListProductsUseCase;
 import com.lumintra.backend.store.domain.model.ProductType;
 import io.micrometer.tracing.Tracer;
@@ -37,11 +38,14 @@ class StoreProductControllerTest {
     private ListProductsUseCase listProductsUseCase;
 
     @Mock
+    private GetProductDetailUseCase getProductDetailUseCase;
+
+    @Mock
     private Tracer tracer;
 
     @BeforeEach
     void setUp() {
-        StoreProductController controller = new StoreProductController(listProductsUseCase);
+        StoreProductController controller = new StoreProductController(listProductsUseCase, getProductDetailUseCase);
         GlobalExceptionHandler exceptionHandler = new GlobalExceptionHandler(tracer);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(exceptionHandler)

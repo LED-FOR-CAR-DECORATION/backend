@@ -2,7 +2,9 @@ package com.lumintra.backend.iam.infrastructure.persistence.entity;
 
 import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
+
 import jakarta.persistence.*;
+
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.DynamicUpdate;
@@ -73,7 +75,21 @@ public class UserAccountEntity {
         return account;
     }
 
+    public static UserAccountEntity createInternalAccount(String email, String passwordHash) {
+        UserAccountEntity account = new UserAccountEntity();
+        account.email = email;
+        account.passwordHash = passwordHash;
+        account.accountType = AccountType.EMPLOYEE;
+        account.status = AccountStatus.ACTIVE;
+        return account;
+    }
+
     public void verifyEmail() {
         this.setStatus(AccountStatus.ACTIVE);
+    }
+
+    public void softDelete(Instant deletedAt) {
+        this.status = AccountStatus.DELETED;
+        this.updatedAt = deletedAt;
     }
 }

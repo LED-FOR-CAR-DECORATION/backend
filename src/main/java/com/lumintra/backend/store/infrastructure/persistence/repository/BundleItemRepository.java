@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface BundleItemRepository extends JpaRepository<BundleItemEntity, Long> {
     List<BundleItemEntity> findAllByBundle_BundleId(Long bundleId);
+
+    List<BundleItemEntity> findAllByBundle_BundleIdOrderByBundleItemIdAsc(Long bundleId);
 }
