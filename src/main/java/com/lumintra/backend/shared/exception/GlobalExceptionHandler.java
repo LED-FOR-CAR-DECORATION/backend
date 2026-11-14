@@ -9,6 +9,8 @@ import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
 import com.lumintra.backend.shared.exception.store.TagAlreadyExistsException;
+import com.lumintra.backend.shared.exception.store.SubscriptionNotFoundException;
+import com.lumintra.backend.shared.exception.store.InvalidSubscriptionDurationException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -50,6 +52,16 @@ public class GlobalExceptionHandler {
         var status = ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
                 ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND;
         return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
+    }
+
+    @ExceptionHandler(SubscriptionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionNotFound(SubscriptionNotFoundException ex) {
+        return buildErrorResponse("SUBSCRIPTION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidSubscriptionDurationException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSubscriptionDuration(InvalidSubscriptionDurationException ex) {
+        return buildErrorResponse("INVALID_SUBSCRIPTION_DURATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(ProductNotFoundException.class)
