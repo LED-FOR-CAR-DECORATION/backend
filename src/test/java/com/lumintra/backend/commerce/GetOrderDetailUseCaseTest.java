@@ -133,16 +133,16 @@ class GetOrderDetailUseCaseTest {
                 5001L,
                 orderId,
                 PaymentGateway.SEPAY,
-                "SEPAY-ORD-102-TEMP1234",
+                "LMTORD102TEMP1234",
                 new BigDecimal("250000.00"),
                 PaymentStatus.PENDING
         );
 
         SepayPaymentInstructions sepayInstructions = new SepayPaymentInstructions(
-                "LUM102",
-                "https://qr.sepay.vn/img?acc=0123456789&bank=MBBank&amount=250000&des=LUM102",
-                "0123456789",
-                "MBBank",
+                "LMTORD102TEMP1234",
+                "https://vietqr.app/img?bank=TPBank&acc=10006140844&template=compact&amount=250000&des=LMTORD102TEMP1234&showinfo=true&holder=NGUYEN%20QUANG%20KHANH",
+                "10006140844",
+                "TPBank",
                 expiresAt
         );
 
@@ -161,7 +161,7 @@ class GetOrderDetailUseCaseTest {
         when(orderDeliveryRepository.findByOrder_OrderId(orderId)).thenReturn(Optional.of(delivery));
         when(paymentTransactionRepository.findFirstByOrderIdOrderByCreatedAtDescPaymentIdDesc(orderId))
                 .thenReturn(Optional.of(payment));
-        when(paymentInstructionPort.buildInstructions(orderId, new BigDecimal("250000.00"), expiresAt))
+        when(paymentInstructionPort.buildInstructions(orderId, "LMTORD102TEMP1234", new BigDecimal("250000.00"), expiresAt))
                 .thenReturn(sepayInstructions);
 
         OrderDetailResponse response = getOrderDetailUseCase.execute(customerId, orderId);
@@ -184,10 +184,10 @@ class GetOrderDetailUseCaseTest {
         assertThat(response.payment()).isNotNull();
         assertThat(response.payment().paymentGateway()).isEqualTo(PaymentGateway.SEPAY);
         assertThat(response.payment().status()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(response.payment().paymentContent()).isEqualTo("LUM102");
-        assertThat(response.payment().qrCodeUrl()).isEqualTo("https://qr.sepay.vn/img?acc=0123456789&bank=MBBank&amount=250000&des=LUM102");
-        assertThat(response.payment().bankAccount()).isEqualTo("0123456789");
-        assertThat(response.payment().bankName()).isEqualTo("MBBank");
+        assertThat(response.payment().paymentContent()).isEqualTo("LMTORD102TEMP1234");
+        assertThat(response.payment().qrCodeUrl()).isEqualTo("https://vietqr.app/img?bank=TPBank&acc=10006140844&template=compact&amount=250000&des=LMTORD102TEMP1234&showinfo=true&holder=NGUYEN%20QUANG%20KHANH");
+        assertThat(response.payment().bankAccount()).isEqualTo("10006140844");
+        assertThat(response.payment().bankName()).isEqualTo("TPBank");
         assertThat(response.payment().expiresAt()).isEqualTo(expiresAt);
         assertThat(response.payment().bankReferenceCode()).isNull();
         assertThat(response.payment().paidAmount()).isNull();
@@ -356,23 +356,38 @@ class GetOrderDetailUseCaseTest {
     }
 
     @Test
-    @DisplayName("UTCID09 [N]: SepayPaymentInstructionAdapter constructs VietQR URL with LUM{orderId} memo and normalized amount")
+    @DisplayName("UTCID09 [N]: SepayPaymentInstructionAdapter delegates to PaymentGatewayPort and constructs VietQR URL")
     void sepayAdapter_buildInstructions_constructsExpectedQrCodeUrl() {
+        com.lumintra.backend.payment.infrastructure.integration.SePayProperties properties =
+                new com.lumintra.backend.payment.infrastructure.integration.SePayProperties(
+                        "https://vietqr.app/img",
+                        "TPBank",
+                        "10006140844",
+                        "NGUYEN QUANG KHANH",
+                        "LUM",
+                        "secret"
+                );
         SepayPaymentInstructionAdapter adapter = new SepayPaymentInstructionAdapter(
-                "https://qr.sepay.vn/img",
-                "0123456789",
-                "MBBank"
+                new com.lumintra.backend.payment.infrastructure.integration.SePayGatewayAdapter(properties),
+                properties
         );
         Instant expiresAt = Instant.parse("2026-11-10T17:00:00Z");
 
-        SepayPaymentInstructions result = adapter.buildInstructions(102L, new BigDecimal("250000.00"), expiresAt);
+        SepayPaymentInstructions withTransactionCode =
+                adapter.buildInstructions(102L, "LUMORD102A1B2C3D4", new BigDecimal("250000.00"), expiresAt);
 
-        assertThat(result.paymentContent()).isEqualTo("LUM102");
-        assertThat(result.bankAccount()).isEqualTo("0123456789");
-        assertThat(result.bankName()).isEqualTo("MBBank");
-        assertThat(result.expiresAt()).isEqualTo(expiresAt);
-        assertThat(result.qrCodeUrl())
-                .isEqualTo("https://qr.sepay.vn/img?acc=0123456789&bank=MBBank&amount=250000&des=LUM102");
+        assertThat(withTransactionCode.paymentContent()).isEqualTo("LUMORD102A1B2C3D4");
+        assertThat(withTransactionCode.bankAccount()).isEqualTo("10006140844");
+        assertThat(withTransactionCode.bankName()).isEqualTo("TPBank");
+        assertThat(withTransactionCode.expiresAt()).isEqualTo(expiresAt);
+        assertThat(withTransactionCode.qrCodeUrl())
+                .isEqualTo("https://vietqr.app/img?bank=TPBank&acc=10006140844&template=compact&amount=250000&des=LUMORD102A1B2C3D4&showinfo=true&holder=NGUYEN%20QUANG%20KHANH");
+
+        SepayPaymentInstructions fallbackResult = adapter.buildInstructions(102L, null, new BigDecimal("250000.00"), expiresAt);
+
+        assertThat(fallbackResult.paymentContent()).isEqualTo("LUM102");
+        assertThat(fallbackResult.qrCodeUrl())
+                .isEqualTo("https://vietqr.app/img?bank=TPBank&acc=10006140844&template=compact&amount=250000&des=LUM102&showinfo=true&holder=NGUYEN%20QUANG%20KHANH");
     }
 
     @Test

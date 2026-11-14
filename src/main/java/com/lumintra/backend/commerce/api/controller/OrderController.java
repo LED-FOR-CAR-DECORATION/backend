@@ -1,11 +1,16 @@
 package com.lumintra.backend.commerce.api.controller;
 
+import com.lumintra.backend.commerce.api.request.CancelOrderRequest;
 import com.lumintra.backend.commerce.api.request.CheckoutRequest;
 import com.lumintra.backend.commerce.api.request.OrderFilterRequest;
+import com.lumintra.backend.commerce.api.response.CancelOrderResponse;
 import com.lumintra.backend.commerce.api.response.CheckoutResponse;
+import com.lumintra.backend.commerce.api.response.ConfirmOrderDeliveryResponse;
 import com.lumintra.backend.commerce.api.response.OrderDetailResponse;
 import com.lumintra.backend.commerce.api.response.OrderListResponse;
+import com.lumintra.backend.commerce.application.CancelOrderUseCase;
 import com.lumintra.backend.commerce.application.CheckoutOrderUseCase;
+import com.lumintra.backend.commerce.application.ConfirmOrderDeliveryUseCase;
 import com.lumintra.backend.commerce.application.GetOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListOrdersUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
@@ -44,6 +49,8 @@ public class OrderController {
     private final CheckoutOrderUseCase checkoutOrderUseCase;
     private final ListOrdersUseCase listOrdersUseCase;
     private final GetOrderDetailUseCase getOrderDetailUseCase;
+    private final ConfirmOrderDeliveryUseCase confirmOrderDeliveryUseCase;
+    private final CancelOrderUseCase cancelOrderUseCase;
 
     @Operation(
             summary = "List authenticated customer's purchase orders",
@@ -350,6 +357,233 @@ public class OrderController {
         Long customerId = extractCustomerId(authentication);
         CheckoutResponse response = checkoutOrderUseCase.execute(customerId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Confirm receipt of a delivered order",
+            description = "Allows the owning authenticated CUSTOMER to confirm receipt of a DELIVERED order, atomically transitioning the order status from DELIVERED to COMPLETED while preserving carrier delivery timestamps."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Order delivery confirmed successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid or non-positive order id path parameter",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Validation Failed",
+                                    value = """
+                                            {
+                                              "code": "VALIDATION_FAILED",
+                                              "message": "Invalid request parameter",
+                                              "status": 400,
+                                              "timestamp": "2026-11-12T14:25:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": [
+                                                {
+                                                  "field": "id",
+                                                  "message": "id must be greater than 0"
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing, expired, or invalid JWT authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: account type is not CUSTOMER (e.g. EMPLOYEE accounts are denied)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Not Found: order does not exist or belongs to another customer",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Order Not Found",
+                                    value = """
+                                            {
+                                              "code": "ORDER_NOT_FOUND",
+                                              "message": "Order not found.",
+                                              "status": 404,
+                                              "timestamp": "2026-11-12T14:25:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict: order is not in DELIVERED status or was concurrently modified",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Invalid Order Status Transition",
+                                    value = """
+                                            {
+                                              "code": "INVALID_ORDER_STATUS_TRANSITION",
+                                              "message": "Cannot confirm delivery for order with status SHIPPING. Only DELIVERED orders can be confirmed.",
+                                              "status": 409,
+                                              "timestamp": "2026-11-12T14:25:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @PostMapping("/{id}/confirm-delivery")
+    public ResponseEntity<ApiResponse<ConfirmOrderDeliveryResponse>> confirmDelivery(
+            Authentication authentication,
+            @Parameter(description = "Numeric purchase order identifier", example = "102")
+            @PathVariable @Positive(message = "id must be greater than 0") Long id) {
+        Long customerId = extractCustomerId(authentication);
+        ConfirmOrderDeliveryResponse response = confirmOrderDeliveryUseCase.execute(customerId, id);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Cancel an order",
+            description = "Allows the owning authenticated CUSTOMER to cancel an undispatched order. PENDING_PAYMENT orders transition to CANCELED, and paid PROCESSING orders transition to REFUNDED. Automatically restores reserved LED physical inventory to stock."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Order cancelled successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid or non-positive order id path parameter or invalid payload",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Validation Failed",
+                                    value = """
+                                            {
+                                              "code": "VALIDATION_FAILED",
+                                              "message": "Invalid request parameter",
+                                              "status": 400,
+                                              "timestamp": "2026-11-13T13:20:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": [
+                                                {
+                                                  "field": "id",
+                                                  "message": "id must be greater than 0"
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing, expired, or invalid JWT authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: account type is not CUSTOMER (e.g. EMPLOYEE accounts are denied)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Not Found: order does not exist or belongs to another customer",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Order Not Found",
+                                    value = """
+                                            {
+                                              "code": "ORDER_NOT_FOUND",
+                                              "message": "Order not found.",
+                                              "status": 404,
+                                              "timestamp": "2026-11-13T13:20:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict: order is already dispatched or in a non-cancellable state, or concurrent modification occurred",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Invalid Order Status Transition",
+                                    value = """
+                                            {
+                                              "code": "INVALID_ORDER_STATUS_TRANSITION",
+                                              "message": "Cannot cancel order with status SHIPPING. Only PENDING_PAYMENT or PROCESSING orders can be cancelled.",
+                                              "status": 409,
+                                              "timestamp": "2026-11-13T13:20:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<CancelOrderResponse>> cancelOrder(
+            Authentication authentication,
+            @Parameter(description = "Numeric purchase order identifier", example = "102")
+            @PathVariable @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody(required = false) CancelOrderRequest request) {
+        Long customerId = extractCustomerId(authentication);
+        CancelOrderResponse response = cancelOrderUseCase.execute(customerId, id, request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     private Long extractCustomerId(Authentication authentication) {

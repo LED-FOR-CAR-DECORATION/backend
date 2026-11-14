@@ -141,7 +141,7 @@ class AuthControllerSwaggerTest {
     }
 
     @Test
-    @DisplayName("login endpoint should have documented @ApiResponses for 200, 400, 401, 423, and 500")
+    @DisplayName("login endpoint should have documented @ApiResponses for 200, 400, 401, 403, 423, and 500")
     void loginEndpointShouldHaveDocumentedApiResponses() throws NoSuchMethodException {
         Method loginMethod = AuthController.class.getMethod("login", LoginRequest.class);
         ApiResponses apiResponses = loginMethod.getAnnotation(ApiResponses.class);
@@ -154,10 +154,11 @@ class AuthControllerSwaggerTest {
                                 r -> r
                         ));
 
-        assertThat(responseMap).containsKeys("200", "400", "401", "423", "500");
+        assertThat(responseMap).containsKeys("200", "400", "401", "403", "423", "500");
         assertThat(responseMap.get("200").description()).contains("successfully");
         assertThat(responseMap.get("400").description()).contains("Validation failed");
         assertThat(responseMap.get("401").description()).contains("Unauthorized");
+        assertThat(responseMap.get("403").description()).contains("not verified");
         assertThat(responseMap.get("423").description()).contains("Locked");
         assertThat(responseMap.get("500").description()).contains("Internal server error");
     }
@@ -292,7 +293,7 @@ class AuthControllerSwaggerTest {
     }
 
     @Test
-    @DisplayName("OpenApiConfig should produce OpenAPI bean with title and version")
+    @DisplayName("OpenApiConfig should produce OpenAPI bean with title, version, and Bearer security scheme")
     void openApiConfigShouldProduceValidMetadata() {
         OpenApiConfig config = new OpenApiConfig();
         OpenAPI openAPI = config.customOpenAPI();
@@ -301,6 +302,17 @@ class AuthControllerSwaggerTest {
         assertThat(openAPI.getInfo()).isNotNull();
         assertThat(openAPI.getInfo().getTitle()).isEqualTo("Lumintra Backend API");
         assertThat(openAPI.getInfo().getVersion()).isEqualTo("1.0.0");
+
+        assertThat(openAPI.getComponents()).isNotNull();
+        assertThat(openAPI.getComponents().getSecuritySchemes()).containsKey("bearerAuth");
+        io.swagger.v3.oas.models.security.SecurityScheme scheme =
+                openAPI.getComponents().getSecuritySchemes().get("bearerAuth");
+        assertThat(scheme.getType())
+                .isEqualTo(io.swagger.v3.oas.models.security.SecurityScheme.Type.HTTP);
+        assertThat(scheme.getScheme()).isEqualTo("bearer");
+        assertThat(scheme.getBearerFormat()).isEqualTo("JWT");
+        assertThat(openAPI.getSecurity()).isNotEmpty();
+        assertThat(openAPI.getSecurity().get(0)).containsKey("bearerAuth");
     }
     @Test
     @DisplayName("googleLogin endpoint should have Swagger @Operation and documentation details")

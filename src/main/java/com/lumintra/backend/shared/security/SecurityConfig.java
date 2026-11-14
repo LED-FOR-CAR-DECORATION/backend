@@ -65,6 +65,12 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/**").permitAll()
                         .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/commerce/webhooks/ahamove",
+                                "/api/payments/webhooks/sepay",
+                                "/api/payments/mock-success/**"
+                        ).permitAll()
+                        .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"

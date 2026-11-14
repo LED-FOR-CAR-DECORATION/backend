@@ -21,4 +21,6 @@ public interface TagRepository extends JpaRepository<TagEntity, Long> {
     @Query(value = "LOCK TABLE tag IN SHARE ROW EXCLUSIVE MODE", nativeQuery = true)
     void lockForCreation();
 
+    @Query("select count(tag) > 0 from TagEntity tag where lower(trim(tag.name)) = lower(:name)")
+    boolean existsByNormalizedName(@Param("name") String name);
 }

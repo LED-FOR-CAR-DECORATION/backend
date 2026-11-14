@@ -44,7 +44,7 @@ public class AuthController {
 
     @Operation(
             summary = "Authenticate user credentials",
-            description = "Authenticates user credentials using email and password. Upon success, returns access and refresh tokens. Failed attempts are tracked (lockout occurs after 5 failed attempts)."
+            description = "Authenticates user credentials using normalized email and password. Rejects deleted, suspended, and pending-verification accounts (dispatching a verification OTP email for pending customer accounts). Upon success, returns access and refresh tokens. Failed attempts are tracked (lockout occurs after 5 failed attempts)."
     )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -79,7 +79,7 @@ public class AuthController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
-                    description = "Unauthorized: Invalid email or password",
+                    description = "Unauthorized: Invalid email or password, or account suspended/deleted",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class),
@@ -90,6 +90,27 @@ public class AuthController {
                                               "code": "INVALID_CREDENTIALS",
                                               "message": "Invalid email or password",
                                               "status": 401,
+                                              "timestamp": "2026-10-29T07:30:00Z",
+                                              "traceId": "trace-12345",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: Account email is not verified. A verification OTP email has been sent if eligible",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Account Not Verified",
+                                    value = """
+                                            {
+                                              "code": "ACCOUNT_NOT_VERIFIED",
+                                              "message": "Account email is not verified. Please verify your email.",
+                                              "status": 403,
                                               "timestamp": "2026-10-29T07:30:00Z",
                                               "traceId": "trace-12345",
                                               "details": []

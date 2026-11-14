@@ -1,7 +1,9 @@
 package com.lumintra.backend.shared.exception;
 
 import com.lumintra.backend.shared.exception.commerce.*;
+import com.lumintra.backend.shared.exception.device.*;
 import com.lumintra.backend.shared.exception.iam.*;
+import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
@@ -111,15 +113,66 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("ORDER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(LedInstanceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleLedInstanceNotFound(LedInstanceNotFoundException ex) {
+        return buildErrorResponse("LED_INSTANCE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidDeviceQrException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidDeviceQr(InvalidDeviceQrException ex) {
+        return buildErrorResponse("INVALID_DEVICE_QR", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DeviceAlreadyBoundException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceAlreadyBound(DeviceAlreadyBoundException ex) {
+        return buildErrorResponse("DEVICE_ALREADY_BOUND", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(DeviceOwnershipMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceOwnershipMismatch(DeviceOwnershipMismatchException ex) {
+        return buildErrorResponse("DEVICE_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(OrderNotDeliveredYetException.class)
+    public ResponseEntity<ErrorResponse> handleOrderNotDeliveredYet(OrderNotDeliveredYetException ex) {
+        return buildErrorResponse("ORDER_NOT_DELIVERED_YET", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(OrderStatusTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleOrderStatusTransition(OrderStatusTransitionException ex) {
+        return buildErrorResponse("INVALID_ORDER_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(CarrierDispatchException.class)
+    public ResponseEntity<ErrorResponse> handleCarrierDispatchException(CarrierDispatchException ex) {
+        return buildErrorResponse(ex.getErrorCode(), ex.getMessage(), ex.getHttpStatus());
+    }
+
+    // Payment exceptions
+    @ExceptionHandler(PaymentSessionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentSessionNotFound(PaymentSessionNotFoundException ex) {
+        return buildErrorResponse("PAYMENT_SESSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
     // IAM exceptions
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
         return buildErrorResponse("INVALID_CREDENTIALS", ex.getMessage(), HttpStatus.UNAUTHORIZED);
     }
 
+    @ExceptionHandler(InvalidManagedUserRoleException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidManagedUserRole(InvalidManagedUserRoleException ex) {
+        return buildErrorResponse("INVALID_MANAGED_USER_ROLE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(AccountLockedException.class)
     public ResponseEntity<ErrorResponse> handleAccountLocked(AccountLockedException ex) {
         return buildErrorResponse("ACCOUNT_LOCKED", ex.getMessage(), HttpStatus.LOCKED);
+    }
+
+    @ExceptionHandler(AccountNotVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleAccountNotVerified(AccountNotVerifiedException ex) {
+        return buildErrorResponse("ACCOUNT_NOT_VERIFIED", ex.getMessage(), HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
@@ -172,11 +225,19 @@ public class GlobalExceptionHandler {
                         .message(error.getDefaultMessage())
                         .build())
                 .toList();
+        String failedFields = details.stream()
+                .map(detail -> detail.getField() + ":" + detail.getMessage())
+                .reduce((a, b) -> a + "; " + b)
+                .orElse("none");
+        log.debug("Request validation failed [fields={}]", failedFields);
         return buildErrorResponse("VALIDATION_FAILED", "Invalid request payload", HttpStatus.BAD_REQUEST, details);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        Throwable cause = ex.getMostSpecificCause();
+        String causeType = cause != null ? cause.getClass().getSimpleName() : ex.getClass().getSimpleName();
+        log.debug("Unreadable HTTP request body [causeType={}]", causeType);
         return buildErrorResponse("VALIDATION_FAILED", "Malformed JSON request or invalid field value", HttpStatus.BAD_REQUEST);
     }
 

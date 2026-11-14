@@ -7,7 +7,6 @@ import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 
 import io.swagger.v3.oas.annotations.*;
-import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.media.*;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.*;
@@ -28,17 +27,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/management/admin/users")
 @RequiredArgsConstructor
 @Tag(name = "User Management", description = "Internal account management")
-@SecurityScheme(
-        name = "internalUserBearerAuth",
-        type = SecuritySchemeType.HTTP,
-        scheme = "bearer",
-        bearerFormat = "JWT")
 public class CreateInternalUserController {
     private final CreateInternalUserUseCase useCase;
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    @SecurityRequirement(name = "internalUserBearerAuth")
+    @SecurityRequirement(name = "bearerAuth")
     @Operation(
             summary = "Create an internal user",
             description =
