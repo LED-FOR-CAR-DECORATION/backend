@@ -8,6 +8,7 @@ import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
+import com.lumintra.backend.shared.exception.store.InvalidBundlePriceException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -49,6 +50,11 @@ public class GlobalExceptionHandler {
         var status = ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
                 ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND;
         return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
+    }
+
+    @ExceptionHandler(InvalidBundlePriceException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidBundlePrice(InvalidBundlePriceException ex) {
+        return buildErrorResponse("INVALID_BUNDLE_PRICE", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(ProductNotFoundException.class)
