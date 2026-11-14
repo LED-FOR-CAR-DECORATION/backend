@@ -11,6 +11,9 @@ import java.util.Optional;
 
 @Repository
 public interface TagRepository extends JpaRepository<TagEntity, Long> {
+    @Query("select count(tag) > 0 from TagEntity tag where tag.tagId <> :id and lower(trim(tag.name)) = lower(:name)")
+    boolean existsByNormalizedNameExcluding(@Param("name") String name, @Param("id") long id);
+
     Optional<TagEntity> findByName(String name);
 
     // Serialize tag writes while checking uniqueness without changing the database schema.
