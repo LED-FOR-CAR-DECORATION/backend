@@ -290,4 +290,54 @@ class LedInstanceMapperTest {
         assertThat(response.boundAt()).isEqualTo(boundAt);
         assertThat(response.warrantyExpiresAt()).isEqualTo(warrantyExpiresAt);
     }
+
+    @Test
+    @DisplayName("DEV-94 MAP-04 [N]: Maps customer-owned LED instance and model into CustomerDeviceItem with warranty status")
+    void toCustomerDeviceItem_mapsSummaryAndWarrantyStatus() {
+        Instant boundAt = Instant.parse("2026-11-14T08:00:00Z");
+        Instant warrantyExpiresAt = Instant.parse("2027-05-13T08:00:00Z");
+
+        LedInstanceEntity entity = LedInstanceEntity.createWithState(
+                101L,
+                "LMT-64X16-0009",
+                "aa:bb:cc:11:22:09",
+                "REV_1_0",
+                42L,
+                "Rear Window Matrix",
+                LedInstanceStatus.BOUND,
+                Instant.parse("2026-10-15T08:00:00Z"),
+                boundAt,
+                warrantyExpiresAt
+        );
+        ReflectionTestUtils.setField(entity, "instanceId", 509L);
+        entity.setCurrentFirmwareId(7L);
+
+        LedModelEntity modelEntity = LedModelEntity.createCatalogModel(
+                101L,
+                101L,
+                "Lumintra Neo 64x16",
+                64,
+                16,
+                Map.of(),
+                50L,
+                LedModelStatus.ACTIVE
+        );
+
+        var item = mapper.toCustomerDeviceItem(entity, modelEntity, boundAt.plusSeconds(60));
+
+        assertThat(item.deviceId()).isEqualTo(509L);
+        assertThat(item.serialNumber()).isEqualTo("LMT-64X16-0009");
+        assertThat(item.macAddress()).isEqualTo("AA:BB:CC:11:22:09");
+        assertThat(item.deviceName()).isEqualTo("Rear Window Matrix");
+        assertThat(item.status()).isEqualTo(LedInstanceStatus.BOUND);
+        assertThat(item.modelId()).isEqualTo(101L);
+        assertThat(item.modelName()).isEqualTo("Lumintra Neo 64x16");
+        assertThat(item.widthPx()).isEqualTo(64);
+        assertThat(item.heightPx()).isEqualTo(16);
+        assertThat(item.currentFirmwareId()).isEqualTo(7L);
+        assertThat(item.boundAt()).isEqualTo(boundAt);
+        assertThat(item.warrantyExpiresAt()).isEqualTo(warrantyExpiresAt);
+        assertThat(item.warrantyStatus()).isEqualTo(WarrantyStatus.ACTIVE);
+        assertThat(mapper.toCustomerDeviceItem(null, modelEntity, boundAt)).isNull();
+    }
 }

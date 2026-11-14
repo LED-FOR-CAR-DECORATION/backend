@@ -55,6 +55,9 @@ class DeviceControllerTest {
     private ClaimDeviceUseCase claimDeviceUseCase;
 
     @MockitoBean
+    private com.lumintra.backend.device.application.ListCustomerDevicesUseCase listCustomerDevicesUseCase;
+
+    @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
@@ -242,6 +245,173 @@ class DeviceControllerTest {
         mockMvc.perform(post("/api/devices/claim")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_REQUEST_JSON))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
+
+    @Test
+    @WithMockUser(username = "42", roles = {"CUSTOMER"})
+    @DisplayName("DEV-94 CTRL-11 [N]: GET /api/devices returns 200 OK wrapped in ApiResponse(data, meta) with default pagination")
+    void listDevices_authenticatedCustomer_returns200WithApiResponseEnvelopeAndDefaultPagination() throws Exception {
+        var item = com.lumintra.backend.device.api.response.CustomerDeviceListResponse.CustomerDeviceItem.builder()
+                .deviceId(2002L)
+                .serialNumber("SN-2026-0002")
+                .macAddress("AA:BB:CC:DD:EE:02")
+                .deviceName("Rear Window Matrix")
+                .status(com.lumintra.backend.device.domain.model.LedInstanceStatus.BOUND)
+                .modelId(101L)
+                .modelName("Lumintra Neo 64x16")
+                .widthPx(64)
+                .heightPx(16)
+                .currentFirmwareId(3L)
+                .boundAt(Instant.parse("2026-11-14T10:15:30Z"))
+                .warrantyExpiresAt(Instant.parse("2027-11-14T10:15:30Z"))
+                .warrantyStatus(com.lumintra.backend.device.domain.model.WarrantyStatus.ACTIVE)
+                .build();
+
+        var meta = com.lumintra.backend.shared.response.PaginationMeta.builder()
+                .page(0)
+                .size(20)
+                .totalElements(1)
+                .totalPages(1)
+                .hasNext(false)
+                .hasPrevious(false)
+                .build();
+
+        when(listCustomerDevicesUseCase.execute(
+                42L,
+                new com.lumintra.backend.device.api.request.CustomerDeviceFilterRequest(0, 20)))
+                .thenReturn(com.lumintra.backend.device.api.response.CustomerDeviceListResponse.builder()
+                        .items(List.of(item))
+                        .meta(meta)
+                        .build());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/devices"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].deviceId").value(2002))
+                .andExpect(jsonPath("$.data[0].serialNumber").value("SN-2026-0002"))
+                .andExpect(jsonPath("$.data[0].macAddress").value("AA:BB:CC:DD:EE:02"))
+                .andExpect(jsonPath("$.data[0].deviceName").value("Rear Window Matrix"))
+                .andExpect(jsonPath("$.data[0].status").value("BOUND"))
+                .andExpect(jsonPath("$.data[0].modelId").value(101))
+                .andExpect(jsonPath("$.data[0].modelName").value("Lumintra Neo 64x16"))
+                .andExpect(jsonPath("$.data[0].widthPx").value(64))
+                .andExpect(jsonPath("$.data[0].heightPx").value(16))
+                .andExpect(jsonPath("$.data[0].currentFirmwareId").value(3))
+                .andExpect(jsonPath("$.data[0].boundAt").value("2026-11-14T10:15:30Z"))
+                .andExpect(jsonPath("$.data[0].warrantyExpiresAt").value("2027-11-14T10:15:30Z"))
+                .andExpect(jsonPath("$.data[0].warrantyStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.meta.page").value(0))
+                .andExpect(jsonPath("$.meta.size").value(20))
+                .andExpect(jsonPath("$.meta.totalElements").value(1))
+                .andExpect(jsonPath("$.meta.totalPages").value(1))
+                .andExpect(jsonPath("$.meta.hasNext").value(false))
+                .andExpect(jsonPath("$.meta.hasPrevious").value(false));
+
+        verify(listCustomerDevicesUseCase).execute(
+                42L,
+                new com.lumintra.backend.device.api.request.CustomerDeviceFilterRequest(0, 20));
+    }
+
+    @Test
+    @WithMockUser(username = "42", roles = {"CUSTOMER"})
+    @DisplayName("DEV-94 CTRL-12 [B]: GET /api/devices binds custom and boundary pagination params and returns empty data with meta")
+    void listDevices_customAndEmptyPagination_returns200WithMeta() throws Exception {
+        var meta = com.lumintra.backend.shared.response.PaginationMeta.builder()
+                .page(2)
+                .size(1)
+                .totalElements(0)
+                .totalPages(0)
+                .hasNext(false)
+                .hasPrevious(true)
+                .build();
+
+        when(listCustomerDevicesUseCase.execute(eq(42L), any()))
+                .thenReturn(com.lumintra.backend.device.api.response.CustomerDeviceListResponse.builder()
+                        .items(List.of())
+                        .meta(meta)
+                        .build());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/devices")
+                        .param("page", "2")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(0))
+                .andExpect(jsonPath("$.meta.page").value(2))
+                .andExpect(jsonPath("$.meta.size").value(1))
+                .andExpect(jsonPath("$.meta.totalElements").value(0))
+                .andExpect(jsonPath("$.meta.totalPages").value(0))
+                .andExpect(jsonPath("$.meta.hasNext").value(false))
+                .andExpect(jsonPath("$.meta.hasPrevious").value(true));
+
+        verify(listCustomerDevicesUseCase).execute(
+                42L,
+                new com.lumintra.backend.device.api.request.CustomerDeviceFilterRequest(2, 1));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/devices")
+                        .param("page", "0")
+                        .param("size", "100"))
+                .andExpect(status().isOk());
+
+        verify(listCustomerDevicesUseCase).execute(
+                42L,
+                new com.lumintra.backend.device.api.request.CustomerDeviceFilterRequest(0, 100));
+    }
+
+    @Test
+    @WithMockUser(username = "42", roles = {"CUSTOMER"})
+    @DisplayName("DEV-94 CTRL-13 [A]: GET /api/devices returns 400 VALIDATION_FAILED on invalid pagination query parameters")
+    void listDevices_invalidPaginationParams_returns400ValidationFailed() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/devices")
+                        .param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/devices")
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/devices")
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verify(listCustomerDevicesUseCase, never()).execute(any(), any());
+    }
+
+    @Test
+    @DisplayName("DEV-94 CTRL-14 [A]: GET /api/devices returns 401 UNAUTHORIZED when unauthenticated")
+    void listDevices_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/devices"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verify(listCustomerDevicesUseCase, never()).execute(any(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "42", roles = {"STAFF"})
+    @DisplayName("DEV-94 CTRL-15 [A]: GET /api/devices returns 403 FORBIDDEN when authenticated user is not CUSTOMER")
+    void listDevices_nonCustomerRole_returns403() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/devices"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verify(listCustomerDevicesUseCase, never()).execute(any(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "42", roles = {"CUSTOMER"})
+    @DisplayName("DEV-94 CTRL-16 [A]: GET /api/devices maps unexpected runtime exception to 500 INTERNAL_SERVER_ERROR")
+    void listDevices_unexpectedFailure_returns500() throws Exception {
+        when(listCustomerDevicesUseCase.execute(eq(42L), any()))
+                .thenThrow(new RuntimeException("Database error"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/devices"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
     }

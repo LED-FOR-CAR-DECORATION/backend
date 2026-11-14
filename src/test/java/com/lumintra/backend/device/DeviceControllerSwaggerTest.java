@@ -2,7 +2,10 @@ package com.lumintra.backend.device;
 
 import com.lumintra.backend.device.api.controller.DeviceController;
 import com.lumintra.backend.device.api.request.ClaimDeviceRequest;
+import com.lumintra.backend.device.api.request.CustomerDeviceFilterRequest;
 import com.lumintra.backend.device.api.response.ClaimDeviceResponse;
+import com.lumintra.backend.device.api.response.CustomerDeviceListResponse;
+import com.lumintra.backend.device.api.response.CustomerDeviceListResponse.CustomerDeviceItem;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -12,11 +15,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.core.Authentication;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -77,6 +80,47 @@ class DeviceControllerSwaggerTest {
                 ClaimDeviceResponse.class,
                 "deviceId", "serialNumber", "macAddress", "deviceName",
                 "modelId", "modelName", "spec", "boundAt", "warrantyExpiresAt"
+        );
+    }
+
+    @Test
+    @DisplayName("DEV-94 SWG-03: DeviceController.listDevices, CustomerDeviceFilterRequest, and CustomerDeviceListResponse declare complete OpenAPI metadata and @Schema annotations")
+    void listDevices_hasCompleteOpenApiMetadataAndDtoSchemas() throws NoSuchFieldException, NoSuchMethodException {
+        Method method = DeviceController.class.getMethod(
+                "listDevices", Authentication.class, CustomerDeviceFilterRequest.class);
+
+        Operation operation = method.getAnnotation(Operation.class);
+        assertThat(operation).isNotNull();
+        assertThat(operation.summary()).isNotBlank();
+        assertThat(operation.description()).isNotBlank();
+        assertThat(operation.security()).isNotEmpty();
+        assertThat(operation.security()[0].name()).isEqualTo("bearerAuth");
+
+        ApiResponses apiResponses = method.getAnnotation(ApiResponses.class);
+        assertThat(apiResponses).isNotNull();
+        Map<String, ApiResponse> responseMap = Arrays.stream(apiResponses.value())
+                .collect(Collectors.toMap(ApiResponse::responseCode, Function.identity()));
+
+        assertThat(responseMap.keySet()).containsExactlyInAnyOrder("200", "400", "401", "403", "500");
+        assertThat(responseMap.get("200").description()).isNotBlank();
+
+        for (String errCode : new String[]{"400", "401", "403", "500"}) {
+            ApiResponse errResponse = responseMap.get(errCode);
+            assertThat(errResponse.content()).isNotEmpty();
+            Content content = errResponse.content()[0];
+            assertThat(content.mediaType()).isEqualTo("application/json");
+            assertThat(content.schema().implementation()).isEqualTo(ErrorResponse.class);
+            assertThat(content.examples()).isNotEmpty();
+            assertThat(content.examples()[0].value()).contains("\"code\":");
+        }
+
+        assertSchemaOnRecordAndFields(CustomerDeviceFilterRequest.class, "page", "size");
+        assertSchemaOnRecordAndFields(CustomerDeviceListResponse.class, "items", "meta");
+        assertSchemaOnRecordAndFields(
+                CustomerDeviceItem.class,
+                "deviceId", "serialNumber", "macAddress", "deviceName", "status",
+                "modelId", "modelName", "widthPx", "heightPx", "currentFirmwareId",
+                "boundAt", "warrantyExpiresAt", "warrantyStatus"
         );
     }
 
