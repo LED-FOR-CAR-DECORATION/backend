@@ -8,6 +8,7 @@ import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
+import com.lumintra.backend.shared.exception.store.TagAlreadyExistsException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -59,6 +60,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(StoreProductTagNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleStoreProductTagNotFound(StoreProductTagNotFoundException ex) {
         return buildErrorResponse("TAG_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(TagAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleTagAlreadyExists(TagAlreadyExistsException ex) {
+        return buildErrorResponse("TAG_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     // Commerce exceptions
