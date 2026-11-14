@@ -1,6 +1,7 @@
 package com.lumintra.backend.device;
 
 import com.lumintra.backend.device.api.response.ClaimDeviceResponse;
+import com.lumintra.backend.device.api.response.CustomerDeviceDetailResponse;
 import com.lumintra.backend.device.api.response.LedInstanceDetailResponse;
 import com.lumintra.backend.device.api.response.LedInstanceListResponse;
 import com.lumintra.backend.device.api.response.LedModelListResponse;
@@ -339,5 +340,112 @@ class LedInstanceMapperTest {
         assertThat(item.warrantyExpiresAt()).isEqualTo(warrantyExpiresAt);
         assertThat(item.warrantyStatus()).isEqualTo(WarrantyStatus.ACTIVE);
         assertThat(mapper.toCustomerDeviceItem(null, modelEntity, boundAt)).isNull();
+    }
+
+    @Test
+    @DisplayName("DEV-95 MAP-05 [N]: Maps customer device detail with model spec, fulfillment reference, and active warranty")
+    void toCustomerDeviceDetail_mapsFullProfileModelAndFulfillment() {
+        Instant boundAt = Instant.parse("2026-11-14T08:00:00Z");
+        Instant warrantyExpiresAt = Instant.parse("2027-05-13T08:00:00Z");
+
+        LedInstanceEntity entity = LedInstanceEntity.createWithState(
+                101L,
+                "LMT-64X64-0010",
+                "aa:bb:cc:11:22:10",
+                "REV_1_0",
+                42L,
+                "Rear Window Matrix",
+                LedInstanceStatus.BOUND,
+                Instant.parse("2026-10-15T08:00:00Z"),
+                boundAt,
+                warrantyExpiresAt
+        );
+        ReflectionTestUtils.setField(entity, "instanceId", 2001L);
+        entity.setCurrentFirmwareId(12L);
+
+        LedModelEntity modelEntity = LedModelEntity.createCatalogModel(
+                101L,
+                301L,
+                "Lumintra Matrix 64x64 Pro",
+                64,
+                64,
+                Map.of("attributes", List.of(Map.of("label", "Voltage", "value", "5V USB-C"))),
+                50L,
+                LedModelStatus.ACTIVE
+        );
+
+        CustomerDeviceDetailResponse response = mapper.toCustomerDeviceDetail(
+                entity,
+                modelEntity,
+                new InstanceFulfillmentSnapshot(2001L, 55L, 102L),
+                boundAt.plusSeconds(120)
+        );
+
+        assertThat(response.deviceId()).isEqualTo(2001L);
+        assertThat(response.serialNumber()).isEqualTo("LMT-64X64-0010");
+        assertThat(response.macAddress()).isEqualTo("AA:BB:CC:11:22:10");
+        assertThat(response.deviceName()).isEqualTo("Rear Window Matrix");
+        assertThat(response.status()).isEqualTo(LedInstanceStatus.BOUND);
+        assertThat(response.currentFirmwareId()).isEqualTo(12L);
+        assertThat(response.boundAt()).isEqualTo(boundAt);
+        assertThat(response.warrantyExpiresAt()).isEqualTo(warrantyExpiresAt);
+        assertThat(response.warrantyStatus()).isEqualTo(WarrantyStatus.ACTIVE);
+        assertThat(response.model()).isEqualTo(CustomerDeviceDetailResponse.ModelInfo.builder()
+                .modelId(101L)
+                .productId(301L)
+                .modelName("Lumintra Matrix 64x64 Pro")
+                .status(LedModelStatus.ACTIVE)
+                .spec(LedModelListResponse.LedSpec.builder()
+                        .widthPx(64)
+                        .heightPx(64)
+                        .attributes(List.of(new LedModelListResponse.SpecAttribute("Voltage", "5V USB-C")))
+                        .build())
+                .build());
+        assertThat(response.fulfillment()).isEqualTo(new CustomerDeviceDetailResponse.FulfillmentInfo(55L, 102L));
+        assertThat(CustomerDeviceDetailResponse.class.getRecordComponents())
+                .extracting(java.lang.reflect.RecordComponent::getName)
+                .doesNotContain("qrPayload", "owner", "hardwareRevision");
+    }
+
+    @Test
+    @DisplayName("DEV-95 MAP-06 [B]: Preserves deprecated model metadata, handles missing fulfillment or model, and computes warranty boundaries")
+    void toCustomerDeviceDetail_deprecatedModelNullFallbacksAndWarrantyBoundaries() {
+        Instant boundAt = Instant.parse("2026-11-01T10:00:00Z");
+        Instant expiry = Instant.parse("2027-04-30T10:00:00Z");
+
+        LedInstanceEntity boundDevice = LedInstanceEntity.createWithState(
+                102L, "LMT-OLD-01", "AA:BB:CC:00:00:21", "REV_1_0",
+                42L, null, LedInstanceStatus.BOUND, Instant.parse("2026-10-01T00:00:00Z"),
+                boundAt, expiry);
+        ReflectionTestUtils.setField(boundDevice, "instanceId", 2002L);
+
+        LedModelEntity deprecatedModel = LedModelEntity.createCatalogModel(
+                102L, null, "Lumintra Legacy 32x16", 32, 16, Map.of(), null, LedModelStatus.DEPRECATED);
+
+        CustomerDeviceDetailResponse deprecatedExpired = mapper.toCustomerDeviceDetail(
+                boundDevice,
+                deprecatedModel,
+                new InstanceFulfillmentSnapshot(2002L, null, null),
+                expiry.plusSeconds(1)
+        );
+        assertThat(deprecatedExpired.warrantyStatus()).isEqualTo(WarrantyStatus.EXPIRED);
+        assertThat(deprecatedExpired.fulfillment()).isNull();
+        assertThat(deprecatedExpired.model().modelId()).isEqualTo(102L);
+        assertThat(deprecatedExpired.model().productId()).isNull();
+        assertThat(deprecatedExpired.model().status()).isEqualTo(LedModelStatus.DEPRECATED);
+        assertThat(deprecatedExpired.model().spec().widthPx()).isEqualTo(32);
+
+        LedInstanceEntity unactivated = LedInstanceEntity.createWithState(
+                102L, "LMT-NEW-02", "AA:BB:CC:00:00:22", "REV_1_0",
+                42L, "Test", LedInstanceStatus.BOUND, Instant.parse("2026-10-01T00:00:00Z"),
+                null, null);
+        ReflectionTestUtils.setField(unactivated, "instanceId", 2003L);
+
+        CustomerDeviceDetailResponse missingModel = mapper.toCustomerDeviceDetail(
+                unactivated, null, null, expiry);
+        assertThat(missingModel.warrantyStatus()).isEqualTo(WarrantyStatus.NOT_ACTIVATED);
+        assertThat(missingModel.model()).isEqualTo(CustomerDeviceDetailResponse.ModelInfo.builder().modelId(102L).build());
+        assertThat(missingModel.fulfillment()).isNull();
+        assertThat(mapper.toCustomerDeviceDetail(null, deprecatedModel, null, expiry)).isNull();
     }
 }

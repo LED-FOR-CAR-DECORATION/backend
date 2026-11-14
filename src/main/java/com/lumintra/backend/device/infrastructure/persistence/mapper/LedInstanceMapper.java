@@ -1,11 +1,14 @@
 package com.lumintra.backend.device.infrastructure.persistence.mapper;
 
 import com.lumintra.backend.device.api.response.ClaimDeviceResponse;
+import com.lumintra.backend.device.api.response.CustomerDeviceDetailResponse;
+import com.lumintra.backend.device.api.response.CustomerDeviceListResponse;
 import com.lumintra.backend.device.api.response.LedInstanceDetailResponse;
 import com.lumintra.backend.device.api.response.LedInstanceListResponse;
 import com.lumintra.backend.device.api.response.LedModelListResponse;
 import com.lumintra.backend.device.domain.model.InstanceFulfillmentSnapshot;
 import com.lumintra.backend.device.domain.model.LedModelSnapshot;
+import com.lumintra.backend.device.domain.model.LedModelStatus;
 import com.lumintra.backend.device.domain.service.FactoryQrPayloadService;
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstanceEntity;
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedModelEntity;
@@ -15,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.function.BiFunction;
 
 /**
  * Maps persisted {@link LedInstanceEntity} rows and cross-module snapshots into inventory response DTOs.
@@ -52,7 +56,11 @@ public class LedInstanceMapper {
                 .hardwareRevision(entity.getHardwareRevision())
                 .deviceName(entity.getDeviceName())
                 .status(entity.getStatus())
-                .fulfillment(toListFulfillment(fulfillmentSnapshot))
+                .fulfillment(mapFulfillment(fulfillmentSnapshot,
+                        (orderId, orderItemId) -> LedInstanceListResponse.FulfillmentInfo.builder()
+                                .orderId(orderId)
+                                .orderItemId(orderItemId)
+                                .build()))
                 .owner(toListOwner(entity.getOwnerCustomerId(), ownerProfile))
                 .boundAt(entity.getBoundAt())
                 .warrantyExpiresAt(entity.getWarrantyExpiresAt())
@@ -85,7 +93,7 @@ public class LedInstanceMapper {
                 .build();
     }
 
-    public com.lumintra.backend.device.api.response.CustomerDeviceListResponse.CustomerDeviceItem toCustomerDeviceItem(
+    public CustomerDeviceListResponse.CustomerDeviceItem toCustomerDeviceItem(
             LedInstanceEntity entity,
             LedModelEntity modelEntity,
             Instant asOf) {
@@ -99,7 +107,7 @@ public class LedInstanceMapper {
         String resolvedModelName = modelEntity != null ? modelEntity.getModelName() : null;
         LedModelListResponse.LedSpec resolvedSpec = modelEntity != null ? ledModelMapper.toSpec(modelEntity) : null;
 
-        return com.lumintra.backend.device.api.response.CustomerDeviceListResponse.CustomerDeviceItem.builder()
+        return CustomerDeviceListResponse.CustomerDeviceItem.builder()
                 .deviceId(entity.getInstanceId())
                 .serialNumber(entity.getSerialNumber())
                 .macAddress(entity.getMacAddress())
@@ -116,6 +124,41 @@ public class LedInstanceMapper {
                 .build();
     }
 
+    public CustomerDeviceDetailResponse toCustomerDeviceDetail(
+            LedInstanceEntity entity,
+            LedModelEntity modelEntity,
+            InstanceFulfillmentSnapshot fulfillmentSnapshot,
+            Instant asOf) {
+        if (entity == null) {
+            return null;
+        }
+
+        return CustomerDeviceDetailResponse.builder()
+                .deviceId(entity.getInstanceId())
+                .serialNumber(entity.getSerialNumber())
+                .macAddress(entity.getMacAddress())
+                .deviceName(entity.getDeviceName())
+                .status(entity.getStatus())
+                .currentFirmwareId(entity.getCurrentFirmwareId())
+                .boundAt(entity.getBoundAt())
+                .warrantyExpiresAt(entity.getWarrantyExpiresAt())
+                .warrantyStatus(entity.resolveWarrantyStatus(asOf))
+                .model(mapModelInfo(entity, modelEntity,
+                        (modelId, productId, modelName, status, spec) -> CustomerDeviceDetailResponse.ModelInfo.builder()
+                                .modelId(modelId)
+                                .productId(productId)
+                                .modelName(modelName)
+                                .status(status)
+                                .spec(spec)
+                                .build()))
+                .fulfillment(mapFulfillment(fulfillmentSnapshot,
+                        (orderId, orderItemId) -> CustomerDeviceDetailResponse.FulfillmentInfo.builder()
+                                .orderId(orderId)
+                                .orderItemId(orderItemId)
+                                .build()))
+                .build();
+    }
+
     public LedInstanceDetailResponse toDetail(
             LedInstanceEntity entity,
             LedModelEntity modelEntity,
@@ -124,7 +167,14 @@ public class LedInstanceMapper {
             Instant asOf) {
         return LedInstanceDetailResponse.builder()
                 .instanceId(entity.getInstanceId())
-                .model(toModelInfo(entity, modelEntity))
+                .model(mapModelInfo(entity, modelEntity,
+                        (modelId, productId, modelName, status, spec) -> LedInstanceDetailResponse.ModelInfo.builder()
+                                .modelId(modelId)
+                                .productId(productId)
+                                .modelName(modelName)
+                                .status(status)
+                                .spec(spec)
+                                .build()))
                 .serialNumber(entity.getSerialNumber())
                 .macAddress(entity.getMacAddress())
                 .hardwareRevision(entity.getHardwareRevision())
@@ -135,7 +185,11 @@ public class LedInstanceMapper {
                 .boundAt(entity.getBoundAt())
                 .warrantyExpiresAt(entity.getWarrantyExpiresAt())
                 .manufacturedAt(entity.getManufacturedAt())
-                .fulfillment(toDetailFulfillment(fulfillmentSnapshot))
+                .fulfillment(mapFulfillment(fulfillmentSnapshot,
+                        (orderId, orderItemId) -> LedInstanceDetailResponse.FulfillmentInfo.builder()
+                                .orderId(orderId)
+                                .orderItemId(orderItemId)
+                                .build()))
                 .owner(toDetailOwner(entity.getOwnerCustomerId(), ownerProfile))
                 .qrPayload(resolveQrPayload(entity))
                 .createdAt(entity.getCreatedAt())
@@ -143,43 +197,34 @@ public class LedInstanceMapper {
                 .build();
     }
 
-    private LedInstanceDetailResponse.ModelInfo toModelInfo(LedInstanceEntity entity, LedModelEntity modelEntity) {
+    private <T> T mapModelInfo(LedInstanceEntity entity, LedModelEntity modelEntity, ModelInfoFactory<T> factory) {
         if (modelEntity == null) {
-            return LedInstanceDetailResponse.ModelInfo.builder()
-                    .modelId(entity.getModelId())
-                    .build();
+            return factory.create(entity.getModelId(), null, null, null, null);
         }
-        return LedInstanceDetailResponse.ModelInfo.builder()
-                .modelId(modelEntity.getModelId() != null ? modelEntity.getModelId() : entity.getModelId())
-                .productId(modelEntity.getProductId())
-                .modelName(modelEntity.getModelName())
-                .status(ledModelMapper.resolveStatus(modelEntity))
-                .spec(ledModelMapper.toSpec(modelEntity))
-                .build();
+        Long resolvedModelId = modelEntity.getModelId() != null ? modelEntity.getModelId() : entity.getModelId();
+        return factory.create(
+                resolvedModelId,
+                modelEntity.getProductId(),
+                modelEntity.getModelName(),
+                ledModelMapper.resolveStatus(modelEntity),
+                ledModelMapper.toSpec(modelEntity)
+        );
     }
 
-    private LedInstanceListResponse.FulfillmentInfo toListFulfillment(InstanceFulfillmentSnapshot snapshot) {
+    private <T> T mapFulfillment(InstanceFulfillmentSnapshot snapshot, BiFunction<Long, Long, T> factory) {
         if (!hasFulfillmentData(snapshot)) {
             return null;
         }
-        return LedInstanceListResponse.FulfillmentInfo.builder()
-                .orderId(snapshot.orderId())
-                .orderItemId(snapshot.orderItemId())
-                .build();
-    }
-
-    private LedInstanceDetailResponse.FulfillmentInfo toDetailFulfillment(InstanceFulfillmentSnapshot snapshot) {
-        if (!hasFulfillmentData(snapshot)) {
-            return null;
-        }
-        return LedInstanceDetailResponse.FulfillmentInfo.builder()
-                .orderId(snapshot.orderId())
-                .orderItemId(snapshot.orderItemId())
-                .build();
+        return factory.apply(snapshot.orderId(), snapshot.orderItemId());
     }
 
     private boolean hasFulfillmentData(InstanceFulfillmentSnapshot snapshot) {
         return snapshot != null && (snapshot.orderId() != null || snapshot.orderItemId() != null);
+    }
+
+    @FunctionalInterface
+    private interface ModelInfoFactory<T> {
+        T create(Long modelId, Long productId, String modelName, LedModelStatus status, LedModelListResponse.LedSpec spec);
     }
 
     private LedInstanceListResponse.OwnerInfo toListOwner(Long ownerCustomerId, CustomerProfileSnapshot profile) {
