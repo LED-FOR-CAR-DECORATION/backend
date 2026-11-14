@@ -1,7 +1,7 @@
 package com.lumintra.backend.shared.exception;
 
 import com.lumintra.backend.shared.exception.commerce.*;
-import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException;
+import com.lumintra.backend.shared.exception.device.*;
 import com.lumintra.backend.shared.exception.iam.*;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
@@ -110,6 +110,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(LedInstanceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleLedInstanceNotFound(LedInstanceNotFoundException ex) {
         return buildErrorResponse("LED_INSTANCE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidDeviceQrException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidDeviceQr(InvalidDeviceQrException ex) {
+        return buildErrorResponse("INVALID_DEVICE_QR", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DeviceAlreadyBoundException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceAlreadyBound(DeviceAlreadyBoundException ex) {
+        return buildErrorResponse("DEVICE_ALREADY_BOUND", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(DeviceOwnershipMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceOwnershipMismatch(DeviceOwnershipMismatchException ex) {
+        return buildErrorResponse("DEVICE_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(OrderNotDeliveredYetException.class)
+    public ResponseEntity<ErrorResponse> handleOrderNotDeliveredYet(OrderNotDeliveredYetException ex) {
+        return buildErrorResponse("ORDER_NOT_DELIVERED_YET", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(OrderStatusTransitionException.class)

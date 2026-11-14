@@ -1,5 +1,6 @@
 package com.lumintra.backend.device;
 
+import com.lumintra.backend.device.api.response.ClaimDeviceResponse;
 import com.lumintra.backend.device.api.response.LedInstanceDetailResponse;
 import com.lumintra.backend.device.api.response.LedInstanceListResponse;
 import com.lumintra.backend.device.api.response.LedModelListResponse;
@@ -240,5 +241,53 @@ class LedInstanceMapperTest {
                 .isEqualTo(WarrantyStatus.ACTIVE);
         assertThat(mapper.toDetail(activated, null, null, null, expiry.plusSeconds(1)).warrantyStatus())
                 .isEqualTo(WarrantyStatus.EXPIRED);
+    }
+
+    @Test
+    @DisplayName("DEV-93 MAP-03 [N]: Maps bound LED instance and model into ClaimDeviceResponse")
+    void toClaimResponse_mapsDeviceAndModelSpecFields() {
+        Instant boundAt = Instant.parse("2026-11-14T08:00:00Z");
+        Instant warrantyExpiresAt = Instant.parse("2027-05-13T08:00:00Z");
+
+        LedInstanceEntity entity = LedInstanceEntity.createWithState(
+                101L,
+                "LMT-64X64-0005",
+                "aa:bb:cc:11:22:05",
+                "REV_1_0",
+                42L,
+                "Rear Window Matrix",
+                LedInstanceStatus.BOUND,
+                Instant.parse("2026-10-15T08:00:00Z"),
+                boundAt,
+                warrantyExpiresAt
+        );
+        ReflectionTestUtils.setField(entity, "instanceId", 501L);
+
+        LedModelEntity modelEntity = LedModelEntity.createCatalogModel(
+                101L,
+                101L,
+                "Lumintra Matrix 64x64 Pro",
+                64,
+                64,
+                Map.of("attributes", List.of(Map.of("label", "Voltage", "value", "5V USB-C"))),
+                50L,
+                LedModelStatus.ACTIVE
+        );
+
+        ClaimDeviceResponse response = mapper.toClaimResponse(entity, modelEntity);
+
+        assertThat(response.deviceId()).isEqualTo(501L);
+        assertThat(response.serialNumber()).isEqualTo("LMT-64X64-0005");
+        assertThat(response.macAddress()).isEqualTo("AA:BB:CC:11:22:05");
+        assertThat(response.deviceName()).isEqualTo("Rear Window Matrix");
+        assertThat(response.modelId()).isEqualTo(101L);
+        assertThat(response.modelName()).isEqualTo("Lumintra Matrix 64x64 Pro");
+        assertThat(response.spec().widthPx()).isEqualTo(64);
+        assertThat(response.spec().heightPx()).isEqualTo(64);
+        assertThat(response.spec().attributes()).containsExactly(
+                new LedModelListResponse.SpecAttribute("Voltage", "5V USB-C")
+        );
+        assertThat(response.boundAt()).isEqualTo(boundAt);
+        assertThat(response.warrantyExpiresAt()).isEqualTo(warrantyExpiresAt);
     }
 }

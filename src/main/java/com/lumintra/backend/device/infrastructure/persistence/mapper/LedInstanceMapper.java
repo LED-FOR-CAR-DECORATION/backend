@@ -1,7 +1,9 @@
 package com.lumintra.backend.device.infrastructure.persistence.mapper;
 
+import com.lumintra.backend.device.api.response.ClaimDeviceResponse;
 import com.lumintra.backend.device.api.response.LedInstanceDetailResponse;
 import com.lumintra.backend.device.api.response.LedInstanceListResponse;
+import com.lumintra.backend.device.api.response.LedModelListResponse;
 import com.lumintra.backend.device.domain.model.InstanceFulfillmentSnapshot;
 import com.lumintra.backend.device.domain.model.LedModelSnapshot;
 import com.lumintra.backend.device.domain.service.FactoryQrPayloadService;
@@ -58,6 +60,28 @@ public class LedInstanceMapper {
                 .qrPayload(resolveQrPayload(entity))
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
+                .build();
+    }
+
+    public ClaimDeviceResponse toClaimResponse(LedInstanceEntity entity, LedModelEntity modelEntity) {
+        Long resolvedModelId = modelEntity != null && modelEntity.getModelId() != null
+                ? modelEntity.getModelId()
+                : entity.getModelId();
+        String resolvedModelName = modelEntity != null ? modelEntity.getModelName() : null;
+        LedModelListResponse.LedSpec resolvedSpec = modelEntity != null
+                ? ledModelMapper.toSpec(modelEntity)
+                : LedModelListResponse.LedSpec.builder().attributes(java.util.List.of()).build();
+
+        return ClaimDeviceResponse.builder()
+                .deviceId(entity.getInstanceId())
+                .serialNumber(entity.getSerialNumber())
+                .macAddress(entity.getMacAddress())
+                .deviceName(entity.getDeviceName())
+                .modelId(resolvedModelId)
+                .modelName(resolvedModelName)
+                .spec(resolvedSpec)
+                .boundAt(entity.getBoundAt())
+                .warrantyExpiresAt(entity.getWarrantyExpiresAt())
                 .build();
     }
 

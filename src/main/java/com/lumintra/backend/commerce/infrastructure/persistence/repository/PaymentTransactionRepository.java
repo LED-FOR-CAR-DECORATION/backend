@@ -30,5 +30,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     boolean existsByTransactionCodeEndingWith(String suffix);
 
+    Optional<PaymentTransactionEntity> findFirstByTransactionCodeEndingWithOrderByPaymentIdDesc(String suffix);
+
     List<PaymentTransactionEntity> findByTransactionCodeStartingWith(String prefix);
 }
