@@ -16,6 +16,10 @@ public interface UserAccountRepository extends JpaRepository<UserAccountEntity, 
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select account from UserAccountEntity account where account.accountId = :id")
+    Optional<UserAccountEntity> findForManagementUpdate(@Param("id") long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select account from UserAccountEntity account where account.accountId = :id")
     Optional<UserAccountEntity> findForDeletion(@Param("id") long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -16,6 +16,10 @@ import java.time.Instant;
 @Getter
 @Setter
 public class UserAccountEntity {
+    public boolean isAccessDisabled() {
+        return status == AccountStatus.SUSPENDED || status == AccountStatus.DELETED;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long accountId;

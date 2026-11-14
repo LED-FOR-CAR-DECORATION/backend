@@ -28,7 +28,7 @@ public class VerifyEmailUseCase {
         String normalizedEmail = request.email().trim().toLowerCase();
 
         UserAccountEntity account = userAccountRepository.findForEmailVerification(normalizedEmail)
-                .filter(candidate -> candidate.getStatus() != AccountStatus.DELETED)
+                .filter(candidate -> !candidate.isAccessDisabled())
                 .orElseThrow(() -> new UserNotFoundException("Account not found"));
 
         if (account.getStatus() == AccountStatus.ACTIVE) {
