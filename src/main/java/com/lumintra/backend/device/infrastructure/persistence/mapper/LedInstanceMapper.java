@@ -85,6 +85,37 @@ public class LedInstanceMapper {
                 .build();
     }
 
+    public com.lumintra.backend.device.api.response.CustomerDeviceListResponse.CustomerDeviceItem toCustomerDeviceItem(
+            LedInstanceEntity entity,
+            LedModelEntity modelEntity,
+            Instant asOf) {
+        if (entity == null) {
+            return null;
+        }
+
+        Long resolvedModelId = modelEntity != null && modelEntity.getModelId() != null
+                ? modelEntity.getModelId()
+                : entity.getModelId();
+        String resolvedModelName = modelEntity != null ? modelEntity.getModelName() : null;
+        LedModelListResponse.LedSpec resolvedSpec = modelEntity != null ? ledModelMapper.toSpec(modelEntity) : null;
+
+        return com.lumintra.backend.device.api.response.CustomerDeviceListResponse.CustomerDeviceItem.builder()
+                .deviceId(entity.getInstanceId())
+                .serialNumber(entity.getSerialNumber())
+                .macAddress(entity.getMacAddress())
+                .deviceName(entity.getDeviceName())
+                .status(entity.getStatus())
+                .modelId(resolvedModelId)
+                .modelName(resolvedModelName)
+                .widthPx(resolvedSpec != null ? resolvedSpec.widthPx() : null)
+                .heightPx(resolvedSpec != null ? resolvedSpec.heightPx() : null)
+                .currentFirmwareId(entity.getCurrentFirmwareId())
+                .boundAt(entity.getBoundAt())
+                .warrantyExpiresAt(entity.getWarrantyExpiresAt())
+                .warrantyStatus(entity.resolveWarrantyStatus(asOf))
+                .build();
+    }
+
     public LedInstanceDetailResponse toDetail(
             LedInstanceEntity entity,
             LedModelEntity modelEntity,
