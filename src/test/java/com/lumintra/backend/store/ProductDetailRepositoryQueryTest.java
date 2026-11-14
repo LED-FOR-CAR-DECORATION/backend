@@ -246,4 +246,33 @@ class ProductDetailRepositoryQueryTest {
 
         assertThat(missing).isEmpty();
     }
+
+    @Test
+    void listsOnlySubscriptionProductsWithPriceStatusAndPlanDetails() {
+        var subscription = ProductEntity.create("Membership", ProductType.SUBSCRIPTION,
+                new BigDecimal("25.00"), null, null, List.of(), ProductStatus.ARCHIVED, Set.of());
+        var led = ProductEntity.create("LED", ProductType.LED, BigDecimal.ONE,
+                null, null, List.of(), ProductStatus.PUBLISHED, Set.of());
+        em.persist(subscription);
+        em.persist(led);
+        var detail = SubscriptionDetailEntity.create(subscription.getProductId(), "MONTHLY",
+                "Monthly plan", false, 30, true, 0, 3, Map.of(), null);
+        em.persist(detail);
+        em.persist(SubscriptionDetailEntity.create(led.getProductId(), "OTHER", "Other",
+                true, null, false, 0, 3, Map.of(), null));
+        em.flush();
+
+        assertThat(subscriptionDetailRepository.listManagedPlans()).singleElement().satisfies(plan -> {
+            assertThat(plan.subscriptionDetailId()).isEqualTo(detail.getSubscriptionDetailId());
+            assertThat(plan.productId()).isEqualTo(subscription.getProductId());
+            assertThat(plan.planCode()).isEqualTo("MONTHLY");
+            assertThat(plan.planName()).isEqualTo("Monthly plan");
+            assertThat(plan.basePrice()).isEqualByComparingTo("25.00");
+            assertThat(plan.lifetime()).isFalse();
+            assertThat(plan.durationDays()).isEqualTo(30);
+            assertThat(plan.allAccessCharacters()).isTrue();
+            assertThat(plan.status()).isEqualTo(ProductStatus.ARCHIVED);
+            assertThat(plan.createdAt()).isNotNull();
+        });
+    }
 }
