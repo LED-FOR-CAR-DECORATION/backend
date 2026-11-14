@@ -53,7 +53,8 @@ import static org.mockito.BDDMockito.given;
 @DataJpaTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:seeder_int_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=CHARACTER;DB_CLOSE_DELAY=-1",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "app.seed.test-customer-email=customer123@gmail.com"
 })
 @ActiveProfiles("test")
 @Import({
