@@ -1,7 +1,9 @@
 package com.lumintra.backend.device;
 
+import com.lumintra.backend.device.domain.model.VerifiedDeviceQrPayload;
 import com.lumintra.backend.device.infrastructure.config.DeviceQrProperties;
 import com.lumintra.backend.device.infrastructure.security.HmacFactoryQrPayloadService;
+import com.lumintra.backend.shared.exception.device.InvalidDeviceQrException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -68,5 +70,47 @@ class HmacFactoryQrPayloadServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.sign("SN-1", ""))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("DEV-93 QR-04 [N/B]: parseAndVerifyQrPayload accepts valid compact or whitespace-formatted QR JSON and normalizes MAC")
+    void parseAndVerifyQrPayload_validPayload_returnsVerifiedFields() {
+        String sig = service.sign("LMT-64X64-0005", "AA:BB:CC:11:22:05");
+        String compact = service.generateQrPayload("LMT-64X64-0005", "aa:bb:cc:11:22:05");
+
+        VerifiedDeviceQrPayload verified = service.parseAndVerifyQrPayload(compact);
+        assertThat(verified.version()).isEqualTo(1);
+        assertThat(verified.serialNumber()).isEqualTo("LMT-64X64-0005");
+        assertThat(verified.macAddress()).isEqualTo("AA:BB:CC:11:22:05");
+        assertThat(verified.signature()).isEqualTo(sig);
+
+        String formatted = " { \"mac\" : \"aa:bb:cc:11:22:05\" , \"v\" : 1 , \"sn\" : \"LMT-64X64-0005\" , \"sig\" : \""
+                + sig.toUpperCase() + "\" } ";
+        VerifiedDeviceQrPayload verifiedFormatted = service.parseAndVerifyQrPayload(formatted);
+        assertThat(verifiedFormatted.serialNumber()).isEqualTo("LMT-64X64-0005");
+        assertThat(verifiedFormatted.macAddress()).isEqualTo("AA:BB:CC:11:22:05");
+        assertThat(verifiedFormatted.signature()).isEqualTo(sig);
+    }
+
+    @Test
+    @DisplayName("DEV-93 QR-05 [A]: parseAndVerifyQrPayload rejects tampered signature, unsupported version, duplicate keys, or malformed JSON")
+    void parseAndVerifyQrPayload_invalidOrTampered_throwsInvalidDeviceQrException() {
+        String validSig = service.sign("LMT-64X64-0005", "AA:BB:CC:11:22:05");
+
+        assertThatThrownBy(() -> service.parseAndVerifyQrPayload(null))
+                .isInstanceOf(InvalidDeviceQrException.class);
+        assertThatThrownBy(() -> service.parseAndVerifyQrPayload("   "))
+                .isInstanceOf(InvalidDeviceQrException.class);
+        assertThatThrownBy(() -> service.parseAndVerifyQrPayload("not-a-json"))
+                .isInstanceOf(InvalidDeviceQrException.class);
+        assertThatThrownBy(() -> service.parseAndVerifyQrPayload(
+                "{\"v\":2,\"sn\":\"LMT-64X64-0005\",\"mac\":\"AA:BB:CC:11:22:05\",\"sig\":\"" + validSig + "\"}"))
+                .isInstanceOf(InvalidDeviceQrException.class);
+        assertThatThrownBy(() -> service.parseAndVerifyQrPayload(
+                "{\"v\":1,\"sn\":\"LMT-64X64-9999\",\"mac\":\"AA:BB:CC:11:22:05\",\"sig\":\"" + validSig + "\"}"))
+                .isInstanceOf(InvalidDeviceQrException.class);
+        assertThatThrownBy(() -> service.parseAndVerifyQrPayload(
+                "{\"v\":1,\"sn\":\"LMT-64X64-0005\",\"sn\":\"DUP\",\"mac\":\"AA:BB:CC:11:22:05\",\"sig\":\"" + validSig + "\"}"))
+                .isInstanceOf(InvalidDeviceQrException.class);
     }
 }

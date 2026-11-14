@@ -1,6 +1,7 @@
 package com.lumintra.backend.device.infrastructure.bootstrap;
 
 import com.lumintra.backend.device.domain.model.LedInstanceStatus;
+import com.lumintra.backend.device.domain.service.OrderFulfillmentLookupService;
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstanceEntity;
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedModelEntity;
 import com.lumintra.backend.device.infrastructure.persistence.repository.LedInstanceRepository;
@@ -24,7 +25,7 @@ import java.util.List;
 
 /**
  * Seeds representative physical {@link LedInstanceEntity} warehouse, transit, bound, returned,
- * and decommissioned records after {@code IamDataSeeder} and {@code StoreDataSeeder} run.
+ * and decommissioned records after {@code IamDataSeeder}, {@code StoreDataSeeder}, and {@code CommerceDataSeeder} run.
  */
 @Component
 @Order(4)
@@ -40,9 +41,14 @@ public class DeviceDataSeeder implements ApplicationRunner {
     public static final String SEED_SERIAL_RETURNED = "LMT-64X64-SEED-0005";
     public static final String SEED_SERIAL_DECOMMISSIONED = "LMT-64X64-SEED-0006";
 
+    private static final String SEED_ORDER_SHIPPING_SUFFIX = "SEED0004";
+    private static final String SEED_ORDER_DELIVERED_SUFFIX = "SEED0005";
+    private static final String SEED_ORDER_COMPLETED_SUFFIX = "SEED0007";
+
     private final LedModelRepository ledModelRepository;
     private final LedInstanceRepository ledInstanceRepository;
     private final CustomerLookupService customerLookupService;
+    private final OrderFulfillmentLookupService orderFulfillmentLookupService;
 
     @Value("${app.seed.test-customer-email:}")
     private String customerEmail;
@@ -72,14 +78,14 @@ public class DeviceDataSeeder implements ApplicationRunner {
                 "AA:BB:CC:11:22:01",
                 "REV_1_0",
                 manufacturedAt
-        ));
+        ), null);
         seededCount += seedIfAbsent(LedInstanceEntity.createInStock(
                 primaryModel.getModelId(),
                 SEED_SERIAL_IN_STOCK_2,
                 "AA:BB:CC:11:22:02",
                 "REV_1_0",
                 manufacturedAt.plus(2, ChronoUnit.DAYS)
-        ));
+        ), null);
         seededCount += seedIfAbsent(LedInstanceEntity.createWithState(
                 secondaryModel.getModelId(),
                 SEED_SERIAL_IN_TRANSIT,
@@ -91,7 +97,7 @@ public class DeviceDataSeeder implements ApplicationRunner {
                 manufacturedAt,
                 null,
                 null
-        ));
+        ), SEED_ORDER_DELIVERED_SUFFIX);
 
         if (customer != null) {
             Instant boundAt = now.minus(5, ChronoUnit.DAYS);
@@ -107,7 +113,7 @@ public class DeviceDataSeeder implements ApplicationRunner {
                     manufacturedAt,
                     boundAt,
                     warrantyExpiresAt
-            ));
+            ), SEED_ORDER_COMPLETED_SUFFIX);
         }
 
         seededCount += seedIfAbsent(LedInstanceEntity.createWithState(
@@ -121,7 +127,7 @@ public class DeviceDataSeeder implements ApplicationRunner {
                 manufacturedAt,
                 null,
                 null
-        ));
+        ), SEED_ORDER_SHIPPING_SUFFIX);
         seededCount += seedIfAbsent(LedInstanceEntity.createWithState(
                 primaryModel.getModelId(),
                 SEED_SERIAL_DECOMMISSIONED,
@@ -133,7 +139,7 @@ public class DeviceDataSeeder implements ApplicationRunner {
                 manufacturedAt,
                 null,
                 null
-        ));
+        ), null);
 
         log.info("LED instance seed verification complete [seededCount={}]", seededCount);
     }
@@ -147,11 +153,21 @@ public class DeviceDataSeeder implements ApplicationRunner {
         return customerLookupService.findFirstProfile().orElse(null);
     }
 
-    private int seedIfAbsent(LedInstanceEntity candidate) {
+    private int seedIfAbsent(LedInstanceEntity candidate, String orderTransactionSuffix) {
         if (ledInstanceRepository.existsBySerialNumber(candidate.getSerialNumber())) {
+            if (orderTransactionSuffix != null && orderFulfillmentLookupService != null) {
+                ledInstanceRepository.findBySerialNumber(candidate.getSerialNumber())
+                        .map(LedInstanceEntity::getInstanceId)
+                        .ifPresent(id -> orderFulfillmentLookupService
+                                .seedOrderFulfillmentIfPresent(orderTransactionSuffix, id));
+            }
             return 0;
         }
         LedInstanceEntity saved = ledInstanceRepository.save(candidate);
+        if (orderTransactionSuffix != null && orderFulfillmentLookupService != null && saved.getInstanceId() != null) {
+            orderFulfillmentLookupService.seedOrderFulfillmentIfPresent(
+                    orderTransactionSuffix, saved.getInstanceId());
+        }
         log.info("Seeded LED instance [instanceId={}] [modelId={}] [serialNumber={}] [status={}]",
                 saved.getInstanceId(), saved.getModelId(), saved.getSerialNumber(), saved.getStatus());
         return 1;

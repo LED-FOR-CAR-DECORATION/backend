@@ -47,6 +47,9 @@ class DeviceDataSeederTest {
     private CustomerLookupService customerLookupService;
 
     @Mock
+    private com.lumintra.backend.device.domain.service.OrderFulfillmentLookupService orderFulfillmentLookupService;
+
+    @Mock
     private ApplicationArguments applicationArguments;
 
     @InjectMocks

@@ -141,4 +141,22 @@ public class LedInstanceEntity {
                 ? WarrantyStatus.EXPIRED
                 : WarrantyStatus.ACTIVE;
     }
+
+    /**
+     * Permanently binds this LED hardware instance to the claiming customer and activates its warranty.
+     */
+    public void bindToCustomer(
+            Long customerId,
+            String resolvedDeviceName,
+            Instant boundTimestamp,
+            Instant warrantyExpiry) {
+        this.ownerCustomerId = customerId;
+        this.deviceName = resolvedDeviceName != null && !resolvedDeviceName.isBlank()
+                ? resolvedDeviceName.strip()
+                : null;
+        this.status = LedInstanceStatus.BOUND;
+        this.boundAt = boundTimestamp;
+        this.warrantyExpiresAt = warrantyExpiry;
+        this.updatedAt = boundTimestamp;
+    }
 }
