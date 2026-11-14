@@ -34,14 +34,18 @@ public class JwtTokenProvider {
         if (accounts == null) return "unit-test";
         var account = accounts.findById(accountId).orElseThrow(() ->
                 new com.lumintra.backend.shared.exception.iam.InvalidCredentialsException("Account not found."));
-        if (account.getStatus() == com.lumintra.backend.iam.domain.model.AccountStatus.DELETED) {
-            throw new com.lumintra.backend.shared.exception.iam.InvalidCredentialsException("Account not found.");
+        if (account.isAccessDisabled()) {
+            throw new com.lumintra.backend.shared.exception.iam.InvalidCredentialsException("Account unavailable.");
+        }
+        String version = accountId + ":" + account.getPasswordHash();
+        if (account.getUpdatedAt() != null) {
+            version += ":" + account.getUpdatedAt().truncatedTo(ChronoUnit.MICROS);
         }
         try {
             var mac = javax.crypto.Mac.getInstance("HmacSHA256");
             mac.init(key);
             return java.util.HexFormat.of().formatHex(mac.doFinal(
-                    (accountId + ":" + account.getPasswordHash()).getBytes(StandardCharsets.UTF_8)));
+                    version.getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.GeneralSecurityException ex) {
             throw new IllegalStateException("Credential verification unavailable", ex);
         }

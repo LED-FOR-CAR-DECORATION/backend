@@ -184,4 +184,16 @@ class VerifyEmailUseCaseTest {
                 .isInstanceOf(UserNotFoundException.class);
         verifyNoInteractions(otpService);
     }
+
+    @Test
+    @DisplayName("A: Verification cannot reactivate a suspended account")
+    void suspendedAccountCannotBeVerified() {
+        String email = "suspended@example.test";
+        var account = new UserAccountEntity();
+        account.setStatus(AccountStatus.SUSPENDED);
+        when(userAccountRepository.findForEmailVerification(email)).thenReturn(Optional.of(account));
+        assertThatThrownBy(() -> verifyEmailUseCase.execute(new VerifyEmailRequest(email, "123456")))
+                .isInstanceOf(UserNotFoundException.class);
+        verifyNoInteractions(otpService);
+    }
 }
