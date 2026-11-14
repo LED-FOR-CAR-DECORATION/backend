@@ -2,7 +2,9 @@ package com.lumintra.backend.device;
 
 import com.lumintra.backend.device.api.controller.ManagedLedInstanceController;
 import com.lumintra.backend.device.api.request.LedInstanceFilterRequest;
+import com.lumintra.backend.device.api.response.LedInstanceDetailResponse;
 import com.lumintra.backend.device.api.response.LedInstanceListResponse;
+import com.lumintra.backend.device.domain.model.WarrantyStatus;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -85,6 +87,64 @@ class LedInstanceControllerSwaggerTest {
                 LedInstanceListResponse.OwnerInfo.class,
                 "customerId", "fullName", "phone", "email"
         );
+    }
+
+    @Test
+    @DisplayName("SWAGGER-04: getLedInstanceDetail declares @Operation, @SecurityRequirement, and complete @ApiResponses")
+    void getLedInstanceDetail_hasOpenApiAnnotations() throws NoSuchMethodException {
+        Method method = ManagedLedInstanceController.class.getMethod(
+                "getLedInstanceDetail", Authentication.class, Long.class);
+
+        Operation operation = method.getAnnotation(Operation.class);
+        assertThat(operation).isNotNull();
+        assertThat(operation.summary()).isNotEmpty();
+        assertThat(operation.description()).isNotEmpty();
+
+        SecurityRequirement securityRequirement = method.getAnnotation(SecurityRequirement.class);
+        assertThat(securityRequirement).isNotNull();
+        assertThat(securityRequirement.name()).isEqualTo("bearerAuth");
+
+        ApiResponses apiResponses = method.getAnnotation(ApiResponses.class);
+        assertThat(apiResponses).isNotNull();
+        Map<String, ApiResponse> responseMap = Arrays.stream(apiResponses.value())
+                .collect(Collectors.toMap(ApiResponse::responseCode, r -> r));
+
+        assertThat(responseMap).containsKeys("200", "400", "401", "403", "404", "500");
+
+        for (String errCode : new String[]{"400", "401", "403", "404", "500"}) {
+            ApiResponse errResponse = responseMap.get(errCode);
+            assertThat(errResponse.content()).isNotEmpty();
+            Content content = errResponse.content()[0];
+            assertThat(content.mediaType()).isEqualTo("application/json");
+            assertThat(content.schema().implementation()).isEqualTo(ErrorResponse.class);
+            assertThat(content.examples()).isNotEmpty();
+            assertThat(content.examples()[0].value()).contains("\"code\":");
+        }
+    }
+
+    @Test
+    @DisplayName("SWAGGER-05: LedInstanceDetailResponse, nested records, and WarrantyStatus declare @Schema")
+    void detailResponseDtos_haveSchemaAnnotations() throws NoSuchFieldException {
+        assertSchemaOnRecordAndFields(
+                LedInstanceDetailResponse.class,
+                "instanceId", "model", "serialNumber", "macAddress", "hardwareRevision",
+                "currentFirmwareId", "deviceName", "status", "warrantyStatus",
+                "boundAt", "warrantyExpiresAt", "manufacturedAt", "fulfillment", "owner",
+                "qrPayload", "createdAt", "updatedAt"
+        );
+        assertSchemaOnRecordAndFields(
+                LedInstanceDetailResponse.ModelInfo.class,
+                "modelId", "productId", "modelName", "status", "spec"
+        );
+        assertSchemaOnRecordAndFields(LedInstanceDetailResponse.FulfillmentInfo.class, "orderId", "orderItemId");
+        assertSchemaOnRecordAndFields(
+                LedInstanceDetailResponse.OwnerInfo.class,
+                "customerId", "fullName", "phone", "email"
+        );
+
+        Schema warrantySchema = WarrantyStatus.class.getAnnotation(Schema.class);
+        assertThat(warrantySchema).isNotNull();
+        assertThat(warrantySchema.description()).isNotEmpty();
     }
 
     private void assertSchemaOnRecordAndFields(Class<?> type, String... fields) throws NoSuchFieldException {

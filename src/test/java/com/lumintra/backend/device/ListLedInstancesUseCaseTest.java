@@ -10,6 +10,7 @@ import com.lumintra.backend.device.domain.service.LedModelLookupService;
 import com.lumintra.backend.device.domain.service.OrderFulfillmentLookupService;
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstanceEntity;
 import com.lumintra.backend.device.infrastructure.persistence.mapper.LedInstanceMapper;
+import com.lumintra.backend.device.infrastructure.persistence.mapper.LedModelMapper;
 import com.lumintra.backend.device.infrastructure.persistence.repository.LedInstanceRepository;
 import com.lumintra.backend.device.infrastructure.security.HmacFactoryQrPayloadService;
 import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
@@ -59,7 +60,9 @@ class ListLedInstancesUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        LedInstanceMapper mapper = new LedInstanceMapper(new HmacFactoryQrPayloadService("usecase-secret"));
+        LedInstanceMapper mapper = new LedInstanceMapper(
+                new HmacFactoryQrPayloadService("usecase-secret"),
+                new LedModelMapper());
         useCase = new ListLedInstancesUseCase(
                 ledInstanceRepository,
                 ledModelLookupService,

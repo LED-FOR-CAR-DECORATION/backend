@@ -1,6 +1,7 @@
 package com.lumintra.backend.shared.exception;
 
 import com.lumintra.backend.shared.exception.commerce.*;
+import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException;
 import com.lumintra.backend.shared.exception.iam.*;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
@@ -104,6 +105,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleOrderNotFound(OrderNotFoundException ex) {
         return buildErrorResponse("ORDER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(LedInstanceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleLedInstanceNotFound(LedInstanceNotFoundException ex) {
+        return buildErrorResponse("LED_INSTANCE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(OrderStatusTransitionException.class)

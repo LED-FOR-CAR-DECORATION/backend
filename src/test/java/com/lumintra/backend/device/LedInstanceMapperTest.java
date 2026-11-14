@@ -1,11 +1,17 @@
 package com.lumintra.backend.device;
 
+import com.lumintra.backend.device.api.response.LedInstanceDetailResponse;
 import com.lumintra.backend.device.api.response.LedInstanceListResponse;
+import com.lumintra.backend.device.api.response.LedModelListResponse;
 import com.lumintra.backend.device.domain.model.InstanceFulfillmentSnapshot;
 import com.lumintra.backend.device.domain.model.LedInstanceStatus;
 import com.lumintra.backend.device.domain.model.LedModelSnapshot;
+import com.lumintra.backend.device.domain.model.LedModelStatus;
+import com.lumintra.backend.device.domain.model.WarrantyStatus;
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstanceEntity;
+import com.lumintra.backend.device.infrastructure.persistence.entity.LedModelEntity;
 import com.lumintra.backend.device.infrastructure.persistence.mapper.LedInstanceMapper;
+import com.lumintra.backend.device.infrastructure.persistence.mapper.LedModelMapper;
 import com.lumintra.backend.device.infrastructure.security.HmacFactoryQrPayloadService;
 import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LedInstanceMapperTest {
 
     private final HmacFactoryQrPayloadService qrService = new HmacFactoryQrPayloadService("mapper-test-secret");
-    private final LedInstanceMapper mapper = new LedInstanceMapper(qrService);
+    private final LedInstanceMapper mapper = new LedInstanceMapper(qrService, new LedModelMapper());
 
     @Test
     @DisplayName("DEV-173 MAP-01 [N]: Returns signed QR payload for IN_STOCK, IN_TRANSIT, RETURNED and suppresses for BOUND and DECOMMISSIONED")
@@ -126,5 +133,112 @@ class LedInstanceMapperTest {
         assertThat(item.fulfillment()).isNull();
         assertThat(item.owner()).isEqualTo(new LedInstanceListResponse.OwnerInfo(88L, null, null, null));
         assertThat(item.qrPayload()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("DEV-174 MAP-01 [N]: Detail mapping includes full model specs, firmwareId, fulfillment, owner, and QR suppression rules")
+    void toDetail_withModelAndSnapshots_mapsFullDetailAndSuppressesQrWhenBoundOrDecommissioned() {
+        Instant manufacturedAt = Instant.parse("2026-10-15T06:00:00Z");
+        Instant boundAt = Instant.parse("2026-11-01T10:00:00Z");
+        Instant warrantyExpiresAt = Instant.parse("2027-04-30T10:00:00Z");
+        Instant now = Instant.parse("2026-11-14T08:00:00Z");
+
+        LedModelEntity modelEntity = LedModelEntity.createCatalogModel(
+                101L,
+                101L,
+                "Lumintra Matrix 64x64 Pro",
+                64,
+                64,
+                Map.of("attributes", List.of(
+                        Map.of("label", "Voltage", "value", "5V USB-C"),
+                        Map.of("label", "Brightness", "value", "1200 nits")
+                )),
+                50L,
+                LedModelStatus.ACTIVE
+        );
+
+        LedInstanceEntity boundEntity = LedInstanceEntity.createWithState(
+                101L,
+                "LMT-64X64-0001",
+                "AA:BB:CC:11:22:01",
+                "REV_1_0",
+                42L,
+                "Windshield Pro",
+                LedInstanceStatus.BOUND,
+                manufacturedAt,
+                boundAt,
+                warrantyExpiresAt
+        );
+        boundEntity.setCurrentFirmwareId(12L);
+        ReflectionTestUtils.setField(boundEntity, "instanceId", 7L);
+
+        LedInstanceDetailResponse detail = mapper.toDetail(
+                boundEntity,
+                modelEntity,
+                new CustomerProfileSnapshot(42L, "Nguyen Van A", "0901234567", "customer@example.com"),
+                new InstanceFulfillmentSnapshot(7L, 55L, 102L),
+                now
+        );
+
+        assertThat(detail.instanceId()).isEqualTo(7L);
+        assertThat(detail.currentFirmwareId()).isEqualTo(12L);
+        assertThat(detail.status()).isEqualTo(LedInstanceStatus.BOUND);
+        assertThat(detail.warrantyStatus()).isEqualTo(WarrantyStatus.ACTIVE);
+        assertThat(detail.qrPayload()).isNull();
+        assertThat(detail.model().modelId()).isEqualTo(101L);
+        assertThat(detail.model().productId()).isEqualTo(101L);
+        assertThat(detail.model().modelName()).isEqualTo("Lumintra Matrix 64x64 Pro");
+        assertThat(detail.model().status()).isEqualTo(LedModelStatus.ACTIVE);
+        assertThat(detail.model().spec().widthPx()).isEqualTo(64);
+        assertThat(detail.model().spec().heightPx()).isEqualTo(64);
+        assertThat(detail.model().spec().attributes()).containsExactly(
+                new LedModelListResponse.SpecAttribute("Voltage", "5V USB-C"),
+                new LedModelListResponse.SpecAttribute("Brightness", "1200 nits")
+        );
+        assertThat(detail.fulfillment()).isEqualTo(new LedInstanceDetailResponse.FulfillmentInfo(55L, 102L));
+        assertThat(detail.owner()).isEqualTo(new LedInstanceDetailResponse.OwnerInfo(
+                42L, "Nguyen Van A", "0901234567", "customer@example.com"));
+
+        for (LedInstanceStatus status : LedInstanceStatus.values()) {
+            LedInstanceEntity candidate = LedInstanceEntity.createWithState(
+                    101L, "LMT-" + status.name(), "AA:BB:CC:00:00:02", "REV_1_0",
+                    null, null, status, manufacturedAt, null, null);
+            ReflectionTestUtils.setField(candidate, "instanceId", 8L);
+
+            LedInstanceDetailResponse mapped = mapper.toDetail(candidate, null, null, null, now);
+            if (status == LedInstanceStatus.BOUND || status == LedInstanceStatus.DECOMMISSIONED) {
+                assertThat(mapped.qrPayload()).isNull();
+            } else {
+                assertThat(mapped.qrPayload()).isEqualTo(
+                        qrService.generateQrPayload("LMT-" + status.name(), "AA:BB:CC:00:00:02"));
+            }
+            assertThat(mapped.model()).isEqualTo(
+                    LedInstanceDetailResponse.ModelInfo.builder().modelId(101L).build());
+        }
+    }
+
+    @Test
+    @DisplayName("DEV-174 MAP-02 [B]: Computes NOT_ACTIVATED, ACTIVE (including expiry boundary), and EXPIRED warranty status")
+    void toDetail_warrantyBoundaries_computesExpectedStatus() {
+        Instant boundAt = Instant.parse("2026-11-01T10:00:00Z");
+        Instant expiry = Instant.parse("2027-04-30T10:00:00Z");
+
+        LedInstanceEntity unactivated = LedInstanceEntity.createInStock(
+                101L, "LMT-01", "AA:BB:CC:00:00:11", "REV_1_0", Instant.parse("2026-10-01T00:00:00Z"));
+        ReflectionTestUtils.setField(unactivated, "instanceId", 1L);
+
+        LedInstanceEntity activated = LedInstanceEntity.createWithState(
+                101L, "LMT-02", "AA:BB:CC:00:00:12", "REV_1_0", 42L, "Rear",
+                LedInstanceStatus.BOUND, Instant.parse("2026-10-01T00:00:00Z"), boundAt, expiry);
+        ReflectionTestUtils.setField(activated, "instanceId", 2L);
+
+        assertThat(mapper.toDetail(unactivated, null, null, null, expiry).warrantyStatus())
+                .isEqualTo(WarrantyStatus.NOT_ACTIVATED);
+        assertThat(mapper.toDetail(activated, null, null, null, expiry.minusSeconds(1)).warrantyStatus())
+                .isEqualTo(WarrantyStatus.ACTIVE);
+        assertThat(mapper.toDetail(activated, null, null, null, expiry).warrantyStatus())
+                .isEqualTo(WarrantyStatus.ACTIVE);
+        assertThat(mapper.toDetail(activated, null, null, null, expiry.plusSeconds(1)).warrantyStatus())
+                .isEqualTo(WarrantyStatus.EXPIRED);
     }
 }

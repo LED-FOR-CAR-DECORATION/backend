@@ -1,6 +1,7 @@
 package com.lumintra.backend.device.infrastructure.persistence.entity;
 
 import com.lumintra.backend.device.domain.model.LedInstanceStatus;
+import com.lumintra.backend.device.domain.model.WarrantyStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -126,5 +127,18 @@ public class LedInstanceEntity {
         return status != null
                 && status != LedInstanceStatus.BOUND
                 && status != LedInstanceStatus.DECOMMISSIONED;
+    }
+
+    /**
+     * Derives hardware warranty status from claim activation and expiration timestamp.
+     */
+    public WarrantyStatus resolveWarrantyStatus(Instant asOf) {
+        if (warrantyExpiresAt == null) {
+            return WarrantyStatus.NOT_ACTIVATED;
+        }
+        Instant effectiveNow = asOf != null ? asOf : Instant.now();
+        return effectiveNow.isAfter(warrantyExpiresAt)
+                ? WarrantyStatus.EXPIRED
+                : WarrantyStatus.ACTIVE;
     }
 }

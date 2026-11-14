@@ -20,9 +20,6 @@ public class LedModelMapper {
 
     public LedModelListResponse.LedModelItem toItem(LedModelEntity entity) {
         long stockQuantity = entity.getStockQuantity() != null ? entity.getStockQuantity() : 0L;
-        LedModelStatus resolvedStatus = entity.getStatus() != null
-                ? entity.getStatus()
-                : (stockQuantity > 0L ? LedModelStatus.ACTIVE : LedModelStatus.OUT_OF_STOCK);
 
         return LedModelListResponse.LedModelItem.builder()
                 .modelId(entity.getModelId())
@@ -30,9 +27,20 @@ public class LedModelMapper {
                 .modelName(entity.getModelName())
                 .stockQuantity(stockQuantity)
                 .isLowStock(stockQuantity < LedModelEntity.LOW_STOCK_THRESHOLD)
-                .status(resolvedStatus)
+                .status(resolveStatus(entity))
                 .spec(toSpec(entity))
                 .build();
+    }
+
+    public LedModelStatus resolveStatus(LedModelEntity entity) {
+        if (entity == null) {
+            return null;
+        }
+        if (entity.getStatus() != null) {
+            return entity.getStatus();
+        }
+        long stockQuantity = entity.getStockQuantity() != null ? entity.getStockQuantity() : 0L;
+        return stockQuantity > 0L ? LedModelStatus.ACTIVE : LedModelStatus.OUT_OF_STOCK;
     }
 
     public LedModelListResponse.LedSpec toSpec(LedModelEntity entity) {
