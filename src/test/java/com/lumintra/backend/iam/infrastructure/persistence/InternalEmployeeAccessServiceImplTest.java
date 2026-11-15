@@ -111,4 +111,40 @@ class InternalEmployeeAccessServiceImplTest {
         assertThatThrownBy(() -> service.requireActiveEmployeeAccountId("13", STAFF_ROLES))
                 .isInstanceOf(AccessDeniedException.class);
     }
+
+    @Test
+    @DisplayName("CHR-01 [N]: requireActiveEmployeeId returns employeeId when role is DESIGNER")
+    void requireActiveEmployeeId_validDesigner_returnsEmployeeId() {
+        UserAccountEntity account = UserAccountEntity.createInternalAccount("designer@lumintra.com", "hash");
+        account.setAccountId(42L);
+        RoleEntity role = new RoleEntity();
+        role.setRoleName("DESIGNER");
+        EmployeeEntity employee = EmployeeEntity.createInternal(account, role, "Graphic Designer");
+        employee.setEmployeeId(101L);
+
+        when(userAccountRepository.findById(42L)).thenReturn(Optional.of(account));
+        when(employeeRepository.findByAccount_AccountId(42L)).thenReturn(Optional.of(employee));
+
+        Long result = service.requireActiveEmployeeId("42", Set.of("DESIGNER"));
+
+        assertThat(result).isEqualTo(101L);
+    }
+
+    @Test
+    @DisplayName("CHR-01 [A]: requireActiveEmployeeId rejects non-designer role with AccessDeniedException")
+    void requireActiveEmployeeId_wrongRole_throwsAccessDenied() {
+        UserAccountEntity account = UserAccountEntity.createInternalAccount("staff@lumintra.com", "hash");
+        account.setAccountId(7L);
+        RoleEntity role = new RoleEntity();
+        role.setRoleName("STAFF");
+        EmployeeEntity employee = EmployeeEntity.createInternal(account, role, "Staff Member");
+        employee.setEmployeeId(202L);
+
+        when(userAccountRepository.findById(7L)).thenReturn(Optional.of(account));
+        when(employeeRepository.findByAccount_AccountId(7L)).thenReturn(Optional.of(employee));
+
+        assertThatThrownBy(() -> service.requireActiveEmployeeId("7", Set.of("DESIGNER")))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Authorized internal role is required.");
+    }
 }

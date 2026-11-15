@@ -1,0 +1,44 @@
+package com.lumintra.backend.character.api.request;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+
+@Schema(description = "Query parameters for filtering designer's personal graphic character catalog")
+public record DesignerCharacterFilterRequest(
+        @Schema(
+                description = "Optional search query substring matching character name or description (case-insensitive)",
+                example = "cyber"
+        )
+        String query,
+
+        @Schema(
+                description = "0-based page index",
+                defaultValue = "0",
+                example = "0"
+        )
+        @Min(value = 0, message = "page must be greater than or equal to 0")
+        Integer page,
+
+        @Schema(
+                description = "Page size (number of records per page, between 1 and 100)",
+                defaultValue = "10",
+                example = "10"
+        )
+        @Min(value = 1, message = "size must be greater than or equal to 1")
+        @Max(value = 100, message = "size must be less than or equal to 100")
+        Integer size
+) {
+    public DesignerCharacterFilterRequest {
+        if (page == null) {
+            page = 0;
+        }
+        if (size == null) {
+            size = 10;
+        }
+        query = query != null ? query.strip() : null;
+        if (query != null && query.isEmpty()) {
+            query = null;
+        }
+    }
+}
