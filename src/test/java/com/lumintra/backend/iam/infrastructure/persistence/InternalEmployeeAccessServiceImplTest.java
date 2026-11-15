@@ -113,7 +113,7 @@ class InternalEmployeeAccessServiceImplTest {
     }
 
     @Test
-    @DisplayName("CHR-01 [N]: requireActiveEmployeeId returns employeeId when role is DESIGNER")
+    @DisplayName("CHR-03 IAM UTCID01 [N]: requireActiveEmployeeId returns employeeId when role is DESIGNER")
     void requireActiveEmployeeId_validDesigner_returnsEmployeeId() {
         UserAccountEntity account = UserAccountEntity.createInternalAccount("designer@lumintra.com", "hash");
         account.setAccountId(42L);
@@ -131,7 +131,7 @@ class InternalEmployeeAccessServiceImplTest {
     }
 
     @Test
-    @DisplayName("CHR-01 [A]: requireActiveEmployeeId rejects non-designer role with AccessDeniedException")
+    @DisplayName("CHR-03 IAM UTCID02 [A]: requireActiveEmployeeId rejects non-designer role with AccessDeniedException")
     void requireActiveEmployeeId_wrongRole_throwsAccessDenied() {
         UserAccountEntity account = UserAccountEntity.createInternalAccount("staff@lumintra.com", "hash");
         account.setAccountId(7L);
