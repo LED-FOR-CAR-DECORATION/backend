@@ -148,6 +148,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(ex.getErrorCode(), ex.getMessage(), ex.getHttpStatus());
     }
 
+    @ExceptionHandler(OrderFulfillmentException.class)
+    public ResponseEntity<ErrorResponse> handleOrderFulfillmentException(OrderFulfillmentException ex) {
+        return buildErrorResponse(ex.getErrorCode(), ex.getMessage(), ex.getHttpStatus());
+    }
+
     // Payment exceptions
     @ExceptionHandler(PaymentSessionNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePaymentSessionNotFound(PaymentSessionNotFoundException ex) {

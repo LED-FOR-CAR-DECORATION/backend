@@ -52,4 +52,18 @@ public interface LedInstanceRepository extends JpaRepository<LedInstanceEntity, 
             @Param("deviceName") String deviceName,
             @Param("boundAt") Instant boundAt,
             @Param("warrantyExpiresAt") Instant warrantyExpiresAt);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE LedInstanceEntity i
+            SET i.status = :targetStatus,
+                i.updatedAt = :updatedAt
+            WHERE i.instanceId = :instanceId
+              AND i.status = :expectedStatus
+            """)
+    int updateStatusIfCurrent(
+            @Param("instanceId") Long instanceId,
+            @Param("expectedStatus") LedInstanceStatus expectedStatus,
+            @Param("targetStatus") LedInstanceStatus targetStatus,
+            @Param("updatedAt") Instant updatedAt);
 }
