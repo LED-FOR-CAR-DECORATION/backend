@@ -1,5 +1,6 @@
 package com.lumintra.backend.shared.exception;
 
+import com.lumintra.backend.shared.exception.character.CannotDeleteListedCharacterException;
 import com.lumintra.backend.shared.exception.character.CharacterNotFoundException;
 import com.lumintra.backend.shared.exception.commerce.*;
 import com.lumintra.backend.shared.exception.device.*;
@@ -57,6 +58,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CharacterNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleCharacterNotFoundException(CharacterNotFoundException ex) {
         return buildErrorResponse("CHARACTER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(CannotDeleteListedCharacterException.class)
+    public ResponseEntity<ErrorResponse> handleCannotDeleteListedCharacter(CannotDeleteListedCharacterException ex) {
+        return buildErrorResponse("CANNOT_DELETE_LISTED_CHARACTER", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(ProductNotFoundException.class)
