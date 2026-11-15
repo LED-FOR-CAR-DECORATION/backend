@@ -10,6 +10,13 @@ public final class CharacterSpecifications {
     private CharacterSpecifications() {
     }
 
+    public static Specification<CharacterEntity> forAdmin(String query, Long creatorEmployeeId) {
+        return (root, criteriaQuery, cb) -> {
+            var predicates = cb.conjunction();
+
+            if (creatorEmployeeId != null) {
+                predicates = cb.and(predicates, cb.equal(root.get("creatorEmployeeId"), creatorEmployeeId));
+            }
     public static Specification<CharacterEntity> forDesigner(Long designerEmployeeId, String query) {
         return (root, criteriaQuery, cb) -> {
             var predicates = cb.conjunction();
