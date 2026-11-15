@@ -29,8 +29,7 @@ public class CreateSignedUploadUrlUseCase {
             "image/jpeg",
             "image/png",
             "image/webp",
-            "image/gif",
-            "image/svg+xml"
+            "image/gif"
     );
 
     private static final long MIN_FILE_SIZE = 1L;
@@ -51,7 +50,7 @@ public class CreateSignedUploadUrlUseCase {
         // 1. Validate MIME type
         String contentType = request.contentType() != null ? request.contentType().trim().toLowerCase() : "";
         if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
-            throw new InvalidMediaRequestException("Invalid MIME content-type. Allowed: image/jpeg, image/png, image/webp, image/gif, image/svg+xml");
+            throw new InvalidMediaRequestException("Invalid MIME content-type. Allowed: image/jpeg, image/png, image/webp, image/gif");
         }
 
         // 2. Validate file size

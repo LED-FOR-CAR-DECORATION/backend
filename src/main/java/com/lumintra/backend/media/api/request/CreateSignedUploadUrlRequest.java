@@ -20,8 +20,8 @@ public record CreateSignedUploadUrlRequest(
         @Schema(description = "MIME content type of the image", example = "image/gif")
         @NotBlank(message = "contentType must not be blank")
         @Pattern(
-                regexp = "^(image/jpeg|image/png|image/webp|image/gif|image/svg\\+xml)$",
-                message = "contentType must be one of: image/jpeg, image/png, image/webp, image/gif, image/svg+xml"
+                regexp = "^(image/jpeg|image/png|image/webp|image/gif)$",
+                message = "contentType must be one of: image/jpeg, image/png, image/webp, image/gif"
         )
         String contentType,
 

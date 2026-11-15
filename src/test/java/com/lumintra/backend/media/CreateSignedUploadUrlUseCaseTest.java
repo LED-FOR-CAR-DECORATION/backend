@@ -111,6 +111,24 @@ class CreateSignedUploadUrlUseCaseTest {
     }
 
     @Test
+    @DisplayName("MED-01 [A]: SVG+XML MIME type -> throws InvalidMediaRequestException")
+    void execute_whenSvgXmlMime_shouldThrowException() {
+        CreateSignedUploadUrlRequest request = new CreateSignedUploadUrlRequest(
+                "vector.svg",
+                "image/svg+xml",
+                1024L,
+                MediaPurpose.COMMISSION_REFERENCE,
+                null
+        );
+
+        assertThatThrownBy(() -> createSignedUploadUrlUseCase.execute("4", Set.of("CUSTOMER"), request))
+                .isInstanceOf(InvalidMediaRequestException.class)
+                .hasMessageContaining("Invalid MIME content-type");
+
+        verify(mediaAccessControlService, never()).verifyAccess(any(), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("MED-01 [A]: File size out of range -> throws InvalidMediaRequestException")
     void execute_whenFileSizeOutOfRange_shouldThrowException() {
         CreateSignedUploadUrlRequest request = new CreateSignedUploadUrlRequest(

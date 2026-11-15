@@ -1,21 +1,19 @@
 package com.lumintra.backend.media.infrastructure.persistence;
 
 import com.lumintra.backend.media.domain.service.CommissionStateLookupService;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.stereotype.Service;
 
 import java.util.Set;
 
 /**
- * Fallback lean implementation of CommissionStateLookupService until the Commission feature tables are added.
+ * Fallback lean implementation of {@link CommissionStateLookupService} until the Commission feature tables are added.
+ * Registered conditionally via {@link com.lumintra.backend.media.infrastructure.config.MediaCommissionFallbackConfig}.
  */
-@Service
-@ConditionalOnMissingBean(type = "com.lumintra.backend.commission.domain.service.CommissionStateLookupService")
 public class DefaultCommissionStateLookupService implements CommissionStateLookupService {
 
     @Override
     public boolean isChatActiveAndParticipant(Long commissionId, Long callerAccountId, Set<String> callerRoles) {
-        if (commissionId == null || commissionId <= 0 || callerAccountId == null) {
+        if (commissionId == null || commissionId <= 0 || callerAccountId == null || callerAccountId <= 0
+                || callerRoles == null || callerRoles.isEmpty()) {
             return false;
         }
         // In default stub before commission feature tables exist, accept valid non-null positive identifiers

@@ -157,6 +157,27 @@ class MediaUploadControllerTest {
     }
 
     @Test
+    @DisplayName("MED-01 [B]: SVG+XML MIME type rejected -> 400 VALIDATION_FAILED")
+    void createSignedUploadUrl_whenSvgXmlMimeType_shouldReturn400() throws Exception {
+        CreateSignedUploadUrlRequest request = new CreateSignedUploadUrlRequest(
+                "vector.svg",
+                "image/svg+xml",
+                102400L,
+                MediaPurpose.COMMISSION_REFERENCE,
+                null
+        );
+
+        mockMvc.perform(post(BASE_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("4").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(createSignedUploadUrlUseCase);
+    }
+
+    @Test
     @DisplayName("MED-01 [B]: Unsupported MIME type rejected -> 400 VALIDATION_FAILED")
     void createSignedUploadUrl_whenUnsupportedMimeType_shouldReturn400() throws Exception {
         CreateSignedUploadUrlRequest request = new CreateSignedUploadUrlRequest(
