@@ -17,6 +17,18 @@ public final class CharacterSpecifications {
             if (creatorEmployeeId != null) {
                 predicates = cb.and(predicates, cb.equal(root.get("creatorEmployeeId"), creatorEmployeeId));
             }
+
+            if (query != null && !query.isBlank()) {
+                String pattern = "%" + query.trim().toLowerCase(Locale.ROOT) + "%";
+                var nameMatch = cb.like(cb.lower(root.get("characterName")), pattern);
+                var descMatch = cb.like(cb.lower(cb.coalesce(root.get("description"), "")), pattern);
+                predicates = cb.and(predicates, cb.or(nameMatch, descMatch));
+            }
+
+            return predicates;
+        };
+    }
+
     public static Specification<CharacterEntity> forDesigner(Long designerEmployeeId, String query) {
         return (root, criteriaQuery, cb) -> {
             var predicates = cb.conjunction();

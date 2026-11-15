@@ -1,5 +1,6 @@
 package com.lumintra.backend.shared.exception;
 
+import com.lumintra.backend.shared.exception.character.CharacterNotFoundException;
 import com.lumintra.backend.shared.exception.commerce.*;
 import com.lumintra.backend.shared.exception.device.*;
 import com.lumintra.backend.shared.exception.iam.*;
@@ -20,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -50,6 +52,11 @@ public class GlobalExceptionHandler {
         var status = ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
                 ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND;
         return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
+    }
+
+    @ExceptionHandler(CharacterNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCharacterNotFoundException(CharacterNotFoundException ex) {
+        return buildErrorResponse("CHARACTER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(ProductNotFoundException.class)
@@ -267,6 +274,17 @@ public class GlobalExceptionHandler {
                                     .message(Optional.ofNullable(error.getDefaultMessage()).orElse("Invalid parameter value"))
                                     .build());
                 })
+                .toList();
+        return buildErrorResponse("VALIDATION_FAILED", "Invalid request parameter", HttpStatus.BAD_REQUEST, details);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
+        List<ErrorResponse.ErrorDetail> details = ex.getConstraintViolations().stream()
+                .map(violation -> ErrorResponse.ErrorDetail.builder()
+                        .field(violation.getPropertyPath().toString())
+                        .message(violation.getMessage())
+                        .build())
                 .toList();
         return buildErrorResponse("VALIDATION_FAILED", "Invalid request parameter", HttpStatus.BAD_REQUEST, details);
     }
