@@ -2,6 +2,8 @@ package com.lumintra.backend.shared.exception;
 
 import com.lumintra.backend.shared.exception.character.CannotDeleteListedCharacterException;
 import com.lumintra.backend.shared.exception.character.CharacterNotFoundException;
+import com.lumintra.backend.shared.exception.character.CharacterVersionAlreadyLinkedToProductException;
+import com.lumintra.backend.shared.exception.character.CharacterVersionNotFoundException;
 import com.lumintra.backend.shared.exception.commerce.*;
 import com.lumintra.backend.shared.exception.device.*;
 import com.lumintra.backend.shared.exception.iam.*;
@@ -63,6 +65,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CannotDeleteListedCharacterException.class)
     public ResponseEntity<ErrorResponse> handleCannotDeleteListedCharacter(CannotDeleteListedCharacterException ex) {
         return buildErrorResponse("CANNOT_DELETE_LISTED_CHARACTER", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(CharacterVersionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCharacterVersionNotFound(CharacterVersionNotFoundException ex) {
+        return buildErrorResponse("VERSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(CharacterVersionAlreadyLinkedToProductException.class)
+    public ResponseEntity<ErrorResponse> handleCharacterVersionAlreadyLinkedToProduct(CharacterVersionAlreadyLinkedToProductException ex) {
+        return buildErrorResponse("VERSION_ALREADY_LINKED_TO_PRODUCT", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(ProductNotFoundException.class)
