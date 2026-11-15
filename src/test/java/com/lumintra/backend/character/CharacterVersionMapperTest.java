@@ -79,4 +79,32 @@ class CharacterVersionMapperTest {
         assertThat(response.productId()).isEqualTo(108L);
         assertThat(response.productStatus()).isEqualTo("PUBLISHED");
     }
+
+    @Test
+    @DisplayName("CHR-07 [N]: Map entity to CreateCharacterVersionResponse")
+    void toCreateResponse_whenNewVersion_shouldMapFields() {
+        CharacterEntity character = CharacterEntity.create(10L, "Samurai", "Desc");
+        character.setCharacterId(12L);
+        CharacterVersionEntity entity = CharacterVersionEntity.create(
+                character,
+                null,
+                2,
+                "preview2.gif",
+                "binary2.bin",
+                16,
+                100,
+                65536,
+                true
+        );
+        entity.setVersionId(25L);
+
+        var response = mapper.toCreateResponse(entity);
+
+        assertThat(response.versionId()).isEqualTo(25L);
+        assertThat(response.characterId()).isEqualTo(12L);
+        assertThat(response.versionNumber()).isEqualTo(2);
+        assertThat(response.previewGifUrl()).isEqualTo("preview2.gif");
+        assertThat(response.isCurrent()).isTrue();
+        assertThat(response.isListedOnStore()).isFalse();
+    }
 }
