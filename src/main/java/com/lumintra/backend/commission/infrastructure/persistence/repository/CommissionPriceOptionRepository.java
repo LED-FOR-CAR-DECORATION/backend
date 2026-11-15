@@ -12,6 +12,8 @@ public interface CommissionPriceOptionRepository extends JpaRepository<Commissio
 
     List<CommissionPriceOptionEntity> findAllByIsActiveTrueOrderByDisplayOrderAsc();
 
+    List<CommissionPriceOptionEntity> findAllByOrderByDisplayOrderAsc();
+
     Optional<CommissionPriceOptionEntity> findByOptionCode(String optionCode);
 
     Optional<CommissionPriceOptionEntity> findByConfigConfigIdAndOptionCode(Long configId, String optionCode);

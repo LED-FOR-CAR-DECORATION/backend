@@ -1,5 +1,12 @@
 package com.lumintra.backend.commission.infrastructure.persistence.mapper;
 
+import com.lumintra.backend.commission.api.response.BundledOptionResponse;
+import com.lumintra.backend.commission.api.response.ManagementCommissionPricingResponse;
+import com.lumintra.backend.commission.api.response.ManagementPricingOptionResponse;
+import com.lumintra.backend.commission.api.response.ManagementPricingRuleResponse;
+import com.lumintra.backend.commission.api.response.ManagementPricingRuleSummaryResponse;
+import com.lumintra.backend.commission.api.response.ManagementPricingTierResponse;
+import com.lumintra.backend.commission.api.response.ManagementPricingTierSummaryResponse;
 import com.lumintra.backend.commission.api.response.PricingOptionResponse;
 import com.lumintra.backend.commission.api.response.PricingRuleResponse;
 import com.lumintra.backend.commission.api.response.PricingTierSummaryResponse;
@@ -158,6 +165,229 @@ public class CommissionPricingMapper {
                 .basePrice(option.getBasePrice())
                 .isDefault(option.isDefault())
                 .displayOrder(option.getDisplayOrder())
+                .build();
+    }
+
+    public ManagementCommissionPricingResponse toManagementPricingResponse(
+            List<CommissionPricingTierEntity> allTiers,
+            CommissionPricingTierEntity activeCustomTier,
+            List<CommissionPriceConfigEntity> allConfigs) {
+        List<ManagementPricingTierSummaryResponse> tierSummaries = allTiers == null
+                ? List.of()
+                : allTiers.stream()
+                        .map(tier -> toManagementTierSummary(tier, activeCustomTier))
+                        .toList();
+
+        List<ManagementPricingRuleSummaryResponse> ruleSummaries = allConfigs == null
+                ? List.of()
+                : allConfigs.stream()
+                        .map(this::toManagementRuleSummary)
+                        .toList();
+
+        return ManagementCommissionPricingResponse.builder()
+                .tiers(tierSummaries)
+                .rules(ruleSummaries)
+                .build();
+    }
+
+    public ManagementPricingTierSummaryResponse toManagementTierSummary(
+            CommissionPricingTierEntity tier,
+            CommissionPricingTierEntity activeCustomTier) {
+        if (tier == null) {
+            return null;
+        }
+
+        BigDecimal customCalculatedPrice;
+        BigDecimal savingsAmount;
+        int includedOptionCount = tier.isCustom() || tier.getIncludedOptions() == null
+                ? 0
+                : tier.getIncludedOptions().size();
+
+        if (tier.isCustom()) {
+            customCalculatedPrice = tier.getBasePrice() != null ? tier.getBasePrice() : BigDecimal.ZERO;
+            savingsAmount = BigDecimal.ZERO;
+        } else if (activeCustomTier != null) {
+            customCalculatedPrice = invariantValidator.calculateCustomCalculatedPrice(tier, activeCustomTier);
+            savingsAmount = invariantValidator.calculateSavingsAmount(customCalculatedPrice, tier.getBasePrice());
+        } else {
+            customCalculatedPrice = tier.getBasePrice() != null ? tier.getBasePrice() : BigDecimal.ZERO;
+            savingsAmount = BigDecimal.ZERO;
+        }
+
+        return ManagementPricingTierSummaryResponse.builder()
+                .tierId(tier.getTierId())
+                .tierCode(tier.getTierCode())
+                .tierName(tier.getName())
+                .basePrice(tier.getBasePrice())
+                .customCalculatedPrice(customCalculatedPrice)
+                .savingsAmount(savingsAmount)
+                .maxRevisions(tier.getMaxRevisions())
+                .isCustom(tier.isCustom())
+                .isActive(tier.isActive())
+                .displayOrder(tier.getDisplayOrder())
+                .includedOptionCount(includedOptionCount)
+                .build();
+    }
+
+    public ManagementPricingRuleSummaryResponse toManagementRuleSummary(CommissionPriceConfigEntity config) {
+        if (config == null) {
+            return null;
+        }
+
+        int optionCount = config.getOptions() != null ? config.getOptions().size() : 0;
+
+        return ManagementPricingRuleSummaryResponse.builder()
+                .configId(config.getConfigId())
+                .configCode(config.getRuleKey())
+                .configName(config.getName())
+                .selectionType(config.getSelectionType())
+                .uiType(config.getUiType())
+                .isRequired(config.isRequired())
+                .isSystem(config.isSystem())
+                .isActive(config.isActive())
+                .displayOrder(config.getDisplayOrder())
+                .dependsOnOptionId(config.getDependsOnOptionId())
+                .optionCount(optionCount)
+                .build();
+    }
+
+    public ManagementPricingTierResponse toManagementTierDetail(
+            CommissionPricingTierEntity tier,
+            CommissionPricingTierEntity activeCustomTier) {
+        if (tier == null) {
+            return null;
+        }
+
+        BigDecimal customCalculatedPrice;
+        BigDecimal savingsAmount;
+        BigDecimal discountPercent;
+        List<BundledOptionResponse> bundledOptions;
+        List<Long> bundledOptionIds;
+
+        if (tier.isCustom()) {
+            customCalculatedPrice = tier.getBasePrice() != null ? tier.getBasePrice() : BigDecimal.ZERO;
+            savingsAmount = BigDecimal.ZERO;
+            discountPercent = BigDecimal.ZERO;
+            bundledOptions = List.of();
+            bundledOptionIds = List.of();
+        } else {
+            Set<CommissionPriceOptionEntity> options = tier.getIncludedOptions() != null
+                    ? tier.getIncludedOptions()
+                    : Collections.emptySet();
+
+            bundledOptions = options.stream()
+                    .sorted(Comparator.comparing((CommissionPriceOptionEntity o) -> o.getConfig() != null ? o.getConfig().getDisplayOrder() : 0)
+                            .thenComparing(CommissionPriceOptionEntity::getDisplayOrder)
+                            .thenComparing(o -> o.getOptionId() != null ? o.getOptionId() : 0L))
+                    .map(this::toBundledOptionResponse)
+                    .toList();
+
+            bundledOptionIds = bundledOptions.stream()
+                    .map(BundledOptionResponse::optionId)
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            if (activeCustomTier != null) {
+                customCalculatedPrice = invariantValidator.calculateCustomCalculatedPrice(tier, activeCustomTier);
+                savingsAmount = invariantValidator.calculateSavingsAmount(customCalculatedPrice, tier.getBasePrice());
+                discountPercent = invariantValidator.calculateDiscountPercent(savingsAmount, customCalculatedPrice);
+            } else {
+                customCalculatedPrice = tier.getBasePrice() != null ? tier.getBasePrice() : BigDecimal.ZERO;
+                savingsAmount = BigDecimal.ZERO;
+                discountPercent = BigDecimal.ZERO;
+            }
+        }
+
+        return ManagementPricingTierResponse.builder()
+                .tierId(tier.getTierId())
+                .tierCode(tier.getTierCode())
+                .tierName(tier.getName())
+                .description(tier.getDescription())
+                .basePrice(tier.getBasePrice())
+                .customCalculatedPrice(customCalculatedPrice)
+                .savingsAmount(savingsAmount)
+                .discountPercent(discountPercent)
+                .maxRevisions(tier.getMaxRevisions())
+                .extraRevisionFeePercent(tier.getExtraRevisionFeePercent())
+                .isCustom(tier.isCustom())
+                .isActive(tier.isActive())
+                .displayOrder(tier.getDisplayOrder())
+                .includedOptions(bundledOptions)
+                .includedOptionIds(bundledOptionIds)
+                .build();
+    }
+
+    public ManagementPricingRuleResponse toManagementRuleDetail(
+            CommissionPriceConfigEntity config,
+            CommissionPriceOptionEntity parentOption) {
+        if (config == null) {
+            return null;
+        }
+
+        String dependsOnRuleKey = null;
+        String dependsOnOptionCode = null;
+
+        if (parentOption != null) {
+            dependsOnOptionCode = parentOption.getOptionCode();
+            if (parentOption.getConfig() != null) {
+                dependsOnRuleKey = parentOption.getConfig().getRuleKey();
+            }
+        }
+
+        List<CommissionPriceOptionEntity> options = config.getOptions() != null
+                ? config.getOptions()
+                : Collections.emptyList();
+
+        List<ManagementPricingOptionResponse> optionResponses = options.stream()
+                .sorted(Comparator.comparing(CommissionPriceOptionEntity::getDisplayOrder)
+                        .thenComparing(o -> o.getOptionId() != null ? o.getOptionId() : 0L))
+                .map(this::toManagementOptionResponse)
+                .toList();
+
+        return ManagementPricingRuleResponse.builder()
+                .configId(config.getConfigId())
+                .configCode(config.getRuleKey())
+                .configName(config.getName())
+                .description(config.getDescription())
+                .selectionType(config.getSelectionType())
+                .uiType(config.getUiType())
+                .isRequired(config.isRequired())
+                .isSystem(config.isSystem())
+                .isActive(config.isActive())
+                .displayOrder(config.getDisplayOrder())
+                .dependsOnOptionId(config.getDependsOnOptionId())
+                .dependsOnRuleKey(dependsOnRuleKey)
+                .dependsOnOptionCode(dependsOnOptionCode)
+                .options(optionResponses)
+                .build();
+    }
+
+    public ManagementPricingOptionResponse toManagementOptionResponse(CommissionPriceOptionEntity option) {
+        if (option == null) {
+            return null;
+        }
+        return ManagementPricingOptionResponse.builder()
+                .optionId(option.getOptionId())
+                .optionCode(option.getOptionCode())
+                .optionLabel(option.getOptionLabel())
+                .basePrice(option.getBasePrice())
+                .isDefault(option.isDefault())
+                .isActive(option.isActive())
+                .displayOrder(option.getDisplayOrder())
+                .build();
+    }
+
+    public BundledOptionResponse toBundledOptionResponse(CommissionPriceOptionEntity option) {
+        if (option == null) {
+            return null;
+        }
+        return BundledOptionResponse.builder()
+                .optionId(option.getOptionId())
+                .ruleKey(option.getConfig() != null ? option.getConfig().getRuleKey() : null)
+                .configName(option.getConfig() != null ? option.getConfig().getName() : null)
+                .optionCode(option.getOptionCode())
+                .optionLabel(option.getOptionLabel())
+                .basePrice(option.getBasePrice())
                 .build();
     }
 }
