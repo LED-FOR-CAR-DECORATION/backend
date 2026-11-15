@@ -116,11 +116,11 @@ class ManagedLedInstanceControllerTest {
     }
 
     @Test
-    @DisplayName("DEV-173 API-01 [N]: ADMIN and MANAGER receive 200 OK with LED instances, fulfillment, owner, warranty, and QR payload")
+    @DisplayName("DEV-173 API-01 [N]: ADMIN, MANAGER, and STAFF receive 200 OK with LED instances, fulfillment, owner, warranty, and QR payload")
     void listLedInstances_adminAndManager_returns200WithEnvelope() throws Exception {
         when(listLedInstancesUseCase.execute(any(LedInstanceFilterRequest.class))).thenReturn(sampleResponse());
 
-        for (String role : new String[]{"ADMIN", "MANAGER"}) {
+        for (String role : new String[]{"ADMIN", "MANAGER", "STAFF"}) {
             mockMvc.perform(get(PATH)
                             .with(SecurityMockMvcRequestPostProcessors.user("7").roles(role)))
                     .andExpect(status().isOk())
@@ -146,7 +146,7 @@ class ManagedLedInstanceControllerTest {
                     .andExpect(jsonPath("$.meta.totalElements").value(2));
         }
 
-        verify(listLedInstancesUseCase, times(2))
+        verify(listLedInstancesUseCase, times(3))
                 .execute(new LedInstanceFilterRequest(null, null, null, null, null));
     }
 
@@ -223,9 +223,9 @@ class ManagedLedInstanceControllerTest {
     }
 
     @Test
-    @DisplayName("DEV-173 API-05 [A]: STAFF, DESIGNER, and CUSTOMER roles return 403 FORBIDDEN")
+    @DisplayName("DEV-173 API-05 [A]: DESIGNER and CUSTOMER roles return 403 FORBIDDEN")
     void listLedInstances_nonManagerRoles_returns403() throws Exception {
-        for (String role : new String[]{"STAFF", "DESIGNER", "CUSTOMER"}) {
+        for (String role : new String[]{"DESIGNER", "CUSTOMER"}) {
             mockMvc.perform(get(PATH)
                             .with(SecurityMockMvcRequestPostProcessors.user("15").roles(role)))
                     .andExpect(status().isForbidden())
@@ -313,12 +313,12 @@ class ManagedLedInstanceControllerTest {
     }
 
     @Test
-    @DisplayName("DEV-174 API-01 [N]: ADMIN and MANAGER receive 200 OK with full unit detail, model specs, warrantyStatus, and conditional QR payload")
+    @DisplayName("DEV-174 API-01 [N]: ADMIN, MANAGER, and STAFF receive 200 OK with full unit detail, model specs, warrantyStatus, and conditional QR payload")
     void getLedInstanceDetail_adminAndManager_returns200WithDetailEnvelope() throws Exception {
         when(getLedInstanceDetailUseCase.execute(2L)).thenReturn(sampleUnboundDetailResponse());
         when(getLedInstanceDetailUseCase.execute(1L)).thenReturn(sampleBoundDetailResponse());
 
-        for (String role : new String[]{"ADMIN", "MANAGER"}) {
+        for (String role : new String[]{"ADMIN", "MANAGER", "STAFF"}) {
             mockMvc.perform(get(PATH + "/{id}", 2L)
                             .with(SecurityMockMvcRequestPostProcessors.user("7").roles(role)))
                     .andExpect(status().isOk())
@@ -348,7 +348,7 @@ class ManagedLedInstanceControllerTest {
                 .andExpect(jsonPath("$.data.owner.fullName").value("Nguyen Van A"))
                 .andExpect(jsonPath("$.data.qrPayload").value(nullValue()));
 
-        verify(getLedInstanceDetailUseCase, times(2)).execute(2L);
+        verify(getLedInstanceDetailUseCase, times(3)).execute(2L);
         verify(getLedInstanceDetailUseCase, times(1)).execute(1L);
     }
 
@@ -380,9 +380,9 @@ class ManagedLedInstanceControllerTest {
     }
 
     @Test
-    @DisplayName("DEV-174 API-04 [A]: STAFF, DESIGNER, and CUSTOMER roles return 403 FORBIDDEN on detail endpoint")
+    @DisplayName("DEV-174 API-04 [A]: DESIGNER and CUSTOMER roles return 403 FORBIDDEN on detail endpoint")
     void getLedInstanceDetail_nonManagerRoles_returns403() throws Exception {
-        for (String role : new String[]{"STAFF", "DESIGNER", "CUSTOMER"}) {
+        for (String role : new String[]{"DESIGNER", "CUSTOMER"}) {
             mockMvc.perform(get(PATH + "/1")
                             .with(SecurityMockMvcRequestPostProcessors.user("15").roles(role)))
                     .andExpect(status().isForbidden())
