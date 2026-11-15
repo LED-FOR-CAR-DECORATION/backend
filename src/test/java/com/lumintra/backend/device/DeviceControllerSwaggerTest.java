@@ -4,6 +4,7 @@ import com.lumintra.backend.device.api.controller.DeviceController;
 import com.lumintra.backend.device.api.request.ClaimDeviceRequest;
 import com.lumintra.backend.device.api.request.CustomerDeviceFilterRequest;
 import com.lumintra.backend.device.api.response.ClaimDeviceResponse;
+import com.lumintra.backend.device.api.response.CustomerDeviceDetailResponse;
 import com.lumintra.backend.device.api.response.CustomerDeviceListResponse;
 import com.lumintra.backend.device.api.response.CustomerDeviceListResponse.CustomerDeviceItem;
 import com.lumintra.backend.shared.exception.ErrorResponse;
@@ -121,6 +122,53 @@ class DeviceControllerSwaggerTest {
                 "deviceId", "serialNumber", "macAddress", "deviceName", "status",
                 "modelId", "modelName", "widthPx", "heightPx", "currentFirmwareId",
                 "boundAt", "warrantyExpiresAt", "warrantyStatus"
+        );
+    }
+
+    @Test
+    @DisplayName("DEV-95 SWG-04: DeviceController.getDeviceDetail and CustomerDeviceDetailResponse declare complete OpenAPI metadata and @Schema annotations")
+    void getDeviceDetail_hasCompleteOpenApiMetadataAndDtoSchemas() throws NoSuchFieldException, NoSuchMethodException {
+        Method method = DeviceController.class.getMethod(
+                "getDeviceDetail", Authentication.class, Long.class);
+
+        Operation operation = method.getAnnotation(Operation.class);
+        assertThat(operation).isNotNull();
+        assertThat(operation.summary()).isNotBlank();
+        assertThat(operation.description()).isNotBlank();
+        assertThat(operation.security()).isNotEmpty();
+        assertThat(operation.security()[0].name()).isEqualTo("bearerAuth");
+
+        ApiResponses apiResponses = method.getAnnotation(ApiResponses.class);
+        assertThat(apiResponses).isNotNull();
+        Map<String, ApiResponse> responseMap = Arrays.stream(apiResponses.value())
+                .collect(Collectors.toMap(ApiResponse::responseCode, Function.identity()));
+
+        assertThat(responseMap.keySet()).containsExactlyInAnyOrder("200", "400", "401", "403", "404", "500");
+        assertThat(responseMap.get("200").description()).isNotBlank();
+
+        for (String errCode : new String[]{"400", "401", "403", "404", "500"}) {
+            ApiResponse errResponse = responseMap.get(errCode);
+            assertThat(errResponse.content()).isNotEmpty();
+            Content content = errResponse.content()[0];
+            assertThat(content.mediaType()).isEqualTo("application/json");
+            assertThat(content.schema().implementation()).isEqualTo(ErrorResponse.class);
+            assertThat(content.examples()).isNotEmpty();
+            assertThat(content.examples()[0].value()).contains("\"code\":");
+        }
+
+        assertSchemaOnRecordAndFields(
+                CustomerDeviceDetailResponse.class,
+                "deviceId", "serialNumber", "macAddress", "deviceName", "status",
+                "currentFirmwareId", "boundAt", "warrantyExpiresAt", "warrantyStatus",
+                "model", "fulfillment"
+        );
+        assertSchemaOnRecordAndFields(
+                CustomerDeviceDetailResponse.ModelInfo.class,
+                "modelId", "productId", "modelName", "status", "spec"
+        );
+        assertSchemaOnRecordAndFields(
+                CustomerDeviceDetailResponse.FulfillmentInfo.class,
+                "orderId", "orderItemId"
         );
     }
 
