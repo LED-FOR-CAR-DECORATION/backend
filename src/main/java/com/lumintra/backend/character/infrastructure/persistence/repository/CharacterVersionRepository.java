@@ -34,4 +34,7 @@ public interface CharacterVersionRepository extends JpaRepository<CharacterVersi
 
     @EntityGraph(attributePaths = "character")
     List<CharacterVersionEntity> findWithCharacterByVersionIdIn(Collection<Long> versionIds);
+
+    @EntityGraph(attributePaths = "character")
+    List<CharacterVersionEntity> findByCharacter_CharacterIdInOrderByVersionNumberDesc(Collection<Long> characterIds);
 }

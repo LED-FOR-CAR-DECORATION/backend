@@ -9,4 +9,6 @@ import java.util.Set;
 public interface InternalEmployeeAccessService {
 
     Long requireActiveEmployeeAccountId(String subject, Set<String> allowedRoles);
+
+    Long requireActiveEmployeeId(String subject, Set<String> allowedRoles);
 }
