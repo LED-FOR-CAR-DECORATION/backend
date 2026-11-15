@@ -103,4 +103,14 @@ public class CharacterVersionEntity {
         entity.setByteSize(byteSize);
         return entity;
     }
+
+    public boolean isListedOnStore() {
+        return this.productId != null;
+    }
+
+    public boolean belongsToCharacter(Long characterId) {
+        return this.character != null
+                && this.character.getCharacterId() != null
+                && this.character.getCharacterId().equals(characterId);
+    }
 }
