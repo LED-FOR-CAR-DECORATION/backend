@@ -1,6 +1,7 @@
 package com.lumintra.backend.character.infrastructure.persistence.mapper;
 
 import com.lumintra.backend.character.api.response.CharacterVersionResponse;
+import com.lumintra.backend.character.api.response.CreateCharacterVersionResponse;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterVersionEntity;
 import com.lumintra.backend.store.domain.model.ProductSnapshot;
 import org.springframework.stereotype.Component;
@@ -32,6 +33,19 @@ public class CharacterVersionMapper {
                 isListed,
                 productId,
                 productStatus,
+                entity.getCreatedAt()
+        );
+    }
+
+    public com.lumintra.backend.character.api.response.CreateCharacterVersionResponse toCreateResponse(CharacterVersionEntity entity) {
+        Long characterId = entity.getCharacter() != null ? entity.getCharacter().getCharacterId() : null;
+        return new com.lumintra.backend.character.api.response.CreateCharacterVersionResponse(
+                entity.getVersionId(),
+                characterId,
+                entity.getVersionNumber(),
+                entity.getPreviewGifUrl(),
+                entity.isCurrent(),
+                entity.getProductId() != null,
                 entity.getCreatedAt()
         );
     }

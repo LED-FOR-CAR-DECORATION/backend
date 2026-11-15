@@ -74,4 +74,33 @@ public class CharacterVersionEntity {
         entity.setCurrent(isCurrent);
         return entity;
     }
+
+    public static CharacterVersionEntity create(
+            CharacterEntity character,
+            Long productId,
+            int versionNumber,
+            String previewGifUrl,
+            Integer frameCount,
+            Integer frameDelayMs,
+            Integer byteSize,
+            boolean isCurrent) {
+        return create(character, productId, versionNumber, previewGifUrl, null, frameCount, frameDelayMs, byteSize, isCurrent);
+    }
+
+    public static CharacterVersionEntity create(
+            CharacterEntity character,
+            Long productId,
+            int versionNumber,
+            String previewGifUrl,
+            String ledBinaryUrl,
+            Integer frameCount,
+            Integer frameDelayMs,
+            Integer byteSize,
+            boolean isCurrent) {
+        CharacterVersionEntity entity = create(character, productId, versionNumber, previewGifUrl, ledBinaryUrl, isCurrent);
+        entity.setFrameCount(frameCount);
+        entity.setFrameDelayMs(frameDelayMs);
+        entity.setByteSize(byteSize);
+        return entity;
+    }
 }
