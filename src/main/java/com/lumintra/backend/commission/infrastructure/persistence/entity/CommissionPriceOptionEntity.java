@@ -59,6 +59,22 @@ public class CommissionPriceOptionEntity {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    public static CommissionPriceOptionEntity create(
+            String optionCode,
+            String optionLabel,
+            BigDecimal basePrice,
+            Boolean isDefault,
+            Integer displayOrder) {
+        return CommissionPriceOptionEntity.builder()
+                .optionCode(optionCode != null ? optionCode.trim() : "")
+                .optionLabel(optionLabel != null ? optionLabel.trim() : "")
+                .basePrice(basePrice != null ? basePrice : BigDecimal.ZERO)
+                .isDefault(Boolean.TRUE.equals(isDefault))
+                .isActive(true)
+                .displayOrder(displayOrder != null ? displayOrder : 0)
+                .build();
+    }
+
     // ERD Compatibility Aliases
     public String getOptionValue() { return this.optionCode; }
     public void setOptionValue(String optionValue) { this.optionCode = optionValue; }

@@ -1,5 +1,8 @@
 package com.lumintra.backend.commission.api.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lumintra.backend.commission.api.request.CreatePricingOptionRequest;
+import com.lumintra.backend.commission.api.request.CreatePricingRuleRequest;
 import com.lumintra.backend.commission.api.response.BundledOptionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionPricingResponse;
 import com.lumintra.backend.commission.api.response.ManagementPricingOptionResponse;
@@ -7,6 +10,7 @@ import com.lumintra.backend.commission.api.response.ManagementPricingRuleRespons
 import com.lumintra.backend.commission.api.response.ManagementPricingRuleSummaryResponse;
 import com.lumintra.backend.commission.api.response.ManagementPricingTierResponse;
 import com.lumintra.backend.commission.api.response.ManagementPricingTierSummaryResponse;
+import com.lumintra.backend.commission.application.CreateCustomPricingRuleUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionPricingUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingRuleDetailUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingTierDetailUseCase;
@@ -17,6 +21,8 @@ import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
 import com.lumintra.backend.shared.exception.commission.CommissionRuleNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionTierNotFoundException;
+import com.lumintra.backend.shared.exception.commission.DuplicateCommissionRuleException;
+import com.lumintra.backend.shared.exception.commission.InvalidRuleConfigurationException;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
 import io.micrometer.tracing.Tracer;
@@ -34,10 +40,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,9 +59,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CommissionManagementPricingControllerTest {
 
     private static final String BASE_PATH = "/api/management/commissions/pricing";
+    private static final String RULES_PATH = BASE_PATH + "/rules";
 
     @Autowired
     private MockMvc mockMvc;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @MockitoBean
     private GetManagementCommissionPricingUseCase getManagementCommissionPricingUseCase;
@@ -63,6 +74,9 @@ class CommissionManagementPricingControllerTest {
 
     @MockitoBean
     private GetManagementPricingRuleDetailUseCase getManagementPricingRuleDetailUseCase;
+
+    @MockitoBean
+    private CreateCustomPricingRuleUseCase createCustomPricingRuleUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -354,5 +368,261 @@ class CommissionManagementPricingControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 
         verifyNoInteractions(getManagementPricingRuleDetailUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID01 [N]: Authenticated MANAGER creates custom pricing rule returning 201 CREATED")
+    void createCustomPricingRule_managerRole_returns201Created() throws Exception {
+        CreatePricingRuleRequest request = CreatePricingRuleRequest.builder()
+                .configCode("BACKGROUND_STYLE")
+                .configName("Kiểu hình nền")
+                .description("Chọn kiểu nền cho ảnh")
+                .selectionType(SelectionType.SINGLE_SELECT)
+                .uiType(UiType.RADIO)
+                .isRequired(true)
+                .displayOrder(5)
+                .options(List.of(
+                        CreatePricingOptionRequest.builder()
+                                .optionCode("BG_SIMPLE")
+                                .optionLabel("Nền đơn giản")
+                                .basePrice(BigDecimal.ZERO)
+                                .isDefault(true)
+                                .displayOrder(1)
+                                .build()
+                ))
+                .build();
+
+        ManagementPricingRuleResponse createdDto = ManagementPricingRuleResponse.builder()
+                .configId(100L)
+                .configCode("BACKGROUND_STYLE")
+                .configName("Kiểu hình nền")
+                .description("Chọn kiểu nền cho ảnh")
+                .selectionType(SelectionType.SINGLE_SELECT)
+                .uiType(UiType.RADIO)
+                .isRequired(true)
+                .isSystem(false)
+                .isActive(true)
+                .displayOrder(5)
+                .options(List.of(
+                        ManagementPricingOptionResponse.builder()
+                                .optionId(200L)
+                                .optionCode("BG_SIMPLE")
+                                .optionLabel("Nền đơn giản")
+                                .basePrice(BigDecimal.ZERO)
+                                .isDefault(true)
+                                .isActive(true)
+                                .displayOrder(1)
+                                .build()
+                ))
+                .build();
+
+        when(createCustomPricingRuleUseCase.execute(any(CreatePricingRuleRequest.class))).thenReturn(createdDto);
+
+        mockMvc.perform(post(RULES_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.configId").value(100))
+                .andExpect(jsonPath("$.data.configCode").value("BACKGROUND_STYLE"))
+                .andExpect(jsonPath("$.data.isSystem").value(false))
+                .andExpect(jsonPath("$.data.options[0].optionCode").value("BG_SIMPLE"));
+
+        verify(createCustomPricingRuleUseCase).execute(any(CreatePricingRuleRequest.class));
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID02 [N]: Authenticated ADMIN creates custom pricing rule returning 201 CREATED")
+    void createCustomPricingRule_adminRole_returns201Created() throws Exception {
+        CreatePricingRuleRequest request = CreatePricingRuleRequest.builder()
+                .configCode("EXPRESS_DELIVERY")
+                .configName("Giao hàng hỏa tốc")
+                .selectionType(SelectionType.MULTI_SELECT)
+                .uiType(UiType.CHECKBOX)
+                .isRequired(false)
+                .displayOrder(6)
+                .options(List.of(
+                        CreatePricingOptionRequest.builder()
+                                .optionCode("EXP_24H")
+                                .optionLabel("Hoàn thành trong 24h")
+                                .basePrice(new BigDecimal("100000.00"))
+                                .isDefault(false)
+                                .displayOrder(1)
+                                .build()
+                ))
+                .build();
+
+        ManagementPricingRuleResponse createdDto = ManagementPricingRuleResponse.builder()
+                .configId(101L)
+                .configCode("EXPRESS_DELIVERY")
+                .configName("Giao hàng hỏa tốc")
+                .selectionType(SelectionType.MULTI_SELECT)
+                .uiType(UiType.CHECKBOX)
+                .isSystem(false)
+                .isActive(true)
+                .options(List.of())
+                .build();
+
+        when(createCustomPricingRuleUseCase.execute(any(CreatePricingRuleRequest.class))).thenReturn(createdDto);
+
+        mockMvc.perform(post(RULES_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("2").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.configCode").value("EXPRESS_DELIVERY"));
+
+        verify(createCustomPricingRuleUseCase).execute(any(CreatePricingRuleRequest.class));
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID03 [A]: Duplicate rule code returns 409 CONFLICT")
+    void createCustomPricingRule_duplicateCode_returns409Conflict() throws Exception {
+        CreatePricingRuleRequest request = CreatePricingRuleRequest.builder()
+                .configCode("FORMAT_TYPE")
+                .configName("Định dạng")
+                .selectionType(SelectionType.SINGLE_SELECT)
+                .uiType(UiType.RADIO)
+                .options(List.of())
+                .build();
+
+        when(createCustomPricingRuleUseCase.execute(any(CreatePricingRuleRequest.class)))
+                .thenThrow(new DuplicateCommissionRuleException("Commission pricing rule with code 'FORMAT_TYPE' already exists."));
+
+        mockMvc.perform(post(RULES_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_COMMISSION_RULE"));
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID04 [A]: Invalid rule configuration throws 400 BAD_REQUEST")
+    void createCustomPricingRule_invalidConfiguration_returns400BadRequest() throws Exception {
+        CreatePricingRuleRequest request = CreatePricingRuleRequest.builder()
+                .configCode("BAD_RULE")
+                .configName("Quy tắc lỗi")
+                .selectionType(SelectionType.SINGLE_SELECT)
+                .uiType(UiType.CHECKBOX)
+                .options(List.of())
+                .build();
+
+        when(createCustomPricingRuleUseCase.execute(any(CreatePricingRuleRequest.class)))
+                .thenThrow(new InvalidRuleConfigurationException("SINGLE_SELECT rules only support RADIO or DROPDOWN UI types."));
+
+        mockMvc.perform(post(RULES_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_RULE_CONFIGURATION"));
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID05 [A]: Missing required Bean Validation fields returns 400 BAD_REQUEST")
+    void createCustomPricingRule_beanValidationFailed_returns400BadRequest() throws Exception {
+        CreatePricingRuleRequest invalidRequest = CreatePricingRuleRequest.builder()
+                .configCode("")
+                .configName("")
+                .selectionType(null)
+                .uiType(null)
+                .build();
+
+        mockMvc.perform(post(RULES_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(createCustomPricingRuleUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID06 [A]: Anonymous caller on POST /rules returns 401 UNAUTHORIZED")
+    void createCustomPricingRule_unauthenticated_returns401() throws Exception {
+        CreatePricingRuleRequest request = CreatePricingRuleRequest.builder()
+                .configCode("NEW_RULE")
+                .configName("Quy tắc mới")
+                .selectionType(SelectionType.TEXT_INPUT)
+                .uiType(UiType.TEXT)
+                .build();
+
+        mockMvc.perform(post(RULES_PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(createCustomPricingRuleUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID07 [A]: CUSTOMER role on POST /rules returns 403 FORBIDDEN")
+    void createCustomPricingRule_customerRole_returns403() throws Exception {
+        CreatePricingRuleRequest request = CreatePricingRuleRequest.builder()
+                .configCode("NEW_RULE")
+                .configName("Quy tắc mới")
+                .selectionType(SelectionType.TEXT_INPUT)
+                .uiType(UiType.TEXT)
+                .build();
+
+        mockMvc.perform(post(RULES_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(createCustomPricingRuleUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID08 [A]: STAFF role on POST /rules returns 403 FORBIDDEN")
+    void createCustomPricingRule_staffRole_returns403() throws Exception {
+        CreatePricingRuleRequest request = CreatePricingRuleRequest.builder()
+                .configCode("NEW_RULE")
+                .configName("Quy tắc mới")
+                .selectionType(SelectionType.TEXT_INPUT)
+                .uiType(UiType.TEXT)
+                .build();
+
+        mockMvc.perform(post(RULES_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("4").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(createCustomPricingRuleUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID09 [A]: DESIGNER role on POST /rules returns 403 FORBIDDEN")
+    void createCustomPricingRule_designerRole_returns403() throws Exception {
+        CreatePricingRuleRequest request = CreatePricingRuleRequest.builder()
+                .configCode("NEW_RULE")
+                .configName("Quy tắc mới")
+                .selectionType(SelectionType.TEXT_INPUT)
+                .uiType(UiType.TEXT)
+                .build();
+
+        mockMvc.perform(post(RULES_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(createCustomPricingRuleUseCase);
     }
 }

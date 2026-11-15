@@ -381,6 +381,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("SYSTEM_RULE_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(DuplicateCommissionRuleException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateCommissionRule(DuplicateCommissionRuleException ex) {
+        return buildErrorResponse("DUPLICATE_COMMISSION_RULE", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     // Helpers
     private ResponseEntity<ErrorResponse> buildErrorResponse(String code, String message, HttpStatus status) {
         return buildErrorResponse(code, message, status, List.of());

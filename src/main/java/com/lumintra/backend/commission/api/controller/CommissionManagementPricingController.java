@@ -1,8 +1,10 @@
 package com.lumintra.backend.commission.api.controller;
 
+import com.lumintra.backend.commission.api.request.CreatePricingRuleRequest;
 import com.lumintra.backend.commission.api.response.ManagementCommissionPricingResponse;
 import com.lumintra.backend.commission.api.response.ManagementPricingRuleResponse;
 import com.lumintra.backend.commission.api.response.ManagementPricingTierResponse;
+import com.lumintra.backend.commission.application.CreateCustomPricingRuleUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionPricingUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingRuleDetailUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingTierDetailUseCase;
@@ -16,13 +18,17 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -38,6 +44,7 @@ public class CommissionManagementPricingController {
     private final GetManagementCommissionPricingUseCase getManagementCommissionPricingUseCase;
     private final GetManagementPricingTierDetailUseCase getManagementPricingTierDetailUseCase;
     private final GetManagementPricingRuleDetailUseCase getManagementPricingRuleDetailUseCase;
+    private final CreateCustomPricingRuleUseCase createCustomPricingRuleUseCase;
 
     @GetMapping
     @Operation(
@@ -257,5 +264,86 @@ public class CommissionManagementPricingController {
             @PathVariable @Positive(message = "ruleId must be a positive integer") Long ruleId) {
         ManagementPricingRuleResponse response = getManagementPricingRuleDetailUseCase.execute(ruleId);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/rules")
+    @Operation(
+            summary = "Create custom commission pricing rule",
+            description = "Creates a new custom commission pricing rule with associated options, validating invariants and uniqueness."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "Custom pricing rule created successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ManagementPricingRuleResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Validation failed or invalid rule configuration",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "InvalidRuleConfigurationExample",
+                                    value = "{\"code\":\"INVALID_RULE_CONFIGURATION\",\"message\":\"SINGLE_SELECT rules only support RADIO or DROPDOWN UI types.\",\"status\":400,\"timestamp\":\"2026-11-15T22:00:00Z\",\"traceId\":\"trace-id-sample\",\"details\":[]}"
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthenticated or missing/invalid token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "UnauthorizedExample",
+                                    value = "{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\",\"status\":401,\"timestamp\":\"2026-11-15T22:00:00Z\",\"traceId\":\"trace-id-sample\",\"details\":[]}"
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Access denied: requires MANAGER or ADMIN role",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "ForbiddenExample",
+                                    value = "{\"code\":\"FORBIDDEN\",\"message\":\"Access denied\",\"status\":403,\"timestamp\":\"2026-11-15T22:00:00Z\",\"traceId\":\"trace-id-sample\",\"details\":[]}"
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Duplicate rule code conflict",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "DuplicateRuleCodeExample",
+                                    value = "{\"code\":\"DUPLICATE_COMMISSION_RULE\",\"message\":\"Commission pricing rule with code 'FORMAT_TYPE' already exists.\",\"status\":409,\"timestamp\":\"2026-11-15T22:00:00Z\",\"traceId\":\"trace-id-sample\",\"details\":[]}"
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error occurred",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "ServerErrorExample",
+                                    value = "{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"An unexpected error occurred\",\"status\":500,\"timestamp\":\"2026-11-15T22:00:00Z\",\"traceId\":\"trace-id-sample\",\"details\":[]}"
+                            )
+                    )
+            )
+    })
+    public ResponseEntity<ApiResponse<ManagementPricingRuleResponse>> createCustomPricingRule(
+            @Valid @RequestBody CreatePricingRuleRequest request) {
+        ManagementPricingRuleResponse response = createCustomPricingRuleUseCase.execute(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 }

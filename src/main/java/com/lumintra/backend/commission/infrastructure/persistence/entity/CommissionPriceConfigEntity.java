@@ -77,6 +77,37 @@ public class CommissionPriceConfigEntity {
     @Builder.Default
     private List<CommissionPriceOptionEntity> options = new ArrayList<>();
 
+    public static CommissionPriceConfigEntity createCustom(
+            String ruleKey,
+            String name,
+            String description,
+            SelectionType selectionType,
+            UiType uiType,
+            Boolean isRequired,
+            Integer displayOrder,
+            Long dependsOnOptionId,
+            List<CommissionPriceOptionEntity> optionEntities) {
+        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
+                .ruleKey(ruleKey != null ? ruleKey.trim() : "")
+                .name(name != null ? name.trim() : "")
+                .description(description)
+                .selectionType(selectionType)
+                .uiType(uiType)
+                .isRequired(Boolean.TRUE.equals(isRequired))
+                .isSystem(false)
+                .isActive(true)
+                .displayOrder(displayOrder != null ? displayOrder : 0)
+                .dependsOnOptionId(dependsOnOptionId)
+                .build();
+
+        if (optionEntities != null) {
+            for (CommissionPriceOptionEntity option : optionEntities) {
+                config.addOption(option);
+            }
+        }
+        return config;
+    }
+
     // ERD Compatibility Aliases
     public String getConfigCode() { return this.ruleKey; }
     public void setConfigCode(String configCode) { this.ruleKey = configCode; }
