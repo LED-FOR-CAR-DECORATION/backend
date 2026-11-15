@@ -17,6 +17,10 @@ public final class CharacterSpecifications {
             if (creatorEmployeeId != null) {
                 predicates = cb.and(predicates, cb.equal(root.get("creatorEmployeeId"), creatorEmployeeId));
             }
+    public static Specification<CharacterEntity> forDesigner(Long designerEmployeeId, String query) {
+        return (root, criteriaQuery, cb) -> {
+            var predicates = cb.conjunction();
+            predicates = cb.and(predicates, cb.equal(root.get("creatorEmployeeId"), designerEmployeeId));
 
             if (query != null && !query.isBlank()) {
                 String pattern = "%" + query.trim().toLowerCase(Locale.ROOT) + "%";

@@ -37,4 +37,6 @@ public interface CharacterVersionRepository extends JpaRepository<CharacterVersi
 
     @Query("select v.character.characterId, count(v) from CharacterVersionEntity v where v.character.characterId in :characterIds group by v.character.characterId")
     List<Object[]> countVersionsByCharacterIds(@Param("characterIds") Collection<Long> characterIds);
+    @EntityGraph(attributePaths = "character")
+    List<CharacterVersionEntity> findByCharacter_CharacterIdInOrderByVersionNumberDesc(Collection<Long> characterIds);
 }
