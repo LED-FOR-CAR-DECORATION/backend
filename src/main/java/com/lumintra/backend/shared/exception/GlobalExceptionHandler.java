@@ -5,6 +5,7 @@ import com.lumintra.backend.shared.exception.character.CharacterNotFoundExceptio
 import com.lumintra.backend.shared.exception.character.CharacterVersionAlreadyLinkedToProductException;
 import com.lumintra.backend.shared.exception.character.CharacterVersionNotFoundException;
 import com.lumintra.backend.shared.exception.commerce.*;
+import com.lumintra.backend.shared.exception.commission.*;
 import com.lumintra.backend.shared.exception.device.*;
 import com.lumintra.backend.shared.exception.iam.*;
 import com.lumintra.backend.shared.exception.media.InvalidMediaRequestException;
@@ -352,6 +353,32 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PasswordResetUnavailableException.class)
     public ResponseEntity<ErrorResponse> handlePasswordResetUnavailable(PasswordResetUnavailableException ex) {
         return buildErrorResponse("PASSWORD_RESET_UNAVAILABLE", ex.getMessage(), HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    // Commission exceptions
+    @ExceptionHandler(PricingTierInvariantViolationException.class)
+    public ResponseEntity<ErrorResponse> handlePricingTierInvariantViolation(PricingTierInvariantViolationException ex) {
+        return buildErrorResponse("PRICING_INVARIANT_VIOLATION", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(InvalidRuleConfigurationException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRuleConfiguration(InvalidRuleConfigurationException ex) {
+        return buildErrorResponse("INVALID_RULE_CONFIGURATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(CommissionRuleNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCommissionRuleNotFound(CommissionRuleNotFoundException ex) {
+        return buildErrorResponse("COMMISSION_RULE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(CommissionTierNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCommissionTierNotFound(CommissionTierNotFoundException ex) {
+        return buildErrorResponse("COMMISSION_TIER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(SystemRuleLockedException.class)
+    public ResponseEntity<ErrorResponse> handleSystemRuleLocked(SystemRuleLockedException ex) {
+        return buildErrorResponse("SYSTEM_RULE_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     // Helpers
