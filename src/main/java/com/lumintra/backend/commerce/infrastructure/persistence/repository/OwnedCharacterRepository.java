@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
+import java.util.List;
 
 @Repository
 public interface OwnedCharacterRepository extends JpaRepository<OwnedCharacterEntity, Long> {
@@ -12,4 +13,6 @@ public interface OwnedCharacterRepository extends JpaRepository<OwnedCharacterEn
     boolean existsByCustomerIdAndVersionIdAndIsRevokedFalse(Long customerId, Long versionId);
 
     boolean existsByCustomerIdAndVersionIdInAndIsRevokedFalse(Long customerId, Collection<Long> versionIds);
+
+    List<OwnedCharacterEntity> findByCustomerIdAndIsRevokedFalseOrderByGrantedAtDesc(Long customerId);
 }
