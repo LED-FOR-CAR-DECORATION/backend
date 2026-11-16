@@ -46,4 +46,14 @@ public class CharacterEntity {
         entity.setDescription(description);
         return entity;
     }
+
+    public void update(String characterName, String description) {
+        this.characterName = characterName;
+        this.description = description;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isOwnedBy(Long employeeId) {
+        return this.creatorEmployeeId != null && this.creatorEmployeeId.equals(employeeId);
+    }
 }

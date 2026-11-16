@@ -24,4 +24,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItemEntity, Long
     List<OrderItemSummaryRow> findSummaryRowsByOrderIds(@Param("orderIds") Collection<Long> orderIds);
 
     List<OrderItemEntity> findAllByOrder_OrderIdOrderByOrderItemIdAsc(Long orderId);
+
+    @Query("SELECT oi FROM OrderItemEntity oi JOIN FETCH oi.order WHERE oi.orderItemId IN :orderItemIds")
+    List<OrderItemEntity> findWithOrderByOrderItemIdIn(@Param("orderItemIds") Collection<Long> orderItemIds);
 }
