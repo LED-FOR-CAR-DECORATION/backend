@@ -19,7 +19,6 @@ import com.lumintra.backend.shared.exception.store.StoreProductReferenceExceptio
 import com.lumintra.backend.shared.exception.store.InvalidBundlePriceException;
 import com.lumintra.backend.shared.exception.store.TagAlreadyExistsException;
 import com.lumintra.backend.shared.exception.store.BundleNotFoundException;
-import com.lumintra.backend.shared.exception.store.InvalidBundlePriceException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
