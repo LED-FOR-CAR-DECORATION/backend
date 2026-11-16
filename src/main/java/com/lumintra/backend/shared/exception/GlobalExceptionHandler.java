@@ -18,6 +18,8 @@ import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundExcept
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
 import com.lumintra.backend.shared.exception.store.InvalidBundlePriceException;
 import com.lumintra.backend.shared.exception.store.TagAlreadyExistsException;
+import com.lumintra.backend.shared.exception.store.SubscriptionNotFoundException;
+import com.lumintra.backend.shared.exception.store.InvalidSubscriptionDurationException;
 import com.lumintra.backend.shared.exception.store.PlanCodeAlreadyExistsException;
 import com.lumintra.backend.shared.exception.store.BundleNotFoundException;
 import io.micrometer.tracing.Span;
@@ -64,6 +66,14 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
     }
 
+    @ExceptionHandler(SubscriptionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionNotFound(SubscriptionNotFoundException ex) {
+        return buildErrorResponse("SUBSCRIPTION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidSubscriptionDurationException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSubscriptionDuration(InvalidSubscriptionDurationException ex) {
+        return buildErrorResponse("INVALID_SUBSCRIPTION_DURATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
     @ExceptionHandler(PlanCodeAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handlePlanCodeAlreadyExists(PlanCodeAlreadyExistsException ex) {
         return buildErrorResponse("PLAN_CODE_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT);
