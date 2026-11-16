@@ -73,4 +73,13 @@ public class CustomerLookupServiceImpl implements CustomerLookupService {
                 .stream()
                 .findFirst();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> findCustomerIdsByKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return Collections.emptySet();
+        }
+        return new LinkedHashSet<>(customerRepository.findCustomerIdsByKeyword(keyword.trim()));
+    }
 }

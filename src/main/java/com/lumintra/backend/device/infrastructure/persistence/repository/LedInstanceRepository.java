@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +26,8 @@ public interface LedInstanceRepository extends JpaRepository<LedInstanceEntity, 
     Optional<LedInstanceEntity> findBySerialNumber(String serialNumber);
 
     Optional<LedInstanceEntity> findBySerialNumberAndMacAddress(String serialNumber, String macAddress);
+
+    List<LedInstanceEntity> findBySerialNumberIn(Collection<String> serialNumbers);
 
     @Query(
             value = "SELECT i FROM LedInstanceEntity i WHERE i.ownerCustomerId = :customerId ORDER BY i.boundAt DESC NULLS LAST, i.instanceId DESC",
