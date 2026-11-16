@@ -33,7 +33,7 @@ import java.util.List;
 
 @Tag(
         name = "LED Hardware Inventory",
-        description = "Manager/admin endpoints for tracking physical LED units and re-printing factory QR payloads"
+        description = "Staff/manager/admin endpoints for tracking physical LED units and re-printing factory QR payloads"
 )
 @RestController
 @RequestMapping("/api/management/admin/led-instances")
@@ -45,7 +45,7 @@ public class ManagedLedInstanceController {
 
     @Operation(
             summary = "List and track LED hardware instances",
-            description = "Retrieves a paginated list of individual physical ESP32 LED units across warehouse stock, transit, customer ownership, returns, and decommissioning for ADMIN and MANAGER users. Supports filtering by modelId, status, and case-insensitive serialNumber/macAddress search. Returns signed factory QR payloads only when status is neither BOUND nor DECOMMISSIONED."
+            description = "Retrieves a paginated list of individual physical ESP32 LED units across warehouse stock, transit, customer ownership, returns, and decommissioning for ADMIN, MANAGER, and STAFF users. Supports filtering by modelId, status, and case-insensitive serialNumber/macAddress search. Returns signed factory QR payloads only when status is neither BOUND nor DECOMMISSIONED."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {
@@ -102,7 +102,7 @@ public class ManagedLedInstanceController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "403",
-                    description = "Forbidden: caller does not hold ADMIN or MANAGER role",
+                    description = "Forbidden: caller does not hold ADMIN, MANAGER, or STAFF role",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class),
@@ -143,7 +143,7 @@ public class ManagedLedInstanceController {
                     )
             )
     })
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<LedInstanceListResponse.LedInstanceItem>>> listLedInstances(
             Authentication authentication,
@@ -155,7 +155,7 @@ public class ManagedLedInstanceController {
 
     @Operation(
             summary = "Get LED hardware instance details and factory QR payload",
-            description = "Retrieves full hardware unit details, parent LED model specifications, derived warranty status, linked fulfillment order info, customer owner summary (if bound), and signed factory QR payload for ADMIN and MANAGER users. Suppresses qrPayload when status is BOUND or DECOMMISSIONED."
+            description = "Retrieves full hardware unit details, parent LED model specifications, derived warranty status, linked fulfillment order info, customer owner summary (if bound), and signed factory QR payload for ADMIN, MANAGER, and STAFF users. Suppresses qrPayload when status is BOUND or DECOMMISSIONED."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {
@@ -212,7 +212,7 @@ public class ManagedLedInstanceController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "403",
-                    description = "Forbidden: caller does not hold ADMIN or MANAGER role",
+                    description = "Forbidden: caller does not hold ADMIN, MANAGER, or STAFF role",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class),
@@ -274,7 +274,7 @@ public class ManagedLedInstanceController {
                     )
             )
     })
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<LedInstanceDetailResponse>> getLedInstanceDetail(
             Authentication authentication,
