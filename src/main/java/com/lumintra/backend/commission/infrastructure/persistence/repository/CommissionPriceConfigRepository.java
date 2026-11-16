@@ -15,6 +15,8 @@ public interface CommissionPriceConfigRepository extends JpaRepository<Commissio
 
     boolean existsByRuleKey(String ruleKey);
 
+    boolean existsByRuleKeyIgnoreCase(String ruleKey);
+
     List<CommissionPriceConfigEntity> findAllByIsActiveTrueOrderByDisplayOrderAsc();
 
     List<CommissionPriceConfigEntity> findAllByOrderByDisplayOrderAsc();

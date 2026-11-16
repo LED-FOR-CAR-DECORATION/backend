@@ -1,6 +1,8 @@
 package com.lumintra.backend.commission;
 
 import com.lumintra.backend.commission.api.controller.CommissionManagementPricingController;
+import com.lumintra.backend.commission.api.request.CreatePricingOptionRequest;
+import com.lumintra.backend.commission.api.request.CreatePricingRuleRequest;
 import com.lumintra.backend.commission.api.response.BundledOptionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionPricingResponse;
 import com.lumintra.backend.commission.api.response.ManagementPricingOptionResponse;
@@ -31,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CommissionManagementPricingSwaggerTest {
 
     @Test
-    @DisplayName("CMS-29 SWG-01: CommissionManagementPricingController declares @Tag, @SecurityRequirement, @PreAuthorize, and complete @Operation/@ApiResponses")
+    @DisplayName("CMS-29/30 SWG-01: CommissionManagementPricingController declares @Tag, @SecurityRequirement, @PreAuthorize, and complete @Operation/@ApiResponses")
     void controller_declaresCompleteOpenApiMetadata() throws NoSuchMethodException {
         Tag tag = CommissionManagementPricingController.class.getAnnotation(Tag.class);
         assertThat(tag).isNotNull();
@@ -47,18 +49,21 @@ class CommissionManagementPricingSwaggerTest {
         assertThat(preAuth.value()).contains("MANAGER", "ADMIN");
 
         Method summaryMethod = CommissionManagementPricingController.class.getMethod("getManagementPricing");
-        assertMethodOpenApi(summaryMethod, ManagementCommissionPricingResponse.class, "200", "401", "403", "500");
+        assertMethodOpenApi(summaryMethod, "200", ManagementCommissionPricingResponse.class, "200", "401", "403", "500");
 
         Method tierDetailMethod = CommissionManagementPricingController.class.getMethod("getManagementPricingTierDetail", Long.class);
-        assertMethodOpenApi(tierDetailMethod, ManagementPricingTierResponse.class, "200", "400", "401", "403", "404", "500");
+        assertMethodOpenApi(tierDetailMethod, "200", ManagementPricingTierResponse.class, "200", "400", "401", "403", "404", "500");
 
         Method ruleDetailMethod = CommissionManagementPricingController.class.getMethod("getManagementPricingRuleDetail", Long.class);
-        assertMethodOpenApi(ruleDetailMethod, ManagementPricingRuleResponse.class, "200", "400", "401", "403", "404", "500");
+        assertMethodOpenApi(ruleDetailMethod, "200", ManagementPricingRuleResponse.class, "200", "400", "401", "403", "404", "500");
+
+        Method createRuleMethod = CommissionManagementPricingController.class.getMethod("createCustomPricingRule", CreatePricingRuleRequest.class);
+        assertMethodOpenApi(createRuleMethod, "201", ManagementPricingRuleResponse.class, "201", "400", "401", "403", "409", "500");
     }
 
     @Test
-    @DisplayName("CMS-29 SWG-02: ManagementCommissionPricingResponse and summary/detail records declare @Schema on record and fields")
-    void responseDtos_declareSchemaAnnotations() throws NoSuchFieldException {
+    @DisplayName("CMS-29/30 SWG-02: ManagementCommissionPricingResponse and request/response records declare @Schema on record and fields")
+    void responseAndRequestDtos_declareSchemaAnnotations() throws NoSuchFieldException {
         assertSchemaOnRecordAndFields(
                 ManagementCommissionPricingResponse.class,
                 "tiers", "rules"
@@ -102,9 +107,20 @@ class CommissionManagementPricingSwaggerTest {
                 ManagementPricingOptionResponse.class,
                 "optionId", "optionCode", "optionLabel", "basePrice", "isDefault", "isActive", "displayOrder"
         );
+
+        assertSchemaOnRecordAndFields(
+                CreatePricingRuleRequest.class,
+                "configCode", "configName", "description",
+                "selectionType", "uiType", "isRequired", "displayOrder", "dependsOnOptionId", "options"
+        );
+
+        assertSchemaOnRecordAndFields(
+                CreatePricingOptionRequest.class,
+                "optionCode", "optionLabel", "optionValue", "basePrice", "isDefault", "displayOrder"
+        );
     }
 
-    private void assertMethodOpenApi(Method method, Class<?> successSchema, String... expectedCodes) {
+    private void assertMethodOpenApi(Method method, String successCode, Class<?> successSchema, String... expectedCodes) {
         Operation operation = method.getAnnotation(Operation.class);
         assertThat(operation).isNotNull();
         assertThat(operation.summary()).isNotBlank();
@@ -118,7 +134,7 @@ class CommissionManagementPricingSwaggerTest {
 
         assertThat(responseMap.keySet()).contains(expectedCodes);
 
-        ApiResponse okResponse = responseMap.get("200");
+        ApiResponse okResponse = responseMap.get(successCode);
         assertThat(okResponse.content()).isNotEmpty();
         assertThat(okResponse.content()[0].mediaType()).isEqualTo("application/json");
         assertThat(okResponse.content()[0].schema().implementation()).isEqualTo(successSchema);
