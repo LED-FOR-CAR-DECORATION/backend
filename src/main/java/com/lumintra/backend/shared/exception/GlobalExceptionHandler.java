@@ -16,9 +16,12 @@ import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
+import com.lumintra.backend.shared.exception.store.InvalidBundlePriceException;
 import com.lumintra.backend.shared.exception.store.TagAlreadyExistsException;
 import com.lumintra.backend.shared.exception.store.SubscriptionNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidSubscriptionDurationException;
+import com.lumintra.backend.shared.exception.store.PlanCodeAlreadyExistsException;
+import com.lumintra.backend.shared.exception.store.BundleNotFoundException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -71,6 +74,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidSubscriptionDurationException.class)
     public ResponseEntity<ErrorResponse> handleInvalidSubscriptionDuration(InvalidSubscriptionDurationException ex) {
         return buildErrorResponse("INVALID_SUBSCRIPTION_DURATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    @ExceptionHandler(PlanCodeAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handlePlanCodeAlreadyExists(PlanCodeAlreadyExistsException ex) {
+        return buildErrorResponse("PLAN_CODE_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT);
+    @ExceptionHandler(BundleNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleBundleNotFound(BundleNotFoundException ex) {
+        return buildErrorResponse("BUNDLE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidBundlePriceException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidBundlePrice(InvalidBundlePriceException ex) {
+        return buildErrorResponse("INVALID_BUNDLE_PRICE", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(CharacterNotFoundException.class)
@@ -189,6 +203,31 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DeviceOwnershipMismatchException.class)
     public ResponseEntity<ErrorResponse> handleDeviceOwnershipMismatch(DeviceOwnershipMismatchException ex) {
         return buildErrorResponse("DEVICE_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(WarrantyNotActiveException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyNotActive(WarrantyNotActiveException ex) {
+        return buildErrorResponse("WARRANTY_NOT_ACTIVE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(WarrantyExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyExpired(WarrantyExpiredException ex) {
+        return buildErrorResponse("WARRANTY_EXPIRED", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(WarrantyClaimConflictException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyClaimConflict(WarrantyClaimConflictException ex) {
+        return buildErrorResponse("WARRANTY_CLAIM_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(WarrantyClaimNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyClaimNotFound(WarrantyClaimNotFoundException ex) {
+        return buildErrorResponse("WARRANTY_CLAIM_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidWarrantyTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidWarrantyTransition(InvalidWarrantyTransitionException ex) {
+        return buildErrorResponse("INVALID_WARRANTY_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(OrderNotDeliveredYetException.class)
@@ -396,6 +435,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateCommissionRuleException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateCommissionRule(DuplicateCommissionRuleException ex) {
         return buildErrorResponse("DUPLICATE_COMMISSION_RULE", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(CommissionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCommissionNotFound(CommissionNotFoundException ex) {
+        return buildErrorResponse("COMMISSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(CommissionOwnershipMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleCommissionOwnershipMismatch(CommissionOwnershipMismatchException ex) {
+        return buildErrorResponse("COMMISSION_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);
     }
 
     // Helpers

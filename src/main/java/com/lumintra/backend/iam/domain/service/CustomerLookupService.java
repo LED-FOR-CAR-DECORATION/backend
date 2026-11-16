@@ -5,6 +5,7 @@ import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Read-only domain boundary exposed by IAM for retrieving customer contact summaries without leaking persistence internals.
@@ -18,4 +19,6 @@ public interface CustomerLookupService {
     Optional<CustomerProfileSnapshot> findProfileByEmail(String email);
 
     Optional<CustomerProfileSnapshot> findFirstProfile();
+
+    Set<Long> findCustomerIdsByKeyword(String keyword);
 }
