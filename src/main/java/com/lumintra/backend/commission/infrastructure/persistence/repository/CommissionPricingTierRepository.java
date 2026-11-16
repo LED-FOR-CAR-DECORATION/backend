@@ -17,6 +17,8 @@ public interface CommissionPricingTierRepository extends JpaRepository<Commissio
 
     List<CommissionPricingTierEntity> findAllByIsActiveTrueOrderByDisplayOrderAsc();
 
+    List<CommissionPricingTierEntity> findAllByOrderByDisplayOrderAsc();
+
     @Query("SELECT DISTINCT t FROM CommissionPricingTierEntity t LEFT JOIN FETCH t.includedOptions o WHERE t.isActive = true ORDER BY t.displayOrder ASC")
     List<CommissionPricingTierEntity> findActiveWithIncludedOptions();
 
