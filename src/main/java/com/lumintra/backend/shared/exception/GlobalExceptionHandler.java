@@ -12,9 +12,9 @@ import com.lumintra.backend.shared.exception.media.InvalidMediaRequestException;
 import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
 import com.lumintra.backend.shared.exception.media.StorageServiceException;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
-import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.BundleNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidBundlePriceException;
+import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
@@ -72,7 +72,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidBundlePrice(InvalidBundlePriceException ex) {
         return buildErrorResponse("INVALID_BUNDLE_PRICE", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
-
     @ExceptionHandler(CharacterNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleCharacterNotFoundException(CharacterNotFoundException ex) {
         return buildErrorResponse("CHARACTER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
