@@ -10,7 +10,7 @@ import java.util.Locale;
 public record LoginRequest(
         @Schema(
                 description = "Registered user email address",
-                example = "user@example.com",
+                example = "customer123@gmail.com",
                 requiredMode = Schema.RequiredMode.REQUIRED
         )
         @NotBlank(message = "Email is required")
@@ -19,7 +19,7 @@ public record LoginRequest(
 
         @Schema(
                 description = "Account password",
-                example = "P@ssword123",
+                example = "Customer123@",
                 requiredMode = Schema.RequiredMode.REQUIRED
         )
         @NotBlank(message = "Password is required")

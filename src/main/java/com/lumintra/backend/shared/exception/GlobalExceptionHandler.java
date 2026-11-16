@@ -1,8 +1,16 @@
 package com.lumintra.backend.shared.exception;
 
+import com.lumintra.backend.shared.exception.character.CannotDeleteListedCharacterException;
+import com.lumintra.backend.shared.exception.character.CharacterNotFoundException;
+import com.lumintra.backend.shared.exception.character.CharacterVersionAlreadyLinkedToProductException;
+import com.lumintra.backend.shared.exception.character.CharacterVersionNotFoundException;
 import com.lumintra.backend.shared.exception.commerce.*;
+import com.lumintra.backend.shared.exception.commission.*;
 import com.lumintra.backend.shared.exception.device.*;
 import com.lumintra.backend.shared.exception.iam.*;
+import com.lumintra.backend.shared.exception.media.InvalidMediaRequestException;
+import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
+import com.lumintra.backend.shared.exception.media.StorageServiceException;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
@@ -21,6 +29,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -56,6 +65,43 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidBundlePriceException.class)
     public ResponseEntity<ErrorResponse> handleInvalidBundlePrice(InvalidBundlePriceException ex) {
         return buildErrorResponse("INVALID_BUNDLE_PRICE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(CharacterNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCharacterNotFoundException(CharacterNotFoundException ex) {
+        return buildErrorResponse("CHARACTER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(CannotDeleteListedCharacterException.class)
+    public ResponseEntity<ErrorResponse> handleCannotDeleteListedCharacter(CannotDeleteListedCharacterException ex) {
+        return buildErrorResponse("CANNOT_DELETE_LISTED_CHARACTER", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(CharacterVersionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCharacterVersionNotFound(CharacterVersionNotFoundException ex) {
+        return buildErrorResponse("VERSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(CharacterVersionAlreadyLinkedToProductException.class)
+    public ResponseEntity<ErrorResponse> handleCharacterVersionAlreadyLinkedToProduct(CharacterVersionAlreadyLinkedToProductException ex) {
+        return buildErrorResponse("VERSION_ALREADY_LINKED_TO_PRODUCT", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    // Media exceptions
+    @ExceptionHandler(InvalidMediaUrlException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMediaUrlException(InvalidMediaUrlException ex) {
+        return buildErrorResponse("VALIDATION_FAILED", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(InvalidMediaRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMediaRequestException(InvalidMediaRequestException ex) {
+        return buildErrorResponse("VALIDATION_FAILED", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(StorageServiceException.class)
+    public ResponseEntity<ErrorResponse> handleStorageServiceException(StorageServiceException ex) {
+        log.error("Storage service failure [message={}]", ex.getMessage(), ex);
+        return buildErrorResponse("STORAGE_SERVICE_ERROR", "Failed to interact with cloud storage service.", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @ExceptionHandler(ProductNotFoundException.class)
@@ -151,6 +197,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(CarrierDispatchException.class)
     public ResponseEntity<ErrorResponse> handleCarrierDispatchException(CarrierDispatchException ex) {
+        return buildErrorResponse(ex.getErrorCode(), ex.getMessage(), ex.getHttpStatus());
+    }
+
+    @ExceptionHandler(OrderFulfillmentException.class)
+    public ResponseEntity<ErrorResponse> handleOrderFulfillmentException(OrderFulfillmentException ex) {
         return buildErrorResponse(ex.getErrorCode(), ex.getMessage(), ex.getHttpStatus());
     }
 
@@ -272,6 +323,17 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("VALIDATION_FAILED", "Invalid request parameter", HttpStatus.BAD_REQUEST, details);
     }
 
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
+        List<ErrorResponse.ErrorDetail> details = ex.getConstraintViolations().stream()
+                .map(violation -> ErrorResponse.ErrorDetail.builder()
+                        .field(violation.getPropertyPath().toString())
+                        .message(violation.getMessage())
+                        .build())
+                .toList();
+        return buildErrorResponse("VALIDATION_FAILED", "Invalid request parameter", HttpStatus.BAD_REQUEST, details);
+    }
+
     // Security exceptions
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException ex) {
@@ -297,6 +359,37 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PasswordResetUnavailableException.class)
     public ResponseEntity<ErrorResponse> handlePasswordResetUnavailable(PasswordResetUnavailableException ex) {
         return buildErrorResponse("PASSWORD_RESET_UNAVAILABLE", ex.getMessage(), HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    // Commission exceptions
+    @ExceptionHandler(PricingTierInvariantViolationException.class)
+    public ResponseEntity<ErrorResponse> handlePricingTierInvariantViolation(PricingTierInvariantViolationException ex) {
+        return buildErrorResponse("PRICING_INVARIANT_VIOLATION", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(InvalidRuleConfigurationException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRuleConfiguration(InvalidRuleConfigurationException ex) {
+        return buildErrorResponse("INVALID_RULE_CONFIGURATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(CommissionRuleNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCommissionRuleNotFound(CommissionRuleNotFoundException ex) {
+        return buildErrorResponse("COMMISSION_RULE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(CommissionTierNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCommissionTierNotFound(CommissionTierNotFoundException ex) {
+        return buildErrorResponse("COMMISSION_TIER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(SystemRuleLockedException.class)
+    public ResponseEntity<ErrorResponse> handleSystemRuleLocked(SystemRuleLockedException ex) {
+        return buildErrorResponse("SYSTEM_RULE_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(DuplicateCommissionRuleException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateCommissionRule(DuplicateCommissionRuleException ex) {
+        return buildErrorResponse("DUPLICATE_COMMISSION_RULE", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     // Helpers

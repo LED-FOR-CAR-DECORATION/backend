@@ -14,11 +14,14 @@ import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderDeli
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderItemEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.mapper.OrderMapper;
+import com.lumintra.backend.commerce.application.LinkOrderFulfillmentDeviceUseCase;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderDeliveryRepository;
+import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemFulfillmentRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderRepository;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
 import com.lumintra.backend.shared.exception.commerce.CarrierDispatchException;
+import com.lumintra.backend.shared.exception.commerce.OrderFulfillmentException;
 import com.lumintra.backend.shared.exception.commerce.OrderNotFoundException;
 import com.lumintra.backend.shared.exception.commerce.OrderStatusTransitionException;
 import com.lumintra.backend.store.domain.model.ProductSnapshot;
@@ -75,6 +78,12 @@ class DispatchOrderUseCaseTest {
     private ProductLookupService productLookupService;
 
     @Mock
+    private OrderItemFulfillmentRepository orderItemFulfillmentRepository;
+
+    @Mock
+    private LinkOrderFulfillmentDeviceUseCase linkOrderFulfillmentDeviceUseCase;
+
+    @Mock
     private CarrierDispatchPort carrierDispatchPort;
 
     @Mock
@@ -95,6 +104,8 @@ class DispatchOrderUseCaseTest {
                 orderDeliveryRepository,
                 orderItemRepository,
                 productLookupService,
+                orderItemFulfillmentRepository,
+                linkOrderFulfillmentDeviceUseCase,
                 carrierDispatchPort,
                 new OrderMapper(),
                 transactionTemplate
@@ -274,5 +285,59 @@ class DispatchOrderUseCaseTest {
         assertThatThrownBy(() -> useCase.execute("7", orderId, new DispatchOrderRequest("SGN-BIKE", null, null)))
                 .isInstanceOf(OrderStatusTransitionException.class)
                 .hasMessageContaining("concurrently");
+    }
+
+    @Test
+    @DisplayName("COM-16 AC04: Blocks dispatch when physical LED hardware fulfillment is incomplete")
+    void execute_incompleteFulfillment_throwsOrderFulfillmentException() {
+        Long orderId = 108L;
+        OrderEntity order = sampleOrder(orderId, OrderStatus.PROCESSING, OrderType.PHYSICAL);
+        OrderDeliveryEntity delivery = sampleDelivery(order, DeliveryStatus.PENDING);
+
+        when(internalEmployeeAccessService.requireActiveEmployeeAccountId("7", ALLOWED_ROLES)).thenReturn(7L);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderDeliveryRepository.findByOrder_OrderId(orderId)).thenReturn(Optional.of(delivery));
+        when(linkOrderFulfillmentDeviceUseCase.calculateTotalRequiredLedUnits(orderId)).thenReturn(2L);
+        when(orderItemFulfillmentRepository.countByOrderItem_Order_OrderId(orderId)).thenReturn(1L);
+
+        assertThatThrownBy(() -> useCase.execute("7", orderId, new DispatchOrderRequest("SGN-BIKE", null, null)))
+                .isInstanceOf(OrderFulfillmentException.class)
+                .satisfies(ex -> {
+                    OrderFulfillmentException ofe = (OrderFulfillmentException) ex;
+                    assertThat(ofe.getHttpStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(ofe.getErrorCode()).isEqualTo("ORDER_FULFILLMENT_INCOMPLETE");
+                    assertThat(ofe.getMessage()).contains("Physical LED hardware fulfillment incomplete: 1/2 units linked");
+                });
+
+        verifyNoInteractions(carrierDispatchPort);
+        verifyNoInteractions(transactionTemplate);
+    }
+
+    @Test
+    @DisplayName("COM-16 AC04: Allows dispatch when physical LED hardware is fully linked")
+    void execute_fullyFulfilledOrder_dispatchesSuccessfully() {
+        Long orderId = 109L;
+        OrderEntity order = sampleOrder(orderId, OrderStatus.PROCESSING, OrderType.PHYSICAL);
+        OrderDeliveryEntity delivery = sampleDelivery(order, DeliveryStatus.PENDING);
+
+        when(internalEmployeeAccessService.requireActiveEmployeeAccountId("7", ALLOWED_ROLES)).thenReturn(7L);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderDeliveryRepository.findByOrder_OrderId(orderId)).thenReturn(Optional.of(delivery));
+        when(linkOrderFulfillmentDeviceUseCase.calculateTotalRequiredLedUnits(orderId)).thenReturn(2L);
+        when(orderItemFulfillmentRepository.countByOrderItem_Order_OrderId(orderId)).thenReturn(2L);
+        when(orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(orderId)).thenReturn(List.of());
+        when(carrierDispatchPort.createDeliveryOrder(any()))
+                .thenReturn(new CarrierDispatchResult("TRACK-OK", "https://expressstg.ahamove.com/s/TRACK-OK", new BigDecimal("35000"), "ASSIGNING"));
+        when(orderRepository.updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PROCESSING), eq(OrderStatus.SHIPPING), any(Instant.class)))
+                .thenReturn(1);
+        when(orderDeliveryRepository.updateDispatchInfoIfEligible(eq(orderId), any(), eq(DeliveryStatus.ASSIGNED), eq("TRACK-OK"), eq("https://expressstg.ahamove.com/s/TRACK-OK"), eq(new BigDecimal("35000")), any(Instant.class)))
+                .thenReturn(1);
+
+        DispatchOrderResponse response = useCase.execute("7", orderId, new DispatchOrderRequest("SGN-BIKE", null, null));
+
+        assertThat(response).isNotNull();
+        assertThat(response.orderId()).isEqualTo(orderId);
+        assertThat(response.orderStatus()).isEqualTo(OrderStatus.SHIPPING);
+        assertThat(response.trackingNumber()).isEqualTo("TRACK-OK");
     }
 }
