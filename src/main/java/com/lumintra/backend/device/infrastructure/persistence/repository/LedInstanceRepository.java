@@ -1,6 +1,9 @@
 package com.lumintra.backend.device.infrastructure.persistence.repository;
 
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstanceEntity;
+import com.lumintra.backend.device.domain.model.LedInstanceStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -9,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -22,17 +26,25 @@ public interface LedInstanceRepository extends JpaRepository<LedInstanceEntity, 
 
     Optional<LedInstanceEntity> findBySerialNumberAndMacAddress(String serialNumber, String macAddress);
 
+    @Query(
+            value = "SELECT i FROM LedInstanceEntity i WHERE i.ownerCustomerId = :customerId ORDER BY i.boundAt DESC NULLS LAST, i.instanceId DESC",
+            countQuery = "SELECT COUNT(i) FROM LedInstanceEntity i WHERE i.ownerCustomerId = :customerId"
+    )
+    Page<LedInstanceEntity> findAllByOwnerCustomerIdOrderByBoundAtDesc(
+            @Param("customerId") Long customerId,
+            Pageable pageable);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             UPDATE LedInstanceEntity i
             SET i.ownerCustomerId = :customerId,
                 i.deviceName = :deviceName,
-                i.status = com.lumintra.backend.device.domain.model.LedInstanceStatus.BOUND,
+                i.status = LedInstanceStatus.BOUND,
                 i.boundAt = :boundAt,
                 i.warrantyExpiresAt = :warrantyExpiresAt,
                 i.updatedAt = :boundAt
             WHERE i.instanceId = :instanceId
-              AND i.status <> com.lumintra.backend.device.domain.model.LedInstanceStatus.BOUND
+              AND i.status <> LedInstanceStatus.BOUND
             """)
     int bindIfUnbound(
             @Param("instanceId") Long instanceId,
@@ -40,4 +52,18 @@ public interface LedInstanceRepository extends JpaRepository<LedInstanceEntity, 
             @Param("deviceName") String deviceName,
             @Param("boundAt") Instant boundAt,
             @Param("warrantyExpiresAt") Instant warrantyExpiresAt);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE LedInstanceEntity i
+            SET i.status = :targetStatus,
+                i.updatedAt = :updatedAt
+            WHERE i.instanceId = :instanceId
+              AND i.status = :expectedStatus
+            """)
+    int updateStatusIfCurrent(
+            @Param("instanceId") Long instanceId,
+            @Param("expectedStatus") LedInstanceStatus expectedStatus,
+            @Param("targetStatus") LedInstanceStatus targetStatus,
+            @Param("updatedAt") Instant updatedAt);
 }

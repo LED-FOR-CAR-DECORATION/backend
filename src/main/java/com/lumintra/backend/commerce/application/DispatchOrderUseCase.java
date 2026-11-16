@@ -12,9 +12,11 @@ import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderEnti
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderItemEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.mapper.OrderMapper;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderDeliveryRepository;
+import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemFulfillmentRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderRepository;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
+import com.lumintra.backend.shared.exception.commerce.OrderFulfillmentException;
 import com.lumintra.backend.shared.exception.commerce.OrderNotFoundException;
 import com.lumintra.backend.shared.exception.commerce.OrderStatusTransitionException;
 import com.lumintra.backend.store.domain.model.ProductSnapshot;
@@ -22,6 +24,7 @@ import com.lumintra.backend.store.domain.service.ProductLookupService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -53,6 +56,8 @@ public class DispatchOrderUseCase {
     private final OrderDeliveryRepository orderDeliveryRepository;
     private final OrderItemRepository orderItemRepository;
     private final ProductLookupService productLookupService;
+    private final OrderItemFulfillmentRepository orderItemFulfillmentRepository;
+    private final LinkOrderFulfillmentDeviceUseCase linkOrderFulfillmentDeviceUseCase;
     private final CarrierDispatchPort carrierDispatchPort;
     private final OrderMapper orderMapper;
     private final TransactionTemplate transactionTemplate;
@@ -85,6 +90,21 @@ public class DispatchOrderUseCase {
                 });
 
         delivery.validateReadyForDispatch();
+
+        long requiredLedUnits = linkOrderFulfillmentDeviceUseCase.calculateTotalRequiredLedUnits(orderId);
+        if (requiredLedUnits > 0) {
+            long fulfilledLedUnits = orderItemFulfillmentRepository.countByOrderItem_Order_OrderId(orderId);
+            if (fulfilledLedUnits < requiredLedUnits) {
+                log.warn("Staff dispatch rejected: fulfillment incomplete [orderId={}] [fulfilled={}] [required={}] [employeeAccountId={}]",
+                        orderId, fulfilledLedUnits, requiredLedUnits, employeeAccountId);
+                throw new OrderFulfillmentException(
+                        HttpStatus.CONFLICT,
+                        "ORDER_FULFILLMENT_INCOMPLETE",
+                        "Cannot dispatch order to carrier. Physical LED hardware fulfillment incomplete: "
+                                + fulfilledLedUnits + "/" + requiredLedUnits + " units linked."
+                );
+            }
+        }
 
         CarrierDispatchCommand command = buildDispatchCommand(orderId, delivery, request);
 
