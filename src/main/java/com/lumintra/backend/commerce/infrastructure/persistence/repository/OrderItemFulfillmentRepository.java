@@ -32,4 +32,12 @@ public interface OrderItemFulfillmentRepository extends JpaRepository<OrderItemF
             WHERE f.instanceId = :instanceId
             """)
     Optional<OrderItemFulfillmentEntity> findWithOrderByInstanceId(@Param("instanceId") Long instanceId);
+
+    long countByOrderItem_OrderItemId(Long orderItemId);
+
+    long countByOrderItem_Order_OrderId(Long orderId);
+
+    List<OrderItemFulfillmentEntity> findAllByOrderItem_Order_OrderId(Long orderId);
+
+    Optional<OrderItemFulfillmentEntity> findByOrderItem_Order_OrderIdAndInstanceId(Long orderId, Long instanceId);
 }
