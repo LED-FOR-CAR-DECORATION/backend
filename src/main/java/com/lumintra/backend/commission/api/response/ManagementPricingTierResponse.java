@@ -6,7 +6,7 @@ import lombok.Builder;
 import java.math.BigDecimal;
 import java.util.List;
 
-@Schema(description = "Management pricing tier detail including configuration, active status, and bundled options")
+@Schema(description = "Management pricing preset/tier detail including configuration, active status, trigger options, and bundled options")
 @Builder
 public record ManagementPricingTierResponse(
         @Schema(description = "Unique tier ID", example = "1")
@@ -24,10 +24,10 @@ public record ManagementPricingTierResponse(
         @Schema(description = "Base tier price in VND", example = "79000.00")
         BigDecimal basePrice,
 
-        @Schema(description = "Calculated custom builder price for identical options in VND", example = "100000.00")
+        @Schema(description = "Informational CUSTOM mode calculated price for identical options in VND", example = "100000.00")
         BigDecimal customCalculatedPrice,
 
-        @Schema(description = "Savings amount in VND compared to custom configurator", example = "21000.00")
+        @Schema(description = "Informational savings amount in VND compared to CUSTOM mode", example = "21000.00")
         BigDecimal savingsAmount,
 
         @Schema(description = "Discount percentage applied to bundled options", example = "21.00")
@@ -47,6 +47,9 @@ public record ManagementPricingTierResponse(
 
         @Schema(description = "Display order sequence", example = "1")
         int displayOrder,
+
+        @Schema(description = "Optional option IDs that filter/display this preset (empty applies globally)")
+        List<Long> triggerOptionIds,
 
         @Schema(description = "List of bundled rule options included in this tier")
         List<BundledOptionResponse> includedOptions,

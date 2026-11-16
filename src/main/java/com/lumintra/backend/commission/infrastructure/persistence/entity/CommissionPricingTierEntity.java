@@ -81,6 +81,15 @@ public class CommissionPricingTierEntity {
     @Builder.Default
     private Set<CommissionPriceOptionEntity> includedOptions = new HashSet<>();
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "commission_pricing_tier_trigger_option",
+        joinColumns = @JoinColumn(name = "tier_id"),
+        inverseJoinColumns = @JoinColumn(name = "option_id")
+    )
+    @Builder.Default
+    private Set<CommissionPriceOptionEntity> triggerOptions = new HashSet<>();
+
     // Compatibility Aliases
     public String getTierName() { return this.name; }
     public void setTierName(String tierName) { this.name = tierName; }

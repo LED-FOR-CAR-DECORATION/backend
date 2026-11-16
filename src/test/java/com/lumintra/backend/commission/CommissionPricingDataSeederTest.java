@@ -1,5 +1,6 @@
 package com.lumintra.backend.commission;
 
+import com.lumintra.backend.commission.domain.model.ModifierType;
 import com.lumintra.backend.commission.domain.service.PricingInvariantValidator;
 import com.lumintra.backend.commission.infrastructure.bootstrap.CommissionPricingDataSeeder;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionPriceConfigEntity;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.DefaultApplicationArguments;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,12 +44,10 @@ class CommissionPricingDataSeederTest {
     private CommissionPricingDataSeeder seeder;
 
     @Test
-    @DisplayName("CMS-01 Seeder UTCID01 [N]: First run on empty database seeds system rules and tiers with validation")
+    @DisplayName("CMS-01 Seeder UTCID01 [N]: First run on empty database seeds system starter blueprint rules (with isBasePrice and BASE_PERCENT) and presets")
     void run_seedsSystemRulesAndTiers_whenDatabaseEmpty() {
-        // Given
         when(configRepository.count()).thenReturn(0L);
 
-        // Mock save on configRepository to assign IDs to options
         when(configRepository.save(any(CommissionPriceConfigEntity.class))).thenAnswer(invocation -> {
             CommissionPriceConfigEntity entity = invocation.getArgument(0);
             if ("FORMAT_TYPE".equals(entity.getRuleKey())) {
@@ -80,10 +80,8 @@ class CommissionPricingDataSeederTest {
             return entity;
         });
 
-        // When
         seeder.run(new DefaultApplicationArguments(new String[0]));
 
-        // Then
         ArgumentCaptor<CommissionPriceConfigEntity> configCaptor =
                 ArgumentCaptor.forClass(CommissionPriceConfigEntity.class);
         verify(configRepository, times(3)).save(configCaptor.capture());
@@ -92,7 +90,17 @@ class CommissionPricingDataSeederTest {
         assertThat(savedConfigs).extracting(CommissionPriceConfigEntity::getRuleKey)
                 .containsExactly("FORMAT_TYPE", "MATRIX_SIZE", "FRAME_RANGE");
 
-        // Verify FRAME_RANGE depends on animated gif option ID (2L)
+        CommissionPriceConfigEntity formatType = savedConfigs.get(0);
+        CommissionPriceOptionEntity gifOption = formatType.getOptions().stream()
+                .filter(o -> "ANIMATED_GIF".equals(o.getOptionCode()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(gifOption.resolvedModifierType()).isEqualTo(ModifierType.BASE_PERCENT);
+        assertThat(gifOption.getBasePrice()).isEqualByComparingTo("50.00");
+
+        CommissionPriceConfigEntity matrixSize = savedConfigs.get(1);
+        assertThat(matrixSize.isBasePrice()).isTrue();
+
         CommissionPriceConfigEntity frameRange = savedConfigs.get(2);
         assertThat(frameRange.getDependsOnOptionId()).isEqualTo(2L);
 

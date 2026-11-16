@@ -1,5 +1,6 @@
 package com.lumintra.backend.commission.infrastructure.bootstrap;
 
+import com.lumintra.backend.commission.domain.model.ModifierType;
 import com.lumintra.backend.commission.domain.model.SelectionType;
 import com.lumintra.backend.commission.domain.model.UiType;
 import com.lumintra.backend.commission.domain.service.PricingInvariantValidator;
@@ -20,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 @Component
@@ -43,15 +43,16 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
             return;
         }
 
-        log.info("Seeding Commission pricing rules and tiers...");
+        log.info("Seeding Commission pricing starter blueprint rules and presets...");
 
-        // 1. System Rule: FORMAT_TYPE
+        // 1. System Rule: FORMAT_TYPE (ANIMATED_GIF scales via +50% of Base bucket)
         CommissionPriceConfigEntity formatTypeConfig = CommissionPriceConfigEntity.builder()
                 .ruleKey("FORMAT_TYPE")
                 .name("Định dạng hiển thị (Format Type)")
                 .description("Chọn định dạng hình ảnh cho thiết kế LED (tĩnh hoặc ảnh động GIF)")
                 .selectionType(SelectionType.SINGLE_SELECT)
                 .uiType(UiType.RADIO)
+                .isBasePrice(false)
                 .isRequired(true)
                 .isSystem(true)
                 .isActive(true)
@@ -61,6 +62,7 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
         CommissionPriceOptionEntity staticImageOption = CommissionPriceOptionEntity.builder()
                 .optionCode("STATIC_IMAGE")
                 .optionLabel("Ảnh tĩnh (PNG)")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(new BigDecimal("0.00"))
                 .isDefault(true)
                 .isActive(true)
@@ -69,8 +71,9 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
 
         CommissionPriceOptionEntity animatedGifOption = CommissionPriceOptionEntity.builder()
                 .optionCode("ANIMATED_GIF")
-                .optionLabel("Ảnh động (GIF)")
-                .basePrice(new BigDecimal("50000.00"))
+                .optionLabel("Ảnh động (GIF) (+50% Base)")
+                .modifierType(ModifierType.BASE_PERCENT)
+                .basePrice(new BigDecimal("50.00"))
                 .isDefault(false)
                 .isActive(true)
                 .displayOrder(2)
@@ -81,7 +84,6 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
         invariantValidator.validateRule(formatTypeConfig);
         formatTypeConfig = configRepository.save(formatTypeConfig);
 
-        // Retrieve persisted animatedGifOption with generated ID
         CommissionPriceOptionEntity savedAnimatedGif = formatTypeConfig.getOptions().stream()
                 .filter(o -> "ANIMATED_GIF".equals(o.getOptionCode()))
                 .findFirst()
@@ -91,13 +93,14 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
                 .findFirst()
                 .orElseThrow();
 
-        // 2. System Rule: MATRIX_SIZE
+        // 2. System Rule: MATRIX_SIZE (Marked isBasePrice = true so BASE_PERCENT scales with resolution)
         CommissionPriceConfigEntity matrixSizeConfig = CommissionPriceConfigEntity.builder()
                 .ruleKey("MATRIX_SIZE")
                 .name("Kích thước ma trận LED (Matrix Size)")
                 .description("Độ phân giải hiển thị ma trận LED của thiết bị")
                 .selectionType(SelectionType.SINGLE_SELECT)
                 .uiType(UiType.RADIO)
+                .isBasePrice(true)
                 .isRequired(true)
                 .isSystem(true)
                 .isActive(true)
@@ -107,6 +110,7 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
         CommissionPriceOptionEntity size16Option = CommissionPriceOptionEntity.builder()
                 .optionCode("16x16")
                 .optionLabel("16 x 16 Pixels")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(new BigDecimal("0.00"))
                 .isDefault(true)
                 .isActive(true)
@@ -116,6 +120,7 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
         CommissionPriceOptionEntity size32Option = CommissionPriceOptionEntity.builder()
                 .optionCode("32x32")
                 .optionLabel("32 x 32 Pixels")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(new BigDecimal("30000.00"))
                 .isDefault(false)
                 .isActive(true)
@@ -125,6 +130,7 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
         CommissionPriceOptionEntity size64Option = CommissionPriceOptionEntity.builder()
                 .optionCode("64x64")
                 .optionLabel("64 x 64 Pixels")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(new BigDecimal("60000.00"))
                 .isDefault(false)
                 .isActive(true)
@@ -153,6 +159,7 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
                 .description("Số lượng khung hình chuyển động cho thiết kế ảnh động GIF")
                 .selectionType(SelectionType.SINGLE_SELECT)
                 .uiType(UiType.RADIO)
+                .isBasePrice(false)
                 .isRequired(false)
                 .isSystem(true)
                 .isActive(true)
@@ -163,6 +170,7 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
         CommissionPriceOptionEntity frame1To5Option = CommissionPriceOptionEntity.builder()
                 .optionCode("1-5")
                 .optionLabel("1 - 5 Khung hình (Ngắn)")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(new BigDecimal("0.00"))
                 .isDefault(true)
                 .isActive(true)
@@ -172,6 +180,7 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
         CommissionPriceOptionEntity frame6To15Option = CommissionPriceOptionEntity.builder()
                 .optionCode("6-15")
                 .optionLabel("6 - 15 Khung hình (Trung bình)")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(new BigDecimal("30000.00"))
                 .isDefault(false)
                 .isActive(true)
@@ -181,6 +190,7 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
         CommissionPriceOptionEntity frame16To30Option = CommissionPriceOptionEntity.builder()
                 .optionCode("16-30")
                 .optionLabel("16 - 30 Khung hình (Dài)")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(new BigDecimal("60000.00"))
                 .isDefault(false)
                 .isActive(true)
@@ -211,12 +221,13 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
                 .isActive(true)
                 .displayOrder(3)
                 .includedOptions(new HashSet<>())
+                .triggerOptions(new HashSet<>())
                 .build();
 
         invariantValidator.validateTier(customTier, null);
         customTier = tierRepository.save(customTier);
 
-        // 5. Tier: BASIC
+        // 5. Tier: BASIC (Static 16x16, 1 revision)
         CommissionPricingTierEntity basicTier = CommissionPricingTierEntity.builder()
                 .tierCode("BASIC")
                 .name("Gói Cơ Bản (Basic Package)")
@@ -229,29 +240,32 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
                 .isActive(true)
                 .displayOrder(1)
                 .includedOptions(new HashSet<>(Set.of(savedStaticImage, savedSize16)))
+                .triggerOptions(new HashSet<>())
                 .build();
 
         invariantValidator.validateTier(basicTier, customTier);
         tierRepository.save(basicTier);
 
-        // 6. Tier: ADVANCED
+        // 6. Tier: ADVANCED (Animated GIF 32x32 1-5 frames, 3 revisions)
+        // Custom pipeline equivalent: (100k + 30k) + 50%*(130k) + 0 = 195k -> 149k = 23.59% savings
         CommissionPricingTierEntity advancedTier = CommissionPricingTierEntity.builder()
                 .tierCode("ADVANCED")
                 .name("Gói Nâng Cao (Advanced Package)")
                 .description("Gói thiết kế chuyển động GIF sống động với ma trận 32x32 và khung hình mượt mà.")
                 .basePrice(new BigDecimal("149000.00"))
-                .discountPercent(new BigDecimal("17.22"))
+                .discountPercent(new BigDecimal("23.59"))
                 .extraRevisionFeePercent(new BigDecimal("10.00"))
                 .maxRevisions(3)
                 .isCustom(false)
                 .isActive(true)
                 .displayOrder(2)
                 .includedOptions(new HashSet<>(Set.of(savedAnimatedGif, savedSize32, savedFrame1To5)))
+                .triggerOptions(new HashSet<>())
                 .build();
 
         invariantValidator.validateTier(advancedTier, customTier);
         tierRepository.save(advancedTier);
 
-        log.info("Commission pricing rules and tiers seeded successfully.");
+        log.info("Commission pricing starter blueprint rules and presets seeded successfully.");
     }
 }

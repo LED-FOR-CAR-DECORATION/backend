@@ -22,11 +22,20 @@ public record PricingRuleResponse(
         @Schema(description = "Detailed prompt or helper description", example = "Chọn định dạng ảnh tĩnh hoặc ảnh động GIF")
         String description,
 
-        @Schema(description = "Selection cardinality type", example = "SINGLE_SELECT")
+        @Schema(description = "Selection cardinality or input primitive type", example = "SINGLE_SELECT")
         SelectionType selectionType,
 
         @Schema(description = "UI component presentation type", example = "RADIO")
         UiType uiType,
+
+        @Schema(description = "Whether this rule contributes to the Base bucket used by BASE_PERCENT modifiers", example = "false")
+        boolean isBasePrice,
+
+        @Schema(description = "Minimum allowed quantity when selectionType is QUANTITY", example = "0", nullable = true)
+        Integer minQuantity,
+
+        @Schema(description = "Maximum allowed quantity when selectionType is QUANTITY", example = "5", nullable = true)
+        Integer maxQuantity,
 
         @Schema(description = "Whether selection is mandatory", example = "true")
         boolean isRequired,

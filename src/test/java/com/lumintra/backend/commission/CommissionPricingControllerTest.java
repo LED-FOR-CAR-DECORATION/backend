@@ -6,6 +6,7 @@ import com.lumintra.backend.commission.api.response.PricingRuleResponse;
 import com.lumintra.backend.commission.api.response.PricingTierSummaryResponse;
 import com.lumintra.backend.commission.api.response.PublicCommissionPricingResponse;
 import com.lumintra.backend.commission.application.GetPublicCommissionPricingUseCase;
+import com.lumintra.backend.commission.domain.model.ModifierType;
 import com.lumintra.backend.commission.domain.model.SelectionType;
 import com.lumintra.backend.commission.domain.model.UiType;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
@@ -72,6 +73,7 @@ class CommissionPricingControllerTest {
                 .maxRevisions(1)
                 .isCustom(false)
                 .displayOrder(1)
+                .triggerOptionIds(List.of())
                 .bundledOptionIds(List.of(1L))
                 .build();
 
@@ -79,6 +81,7 @@ class CommissionPricingControllerTest {
                 .optionId(1L)
                 .optionCode("STATIC_IMAGE")
                 .optionLabel("Ảnh tĩnh (PNG)")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(BigDecimal.ZERO)
                 .isDefault(true)
                 .displayOrder(1)
@@ -112,8 +115,11 @@ class CommissionPricingControllerTest {
                 .andExpect(jsonPath("$.data.tiers[0].customCalculatedPrice").value(100000.00))
                 .andExpect(jsonPath("$.data.tiers[0].savingsAmount").value(21000.00))
                 .andExpect(jsonPath("$.data.tiers[0].bundledOptionIds[0]").value(1))
+                .andExpect(jsonPath("$.data.tiers[0].triggerOptionIds").isArray())
                 .andExpect(jsonPath("$.data.rules[0].ruleKey").value("FORMAT_TYPE"))
-                .andExpect(jsonPath("$.data.rules[0].options[0].optionCode").value("STATIC_IMAGE"));
+                .andExpect(jsonPath("$.data.rules[0].isBasePrice").value(false))
+                .andExpect(jsonPath("$.data.rules[0].options[0].optionCode").value("STATIC_IMAGE"))
+                .andExpect(jsonPath("$.data.rules[0].options[0].modifierType").value("FLAT_ADD"));
 
         verify(getPublicCommissionPricingUseCase).execute();
     }
