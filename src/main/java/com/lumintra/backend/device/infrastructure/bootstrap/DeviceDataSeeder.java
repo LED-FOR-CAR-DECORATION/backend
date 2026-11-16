@@ -72,6 +72,25 @@ public class DeviceDataSeeder implements ApplicationRunner {
         Instant manufacturedAt = now.minus(30, ChronoUnit.DAYS);
 
         int seededCount = 0;
+
+        // Seed 10 IN_STOCK instances per LED Model
+        for (LedModelEntity model : models) {
+            Long modelId = model.getModelId();
+            String prefix = sanitizeModelPrefix(model.getModelName());
+            for (int i = 1; i <= 10; i++) {
+                String serialNumber = String.format("LMT-%s-STOCK-%04d", prefix, i);
+                String macAddress = generateMacAddress(modelId, i);
+                seededCount += seedIfAbsent(LedInstanceEntity.createInStock(
+                        modelId,
+                        serialNumber,
+                        macAddress,
+                        "REV_1_0",
+                        manufacturedAt.plus(i, ChronoUnit.DAYS)
+                ), null);
+            }
+        }
+
+        // Additional representative historical/lifecycle instances for testing
         seededCount += seedIfAbsent(LedInstanceEntity.createInStock(
                 primaryModel.getModelId(),
                 SEED_SERIAL_IN_STOCK_1,
@@ -142,6 +161,31 @@ public class DeviceDataSeeder implements ApplicationRunner {
         ), null);
 
         log.info("LED instance seed verification complete [seededCount={}]", seededCount);
+    }
+
+    private String sanitizeModelPrefix(String modelName) {
+        if (modelName == null || modelName.isBlank()) {
+            return "LED";
+        }
+        String clean = modelName.replaceAll("[^a-zA-Z0-9]", "-")
+                .replaceAll("-+", "-")
+                .toUpperCase(java.util.Locale.ROOT);
+        if (clean.startsWith("-")) {
+            clean = clean.substring(1);
+        }
+        if (clean.endsWith("-")) {
+            clean = clean.substring(0, clean.length() - 1);
+        }
+        return clean.length() > 20 ? clean.substring(0, 20) : clean;
+    }
+
+    private String generateMacAddress(Long modelId, int instanceIndex) {
+        long mid = modelId != null ? modelId : 0L;
+        int b1 = (int) ((mid >> 8) & 0xFF);
+        int b2 = (int) (mid & 0xFF);
+        int b3 = (instanceIndex >> 8) & 0xFF;
+        int b4 = instanceIndex & 0xFF;
+        return String.format("A2:B0:%02X:%02X:%02X:%02X", b1, b2, b3, b4);
     }
 
     private CustomerProfileSnapshot resolveCustomer() {

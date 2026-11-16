@@ -79,14 +79,16 @@ public class CheckoutOrderUseCase {
     @Transactional
     public CheckoutResponse execute(Long customerId, CheckoutRequest request) {
         CartEntity cart = cartRepository.findByCustomerId(customerId)
-                .orElseThrow(() -> new InvalidCartItemException("Shopping cart not found or selected items are invalid."));
+                .orElseThrow(
+                        () -> new InvalidCartItemException("Shopping cart not found or selected items are invalid."));
 
         Set<Long> requestedItemIds = new LinkedHashSet<>(request.cartItemIds());
-        List<CartItemEntity> selectedItems =
-                cartItemRepository.findAllByCart_CartIdAndCartItemIdIn(cart.getCartId(), requestedItemIds);
+        List<CartItemEntity> selectedItems = cartItemRepository.findAllByCart_CartIdAndCartItemIdIn(cart.getCartId(),
+                requestedItemIds);
 
         if (selectedItems.size() != requestedItemIds.size()) {
-            throw new InvalidCartItemException("One or more selected cart items do not exist or do not belong to your cart.");
+            throw new InvalidCartItemException(
+                    "One or more selected cart items do not exist or do not belong to your cart.");
         }
 
         Map<Long, ProductSnapshot> productsById = productLookupService.findSnapshotsByIds(
@@ -113,8 +115,7 @@ public class CheckoutOrderUseCase {
                 FREE_SHIPPING_FEE,
                 inspection.subtotal(),
                 inspection.orderType(),
-                expiresAt
-        ));
+                expiresAt));
 
         List<OrderItemEntity> orderItems = new ArrayList<>(selectedItems.size());
         for (CartItemEntity cartItem : selectedItems) {
@@ -123,8 +124,7 @@ public class CheckoutOrderUseCase {
                     order,
                     product.productId(),
                     cartItem.getQuantity(),
-                    product.basePrice()
-            ));
+                    product.basePrice()));
         }
         orderItemRepository.saveAll(orderItems);
 
@@ -135,8 +135,7 @@ public class CheckoutOrderUseCase {
         PaymentIntentResult paymentIntent = paymentIntentPort.initializePaymentIntent(
                 order.getOrderId(),
                 order.getTotalAmount(),
-                request.paymentGateway()
-        );
+                request.paymentGateway());
 
         cartItemRepository.deleteAllByIdInBatch(requestedItemIds);
         cart.touch();
@@ -148,8 +147,7 @@ public class CheckoutOrderUseCase {
                 paymentIntent.paymentId(),
                 paymentIntent.gateway(),
                 order.getTotalAmount(),
-                order.getExpiresAt()
-        ));
+                order.getExpiresAt()));
 
         log.info("Order created successfully [orderId={}] [customerId={}] [orderType={}] [paymentId={}]",
                 order.getOrderId(), customerId, order.getOrderType(), paymentIntent.paymentId());
@@ -177,17 +175,17 @@ public class CheckoutOrderUseCase {
 
             if (type == ProductType.CHARACTER || type == ProductType.SUBSCRIPTION) {
                 if (cartItem.getQuantity() > 1) {
-                    throw new DigitalItemQuantityLimitException("Digital products cannot exceed a quantity of 1.");
+                    throw new DigitalItemQuantityLimitException("Bạn chỉ có thể mua 1 Character 1 lần mỗi tài khoảng.");
                 }
                 if (productAvailabilityPort.isDigitalProductOwned(customerId, product.productId(), type)) {
-                    throw new ProductAlreadyOwnedException("Customer already owns one or more selected digital products.");
+                    throw new ProductAlreadyOwnedException("Bạn đã sở hữu Character hoặc gói hội viên này rồi");
                 }
             } else if (type == ProductType.LED) {
                 hasPhysicalGoods = true;
                 requiredLedStocks.merge(product.productId(), (long) cartItem.getQuantity(), Long::sum);
             } else if (type == ProductType.BUNDLE) {
-                BundleCheckoutInspection bundleInspection =
-                        productAvailabilityPort.inspectBundleForCheckout(customerId, product.productId(), cartItem.getQuantity());
+                BundleCheckoutInspection bundleInspection = productAvailabilityPort.inspectBundleForCheckout(customerId,
+                        product.productId(), cartItem.getQuantity());
                 if (!bundleInspection.available()) {
                     throw translateBundleFailure(bundleInspection.unavailableReason());
                 }
@@ -205,12 +203,14 @@ public class CheckoutOrderUseCase {
         }
 
         OrderType orderType = resolveOrderType(distinctProductTypes);
-        return new CheckoutInspection(hasPhysicalGoods, requiredLedStocks, orderType, subtotal.setScale(2, RoundingMode.HALF_UP));
+        return new CheckoutInspection(hasPhysicalGoods, requiredLedStocks, orderType,
+                subtotal.setScale(2, RoundingMode.HALF_UP));
     }
 
     private RuntimeException translateBundleFailure(String reason) {
         if (AvailabilityCheckResult.REASON_ALREADY_OWNED.equals(reason)) {
-            return new ProductAlreadyOwnedException("Customer already owns a character included in the selected bundle.");
+            return new ProductAlreadyOwnedException(
+                    "Customer already owns a character included in the selected bundle.");
         }
         if (AvailabilityCheckResult.REASON_OUT_OF_STOCK.equals(reason)) {
             return new InsufficientStockException("Insufficient LED hardware stock for the selected bundle.");
@@ -229,8 +229,7 @@ public class CheckoutOrderUseCase {
                     savedAddress.recipientPhone(),
                     savedAddress.fullAddress(),
                     savedAddress.latitude(),
-                    savedAddress.longitude()
-            );
+                    savedAddress.longitude());
         }
 
         if (request.shippingDetails() != null) {
@@ -241,11 +240,11 @@ public class CheckoutOrderUseCase {
                     inline.recipientPhone().trim(),
                     inline.fullAddress().trim(),
                     inline.latitude(),
-                    inline.longitude()
-            );
+                    inline.longitude());
         }
 
-        throw new DeliveryAddressRequiredException("Delivery address or shipping details are required for physical orders.");
+        throw new DeliveryAddressRequiredException(
+                "Delivery address or shipping details are required for physical orders.");
     }
 
     private OrderType resolveOrderType(Set<ProductType> distinctProductTypes) {
@@ -265,6 +264,6 @@ public class CheckoutOrderUseCase {
             boolean hasPhysicalGoods,
             Map<Long, Long> requiredLedStocks,
             OrderType orderType,
-            BigDecimal subtotal
-    ) {}
+            BigDecimal subtotal) {
+    }
 }
