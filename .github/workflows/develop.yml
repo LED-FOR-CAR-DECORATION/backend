@@ -117,6 +117,9 @@ jobs:
             TEST_STAFF_PASSWORD=${{ secrets.TEST_STAFF_PASSWORD }}
             TEST_DESIGNER_EMAIL=${{ secrets.TEST_DESIGNER_EMAIL }}
             TEST_DESIGNER_PASSWORD=${{ secrets.TEST_DESIGNER_PASSWORD }}
+            FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}
+            FIREBASE_CREDENTIALS_BASE64=${{ secrets.FIREBASE_CREDENTIALS_BASE64 }}
+            CDN_BASE_URL=${{ secrets.CDN_BASE_URL }}
 
       - name: Configure Container Resources and Scaling
         run: |

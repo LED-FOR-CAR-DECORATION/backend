@@ -1,13 +1,16 @@
 package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.CustomerCommissionFilterRequest;
+import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse.CustomerCommissionSummaryItem;
+import com.lumintra.backend.commission.application.GetCustomerCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.ListCustomerCommissionsUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -15,6 +18,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,6 +26,7 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,6 +42,7 @@ import java.util.List;
 public class CommissionController {
 
     private final ListCustomerCommissionsUseCase listCustomerCommissionsUseCase;
+    private final GetCustomerCommissionDetailUseCase getCustomerCommissionDetailUseCase;
 
     @Operation(
             summary = "List personal commission requests",
@@ -85,7 +91,7 @@ public class CommissionController {
                                     value = """
                                             {
                                               "code": "UNAUTHORIZED",
-                                              "message": "Authentication is required to access this resource",
+                                              "message": "Authentication is required.",
                                               "status": 401,
                                               "timestamp": "2026-11-16T02:00:00Z",
                                               "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
@@ -106,7 +112,7 @@ public class CommissionController {
                                     value = """
                                             {
                                               "code": "FORBIDDEN",
-                                              "message": "Access is denied",
+                                              "message": "Access is denied.",
                                               "status": 403,
                                               "timestamp": "2026-11-16T02:00:00Z",
                                               "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
@@ -127,7 +133,7 @@ public class CommissionController {
                                     value = """
                                             {
                                               "code": "INTERNAL_SERVER_ERROR",
-                                              "message": "An unexpected internal error occurred",
+                                              "message": "An unexpected error occurred",
                                               "status": 500,
                                               "timestamp": "2026-11-16T02:00:00Z",
                                               "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
@@ -146,6 +152,153 @@ public class CommissionController {
         Long customerId = extractCustomerId(authentication);
         CustomerCommissionListResponse result = listCustomerCommissionsUseCase.execute(customerId, filter);
         return ResponseEntity.ok(ApiResponse.success(result.items(), result.meta()));
+    }
+
+    @Operation(
+            summary = "View personal commission request details",
+            description = "Retrieves the complete customer-facing detail view of a commission request owned by the authenticated CUSTOMER account, including requirements, snapshotted pricing breakdown, reference attachments, `activePaymentCode` when payment is pending, and Staff-approved delivered previews (excluding unapproved internal Designer drafts).",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Commission request details retrieved successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid or non-positive commission id path parameter",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "InvalidCommissionIdExample",
+                                    value = """
+                                            {
+                                              "code": "VALIDATION_FAILED",
+                                              "message": "Invalid request parameter",
+                                              "status": 400,
+                                              "timestamp": "2026-11-16T02:30:00Z",
+                                              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                                              "details": [
+                                                {
+                                                  "field": "id",
+                                                  "message": "id must be greater than 0"
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Missing, expired, or invalid JWT access token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "UnauthorizedExample",
+                                    value = """
+                                            {
+                                              "code": "UNAUTHORIZED",
+                                              "message": "Authentication is required.",
+                                              "status": 401,
+                                              "timestamp": "2026-11-16T02:30:00Z",
+                                              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Caller does not hold the CUSTOMER role or does not own the requested commission",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "OwnershipMismatchExample",
+                                            value = """
+                                                    {
+                                                      "code": "COMMISSION_OWNERSHIP_MISMATCH",
+                                                      "message": "You do not have permission to access this commission request.",
+                                                      "status": 403,
+                                                      "timestamp": "2026-11-16T02:30:00Z",
+                                                      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "ForbiddenRoleExample",
+                                            value = """
+                                                    {
+                                                      "code": "FORBIDDEN",
+                                                      "message": "Access is denied.",
+                                                      "status": 403,
+                                                      "timestamp": "2026-11-16T02:30:00Z",
+                                                      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                                                      "details": []
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Commission request does not exist",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "CommissionNotFoundExample",
+                                    value = """
+                                            {
+                                              "code": "COMMISSION_NOT_FOUND",
+                                              "message": "Commission request not found with id: 9999",
+                                              "status": 404,
+                                              "timestamp": "2026-11-16T02:30:00Z",
+                                              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Unexpected internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "InternalServerErrorExample",
+                                    value = """
+                                            {
+                                              "code": "INTERNAL_SERVER_ERROR",
+                                              "message": "An unexpected error occurred",
+                                              "status": 500,
+                                              "timestamp": "2026-11-16T02:30:00Z",
+                                              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                                              "details": []
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<CustomerCommissionDetailResponse>> getMyCommissionDetail(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "501")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id) {
+        Long customerId = extractCustomerId(authentication);
+        CustomerCommissionDetailResponse result = getCustomerCommissionDetailUseCase.execute(customerId, id);
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     private Long extractCustomerId(Authentication authentication) {
