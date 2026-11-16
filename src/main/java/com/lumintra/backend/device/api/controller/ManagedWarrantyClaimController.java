@@ -37,10 +37,10 @@ import java.util.List;
 
 @Tag(
         name = "Warranty Claims",
-        description = "Manager and admin endpoints for reviewing and processing customer hardware warranty claims"
+        description = "Staff, manager, and admin endpoints for reviewing and processing customer hardware warranty claims"
 )
 @RestController
-@RequestMapping("/api/management/manager/warranty-claims")
+@RequestMapping({"/api/management/manager/warranty-claims", "/api/management/staff/warranty-claims"})
 @RequiredArgsConstructor
 public class ManagedWarrantyClaimController {
 
@@ -106,7 +106,7 @@ public class ManagedWarrantyClaimController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "403",
-                    description = "Forbidden: caller does not hold MANAGER or ADMIN role",
+                    description = "Forbidden: caller does not hold STAFF, MANAGER, or ADMIN role",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class),
@@ -126,7 +126,7 @@ public class ManagedWarrantyClaimController {
                     )
             )
     })
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<ManagedWarrantyClaimResponse>>> listWarrantyClaims(
             Authentication authentication,
@@ -138,7 +138,7 @@ public class ManagedWarrantyClaimController {
 
     @Operation(
             summary = "Adjudicate and update status of a warranty claim",
-            description = "Allows managers and admins to transition a warranty claim from PENDING to APPROVED/REJECTED, or from APPROVED to COMPLETED/REJECTED. Non-blank resolutionNotes is required when rejecting or completing."
+            description = "Allows staff, managers, and admins to transition a warranty claim from PENDING to APPROVED/REJECTED, or from APPROVED to COMPLETED/REJECTED. Non-blank resolutionNotes is required when rejecting or completing."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {
@@ -164,7 +164,7 @@ public class ManagedWarrantyClaimController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "403",
-                    description = "Forbidden: caller does not hold MANAGER or ADMIN role",
+                    description = "Forbidden: caller does not hold STAFF, MANAGER, or ADMIN role",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponse.class)
@@ -187,7 +187,7 @@ public class ManagedWarrantyClaimController {
                     )
             )
     })
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
     @PatchMapping("/{id}")
     public ResponseEntity<ApiResponse<WarrantyClaimResponse>> processWarrantyClaim(
             Authentication authentication,

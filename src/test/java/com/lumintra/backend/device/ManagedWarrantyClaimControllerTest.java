@@ -198,14 +198,30 @@ class ManagedWarrantyClaimControllerTest {
     }
 
     @Test
-    @DisplayName("DEV-15 API-08 [A]: STAFF role returns 403 FORBIDDEN")
-    void listWarrantyClaims_staffRole_returns403() throws Exception {
+    @DisplayName("DEV-15 API-08 [P]: STAFF role returns 200 OK with paginated claims")
+    void listWarrantyClaims_staffRole_returns200WithPaginatedClaims() throws Exception {
+        when(listManagedWarrantyClaimsUseCase.execute(any())).thenReturn(samplePage());
+
         mockMvc.perform(get(PATH)
                         .with(SecurityMockMvcRequestPostProcessors.user("20").roles("STAFF")))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].ticketId").value(1))
+                .andExpect(jsonPath("$.data[0].deviceSerialNumber").value("LUM-6432-RGB-2026-0001"));
 
-        verifyNoInteractions(listManagedWarrantyClaimsUseCase);
+        verify(listManagedWarrantyClaimsUseCase).execute(any(WarrantyClaimFilterRequest.class));
+    }
+
+    @Test
+    @DisplayName("DEV-15 API-08b [P]: STAFF accessing via /api/management/staff/warranty-claims returns 200 OK")
+    void listWarrantyClaims_staffAliasPath_returns200() throws Exception {
+        when(listManagedWarrantyClaimsUseCase.execute(any())).thenReturn(samplePage());
+
+        mockMvc.perform(get("/api/management/staff/warranty-claims")
+                        .with(SecurityMockMvcRequestPostProcessors.user("20").roles("STAFF")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].ticketId").value(1));
+
+        verify(listManagedWarrantyClaimsUseCase).execute(any(WarrantyClaimFilterRequest.class));
     }
 
     @Test
@@ -327,20 +343,47 @@ class ManagedWarrantyClaimControllerTest {
     }
 
     @Test
-    @DisplayName("DEV-16 API-05 [A]: STAFF role returns 403 FORBIDDEN")
-    void processWarrantyClaim_staffRole_returns403() throws Exception {
+    @DisplayName("DEV-16 API-05 [P]: STAFF role successfully processes claim and returns 200 OK")
+    void processWarrantyClaim_staffRole_returns200() throws Exception {
+        WarrantyClaimResponse response = sampleUpdatedClaimResponse(WarrantyTicketStatus.COMPLETED, "Da thay the LED thanh cong.");
+        when(processWarrantyClaimUseCase.execute(eq(1L), any(ProcessWarrantyClaimRequest.class))).thenReturn(response);
+
         mockMvc.perform(patch(PATH + "/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "status": "APPROVED"
+                                  "status": "COMPLETED",
+                                  "resolutionNotes": "Da thay the LED thanh cong."
                                 }
                                 """)
                         .with(SecurityMockMvcRequestPostProcessors.user("20").roles("STAFF")))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ticketId").value(1))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"));
 
-        verifyNoInteractions(processWarrantyClaimUseCase);
+        verify(processWarrantyClaimUseCase).execute(eq(1L), any(ProcessWarrantyClaimRequest.class));
+    }
+
+    @Test
+    @DisplayName("DEV-16 API-05b [P]: STAFF accessing via /api/management/staff/warranty-claims/{id} returns 200 OK")
+    void processWarrantyClaim_staffAliasPath_returns200() throws Exception {
+        WarrantyClaimResponse response = sampleUpdatedClaimResponse(WarrantyTicketStatus.COMPLETED, "Da thay the LED thanh cong.");
+        when(processWarrantyClaimUseCase.execute(eq(1L), any(ProcessWarrantyClaimRequest.class))).thenReturn(response);
+
+        mockMvc.perform(patch("/api/management/staff/warranty-claims/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "COMPLETED",
+                                  "resolutionNotes": "Da thay the LED thanh cong."
+                                }
+                                """)
+                        .with(SecurityMockMvcRequestPostProcessors.user("20").roles("STAFF")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ticketId").value(1))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"));
+
+        verify(processWarrantyClaimUseCase).execute(eq(1L), any(ProcessWarrantyClaimRequest.class));
     }
 
     @Test
