@@ -3,6 +3,7 @@ package com.lumintra.backend.iam.infrastructure.persistence;
 import com.lumintra.backend.iam.domain.model.AccountStatus;
 import com.lumintra.backend.iam.domain.model.AccountType;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
+import com.lumintra.backend.iam.infrastructure.persistence.entity.EmployeeEntity;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.EmployeeRepository;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.UserAccountRepository;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
@@ -26,6 +27,18 @@ public class InternalEmployeeAccessServiceImpl implements InternalEmployeeAccess
     @Override
     @Transactional(readOnly = true)
     public Long requireActiveEmployeeAccountId(String subject, Set<String> allowedRoles) {
+        EmployeeEntity employee = resolveActiveEmployee(subject, allowedRoles);
+        return employee.getAccount().getAccountId();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Long requireActiveEmployeeId(String subject, Set<String> allowedRoles) {
+        EmployeeEntity employee = resolveActiveEmployee(subject, allowedRoles);
+        return employee.getEmployeeId();
+    }
+
+    private EmployeeEntity resolveActiveEmployee(String subject, Set<String> allowedRoles) {
         if (allowedRoles == null || allowedRoles.isEmpty()) {
             throw new IllegalArgumentException("allowedRoles must not be empty.");
         }
@@ -61,6 +74,6 @@ public class InternalEmployeeAccessServiceImpl implements InternalEmployeeAccess
             throw new AccessDeniedException("Authorized internal role is required.");
         }
 
-        return accountId;
+        return employee;
     }
 }
