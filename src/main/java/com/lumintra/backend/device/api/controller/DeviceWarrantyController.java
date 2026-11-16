@@ -1,7 +1,9 @@
 package com.lumintra.backend.device.api.controller;
 
 import com.lumintra.backend.device.api.request.SubmitWarrantyClaimRequest;
+import com.lumintra.backend.device.api.response.CustomerDeviceWarrantyResponse;
 import com.lumintra.backend.device.api.response.WarrantyClaimResponse;
+import com.lumintra.backend.device.application.GetCustomerDeviceWarrantyUseCase;
 import com.lumintra.backend.device.application.SubmitWarrantyClaimUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
@@ -22,6 +24,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -39,6 +42,54 @@ import org.springframework.web.bind.annotation.RestController;
 public class DeviceWarrantyController {
 
     private final SubmitWarrantyClaimUseCase submitWarrantyClaimUseCase;
+    private final GetCustomerDeviceWarrantyUseCase getCustomerDeviceWarrantyUseCase;
+
+    @Operation(
+            summary = "View device warranty coverage and claim history",
+            description = "Retrieves active warranty coverage, remaining warranty days, and full history of warranty claims for an LED device owned by the authenticated customer.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Warranty coverage and claims retrieved successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CustomerDeviceWarrantyResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid device ID format",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized — missing, expired, or invalid JWT",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden — non-customer role or caller does not own the device",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Device not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            )
+    })
+    @GetMapping("/{id}/warranty")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<CustomerDeviceWarrantyResponse>> getDeviceWarranty(
+            Authentication authentication,
+            @Parameter(description = "Device instance ID", required = true)
+            @PathVariable("id") @Positive Long id
+    ) {
+        Long customerId = resolveCustomerId(authentication);
+        CustomerDeviceWarrantyResponse response = getCustomerDeviceWarrantyUseCase.execute(customerId, id);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 
     @Operation(
             summary = "Submit a hardware warranty claim",
@@ -65,7 +116,7 @@ public class DeviceWarrantyController {
                     responseCode = "401",
                     description = "Unauthorized — missing, expired, or invalid JWT",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))
-            ),
+                    ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "403",
                     description = "Forbidden — non-customer role or caller does not own the device",
