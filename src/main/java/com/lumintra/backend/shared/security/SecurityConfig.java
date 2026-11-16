@@ -64,6 +64,7 @@ public class SecurityConfig {
                                 "/api/auth/refresh"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/commissions/pricing").permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/commerce/webhooks/ahamove",
