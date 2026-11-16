@@ -179,6 +179,31 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("DEVICE_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(WarrantyNotActiveException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyNotActive(WarrantyNotActiveException ex) {
+        return buildErrorResponse("WARRANTY_NOT_ACTIVE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(WarrantyExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyExpired(WarrantyExpiredException ex) {
+        return buildErrorResponse("WARRANTY_EXPIRED", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(WarrantyClaimConflictException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyClaimConflict(WarrantyClaimConflictException ex) {
+        return buildErrorResponse("WARRANTY_CLAIM_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(WarrantyClaimNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyClaimNotFound(WarrantyClaimNotFoundException ex) {
+        return buildErrorResponse("WARRANTY_CLAIM_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidWarrantyTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidWarrantyTransition(InvalidWarrantyTransitionException ex) {
+        return buildErrorResponse("INVALID_WARRANTY_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(OrderNotDeliveredYetException.class)
     public ResponseEntity<ErrorResponse> handleOrderNotDeliveredYet(OrderNotDeliveredYetException ex) {
         return buildErrorResponse("ORDER_NOT_DELIVERED_YET", ex.getMessage(), HttpStatus.CONFLICT);
