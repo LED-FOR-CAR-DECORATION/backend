@@ -1,6 +1,7 @@
 package com.lumintra.backend.device.infrastructure.persistence.entity;
 
 import com.lumintra.backend.device.domain.model.WarrantyTicketStatus;
+import com.lumintra.backend.shared.exception.device.InvalidWarrantyTransitionException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -93,6 +94,20 @@ public class WarrantyTicketEntity {
 
     public void complete(String notes) {
         this.status = WarrantyTicketStatus.COMPLETED;
+        this.resolutionNotes = notes != null && !notes.isBlank() ? notes.strip() : null;
+    }
+
+    public void process(WarrantyTicketStatus targetStatus, String notes) {
+        if (targetStatus == null || !this.status.canTransitionTo(targetStatus)) {
+            throw new InvalidWarrantyTransitionException(
+                    "Cannot transition warranty claim from " + this.status + " to " + targetStatus + "."
+            );
+        }
+        if ((targetStatus == WarrantyTicketStatus.REJECTED || targetStatus == WarrantyTicketStatus.COMPLETED)
+                && (notes == null || notes.isBlank())) {
+            throw new IllegalArgumentException("resolutionNotes is required when transitioning to " + targetStatus);
+        }
+        this.status = targetStatus;
         this.resolutionNotes = notes != null && !notes.isBlank() ? notes.strip() : null;
     }
 
