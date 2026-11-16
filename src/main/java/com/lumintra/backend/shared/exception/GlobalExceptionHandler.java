@@ -18,6 +18,7 @@ import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundExcept
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
 import com.lumintra.backend.shared.exception.store.InvalidBundlePriceException;
 import com.lumintra.backend.shared.exception.store.TagAlreadyExistsException;
+import com.lumintra.backend.shared.exception.store.PlanCodeAlreadyExistsException;
 import com.lumintra.backend.shared.exception.store.BundleNotFoundException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
@@ -63,6 +64,9 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
     }
 
+    @ExceptionHandler(PlanCodeAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handlePlanCodeAlreadyExists(PlanCodeAlreadyExistsException ex) {
+        return buildErrorResponse("PLAN_CODE_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT);
     @ExceptionHandler(BundleNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleBundleNotFound(BundleNotFoundException ex) {
         return buildErrorResponse("BUNDLE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
