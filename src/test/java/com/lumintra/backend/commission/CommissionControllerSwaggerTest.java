@@ -2,6 +2,9 @@ package com.lumintra.backend.commission;
 
 import com.lumintra.backend.commission.api.controller.CommissionController;
 import com.lumintra.backend.commission.api.request.CustomerCommissionFilterRequest;
+import com.lumintra.backend.commission.api.request.SubmitCommissionRequest;
+import com.lumintra.backend.commission.api.request.SubmitCommissionRequest.CommissionAttachmentItemRequest;
+import com.lumintra.backend.commission.api.request.SubmitCommissionRequest.SelectedOptionItem;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse.CustomerCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse.CustomerDeliveredPreviewItem;
@@ -46,13 +49,33 @@ class CommissionControllerSwaggerTest {
                 "getMyCommissionDetail", Authentication.class, Long.class
         );
         assertEndpointMetadata(detailMethod, "200", "400", "401", "403", "404", "500");
+
+        Method submitMethod = CommissionController.class.getMethod(
+                "submitCommission", Authentication.class, SubmitCommissionRequest.class
+        );
+        assertEndpointMetadata(submitMethod, "201", "400", "401", "403", "404", "500");
     }
 
     @Test
-    @DisplayName("CMS-04/CMS-05 SWG-02: Filter request, list/detail responses, child items, and enums declare @Schema")
+    @DisplayName("CMS-03/04/05 SWG-02: Request/Filter/Response records and enums declare @Schema")
     void dtosAndEnums_declareSchemaAnnotations() throws NoSuchFieldException {
         assertThat(CommissionStatus.class.getAnnotation(Schema.class)).isNotNull();
         assertThat(CommissionSubmissionStatus.class.getAnnotation(Schema.class)).isNotNull();
+
+        assertSchemaOnRecordAndFields(
+                SubmitCommissionRequest.class,
+                "title", "description", "tierCode", "selectedOptions", "targetMatrixDimensions", "attachments"
+        );
+
+        assertSchemaOnRecordAndFields(
+                SelectedOptionItem.class,
+                "configId", "optionIds", "quantity", "textValue"
+        );
+
+        assertSchemaOnRecordAndFields(
+                CommissionAttachmentItemRequest.class,
+                "imageUrl", "caption"
+        );
 
         assertSchemaOnRecordAndFields(
                 CustomerCommissionFilterRequest.class,

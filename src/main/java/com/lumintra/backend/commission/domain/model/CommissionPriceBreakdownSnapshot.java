@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * Immutable snapshot model serialized into commission.price_breakdown_json upon commission creation.
- * Preserves exact resolved tier, options, text values, and historical prices.
+ * Preserves exact resolved tier, primitive selections, modifiers, quantities, text inputs, and computed line amounts.
  */
 public record CommissionPriceBreakdownSnapshot(
         String tierCode,
@@ -14,34 +14,30 @@ public record CommissionPriceBreakdownSnapshot(
         BigDecimal basePrice,
         BigDecimal discountPercent,
         int maxRevisions,
-        List<Step1SelectionSnapshot> step1Selections,
-        List<Step2SelectionSnapshot> step2Selections,
+        List<RuleSelectionSnapshot> selections,
+        BigDecimal computedBaseBucket,
         BigDecimal computedInitialPrice,
         BigDecimal totalPrice
 ) {
-    public record Step1SelectionSnapshot(
+    public record RuleSelectionSnapshot(
             Long configId,
             String ruleKey,
             String ruleName,
-            Long optionId,
-            String optionCode,
-            String optionLabel,
-            BigDecimal basePrice
-    ) {}
-
-    public record Step2SelectionSnapshot(
-            Long configId,
-            String ruleKey,
-            String ruleName,
-            List<OptionSnapshot> selectedOptions,
+            SelectionType selectionType,
+            boolean isBasePrice,
+            Integer quantity,
             String textValue,
-            BigDecimal subtotal
+            List<OptionSnapshot> selectedOptions,
+            BigDecimal computedLineAmount
     ) {}
 
     public record OptionSnapshot(
             Long optionId,
             String optionCode,
             String optionLabel,
-            BigDecimal basePrice
+            ModifierType modifierType,
+            BigDecimal basePrice,
+            boolean includedInPreset,
+            BigDecimal computedAmount
     ) {}
 }
