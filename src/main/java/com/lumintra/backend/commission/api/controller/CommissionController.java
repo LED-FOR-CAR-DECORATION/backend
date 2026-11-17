@@ -219,6 +219,34 @@ public class CommissionController {
     @PostMapping
     public ResponseEntity<ApiResponse<CustomerCommissionDetailResponse>> submitCommission(
             Authentication authentication,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = SubmitCommissionRequest.class),
+                            examples = @ExampleObject(
+                                    name = "CustomCommissionExample",
+                                    value = """
+                                        {
+                                          "title": "Cyberpunk Shiba Inu Pixel Art",
+                                          "description": "Pixel art shiba with blinking neon effects...",
+                                          "tierCode": "CUSTOM",
+                                          "selectedOptions": [
+                                            { "configId": 1, "optionIds": [2] },
+                                            { "configId": 2, "optionIds": [4, 8] },
+                                            { "configId": 3, "quantity": 4 },
+                                            { "configId": 4, "textValue": "Make the shiba have a glowing neon cyan outline, using the colors I have attached as image in the request" }
+                                          ],
+                                          "attachments": [
+                                            {
+                                              "imageUrl": "https://cdn.lumintra.com/commissions/references/42/ref-01.png",
+                                              "caption": "Neon color palette reference"
+                                            }
+                                          ]
+                                        }
+                                        """
+                            )
+                    )
+            )
             @Valid @RequestBody SubmitCommissionRequest request) {
         Long customerId = extractCustomerId(authentication);
         CustomerCommissionDetailResponse result = submitCommissionUseCase.execute(customerId, request);

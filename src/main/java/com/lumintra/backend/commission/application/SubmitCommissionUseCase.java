@@ -120,7 +120,7 @@ public class SubmitCommissionUseCase {
         );
 
         String resolvedTargetMatrixDimensions = resolveTargetMatrixDimensions(
-                request.targetMatrixDimensions(), configsByRuleKey, selectionsByConfigId
+                configsByRuleKey, selectionsByConfigId
         );
 
         // tier.getBasePrice() already represents the final preset package base price (not reduced again by discountPercent)
@@ -456,29 +456,19 @@ public class SubmitCommissionUseCase {
     }
 
     private String resolveTargetMatrixDimensions(
-            String requestedDimensions,
             Map<String, CommissionPriceConfigEntity> configsByRuleKey,
             Map<Long, NormalizedSelection> selectionsByConfigId) {
         CommissionPriceConfigEntity matrixConfig = configsByRuleKey.get("MATRIX_SIZE");
         if (matrixConfig == null) {
-            return requestedDimensions;
+            return null;
         }
 
         NormalizedSelection matrixSelection = selectionsByConfigId.get(matrixConfig.getConfigId());
         if (matrixSelection == null || matrixSelection.options().isEmpty()) {
-            return requestedDimensions;
+            return null;
         }
 
-        String selectedCode = matrixSelection.options().get(0).getOptionCode();
-        if (requestedDimensions != null) {
-            if (!requestedDimensions.equalsIgnoreCase(selectedCode)) {
-                throw new InvalidCommissionRuleSelectionException(
-                        "targetMatrixDimensions must match selected MATRIX_SIZE: " + selectedCode
-                );
-            }
-            return requestedDimensions;
-        }
-        return selectedCode;
+        return matrixSelection.options().get(0).getOptionCode();
     }
 
     private CommissionPriceBreakdownSnapshot calculateAndBuildSnapshot(

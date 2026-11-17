@@ -64,7 +64,7 @@ class CommissionControllerSwaggerTest {
 
         assertSchemaOnRecordAndFields(
                 SubmitCommissionRequest.class,
-                "title", "description", "tierCode", "selectedOptions", "targetMatrixDimensions", "attachments"
+                "title", "description", "tierCode", "selectedOptions", "attachments", "openPaymentImmediately"
         );
 
         assertSchemaOnRecordAndFields(
