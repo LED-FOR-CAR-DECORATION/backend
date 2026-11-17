@@ -9,6 +9,7 @@ import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.request.RejectCommissionRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.request.UploadCommissionDraftRequest;
 import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
 import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
@@ -19,12 +20,14 @@ import com.lumintra.backend.commission.api.response.ManagementCommissionDetailRe
 import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
+import com.lumintra.backend.commission.api.response.UploadCommissionDraftResponse;
 import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.AssignCommissionToDesignerUseCase;
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
+import com.lumintra.backend.commission.application.UploadCommissionDraftUseCase;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
@@ -34,8 +37,10 @@ import com.lumintra.backend.payment.domain.model.PaymentStatus;
 import com.lumintra.backend.payment.domain.model.PaymentTargetType;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
+import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.commission.CommissionStaffLockException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
+import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
@@ -94,6 +99,7 @@ class CommissionManagementControllerTest {
     private static final String APPROVE_PATH = "/api/management/commissions/{id}/approve";
     private static final String ASSIGN_PATH = "/api/management/commissions/{id}/assign";
     private static final String REJECT_PATH = "/api/management/commissions/{id}/reject";
+    private static final String DRAFTS_PATH = "/api/management/commissions/{id}/drafts";
 
     @Autowired
     private MockMvc mockMvc;
@@ -115,6 +121,9 @@ class CommissionManagementControllerTest {
 
     @MockitoBean
     private RejectCommissionRequestUseCase rejectCommissionRequestUseCase;
+
+    @MockitoBean
+    private UploadCommissionDraftUseCase uploadCommissionDraftUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -1068,5 +1077,215 @@ class CommissionManagementControllerTest {
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVALID_COMMISSION_STATUS_TRANSITION"));
+    }
+
+    @Test
+    @DisplayName("CMS-15 Controller UTCID01 [N]: Authenticated DESIGNER uploads draft -> returns 201 CREATED with UploadCommissionDraftResponse")
+    void uploadCommissionDraft_validDesigner_returns201Created() throws Exception {
+        UploadCommissionDraftResponse response = UploadCommissionDraftResponse.builder()
+                .submissionId(42L)
+                .commissionId(105L)
+                .designerId(5L)
+                .versionNumber(1)
+                .imageUrl("https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif")
+                .designerNote("First animated draft")
+                .submissionStatus(CommissionSubmissionStatus.PENDING_STAFF_REVIEW)
+                .commissionStatus(CommissionStatus.INTERNAL_REVIEW)
+                .createdAt(Instant.parse("2026-11-17T10:50:00Z"))
+                .build();
+
+        when(uploadCommissionDraftUseCase.execute(eq(105L), any(UploadCommissionDraftRequest.class), eq(5L)))
+                .thenReturn(response);
+
+        String requestBody = """
+                {
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif",
+                    "designerNote": "First animated draft"
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.submissionId").value(42))
+                .andExpect(jsonPath("$.data.commissionId").value(105))
+                .andExpect(jsonPath("$.data.designerId").value(5))
+                .andExpect(jsonPath("$.data.versionNumber").value(1))
+                .andExpect(jsonPath("$.data.imageUrl").value("https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"))
+                .andExpect(jsonPath("$.data.designerNote").value("First animated draft"))
+                .andExpect(jsonPath("$.data.submissionStatus").value("PENDING_STAFF_REVIEW"))
+                .andExpect(jsonPath("$.data.commissionStatus").value("INTERNAL_REVIEW"));
+
+        ArgumentCaptor<UploadCommissionDraftRequest> captor = ArgumentCaptor.forClass(UploadCommissionDraftRequest.class);
+        verify(uploadCommissionDraftUseCase).execute(eq(105L), captor.capture(), eq(5L));
+        assertThat(captor.getValue().imageUrl()).isEqualTo("https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif");
+        assertThat(captor.getValue().designerNote()).isEqualTo("First animated draft");
+    }
+
+    @Test
+    @DisplayName("CMS-15 Controller UTCID02 [B]: Blank imageUrl returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void uploadCommissionDraft_blankImageUrl_returns400BadRequest() throws Exception {
+        String invalidBody = """
+                {
+                    "imageUrl": "   ",
+                    "designerNote": "Some note"
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(uploadCommissionDraftUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-15 Controller UTCID03 [B]: Non-positive commission id returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void uploadCommissionDraft_nonPositiveId_returns400BadRequest() throws Exception {
+        String requestBody = """
+                {
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 0L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(uploadCommissionDraftUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-15 Controller UTCID04 [A]: Unauthenticated request returns 401 UNAUTHORIZED")
+    void uploadCommissionDraft_unauthenticated_returns401Unauthorized() throws Exception {
+        String requestBody = """
+                {
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 105L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(uploadCommissionDraftUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-15 Controller UTCID05 [A]: Caller with STAFF or CUSTOMER role returns 403 FORBIDDEN")
+    void uploadCommissionDraft_nonDesignerRole_returns403Forbidden() throws Exception {
+        String requestBody = """
+                {
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(uploadCommissionDraftUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-15 Controller UTCID06 [A]: Upload throws CommissionOwnershipMismatchException -> returns 403 FORBIDDEN")
+    void uploadCommissionDraft_ownershipMismatch_returns403Forbidden() throws Exception {
+        when(uploadCommissionDraftUseCase.execute(eq(105L), any(UploadCommissionDraftRequest.class), eq(8L)))
+                .thenThrow(new CommissionOwnershipMismatchException("Commission request 105 is not assigned to designer 8"));
+
+        String requestBody = """
+                {
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("8").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMISSION_OWNERSHIP_MISMATCH"));
+    }
+
+    @Test
+    @DisplayName("CMS-15 Controller UTCID07 [A]: Upload throws CommissionNotFoundException -> returns 404 NOT_FOUND")
+    void uploadCommissionDraft_notFound_returns404NotFound() throws Exception {
+        when(uploadCommissionDraftUseCase.execute(eq(999L), any(UploadCommissionDraftRequest.class), eq(5L)))
+                .thenThrow(new CommissionNotFoundException("Commission request not found with id: 999"));
+
+        String requestBody = """
+                {
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/999/drafts/v1-neon-cat.gif"
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 999L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COMMISSION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CMS-15 Controller UTCID08 [A]: Upload throws InvalidCommissionStatusTransitionException -> returns 409 CONFLICT")
+    void uploadCommissionDraft_invalidStatus_returns409Conflict() throws Exception {
+        when(uploadCommissionDraftUseCase.execute(eq(105L), any(UploadCommissionDraftRequest.class), eq(5L)))
+                .thenThrow(new InvalidCommissionStatusTransitionException("Cannot upload draft for commission in status PAID"));
+
+        String requestBody = """
+                {
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_COMMISSION_STATUS_TRANSITION"));
+    }
+
+    @Test
+    @DisplayName("CMS-15 Controller UTCID09 [A]: Upload throws InvalidMediaUrlException -> returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void uploadCommissionDraft_invalidMediaUrl_returns400BadRequest() throws Exception {
+        when(uploadCommissionDraftUseCase.execute(eq(105L), any(UploadCommissionDraftRequest.class), eq(5L)))
+                .thenThrow(new InvalidMediaUrlException("Submitted media URL is invalid or does not belong to authorized CDN / storage domains."));
+
+        String requestBody = """
+                {
+                    "imageUrl": "https://evil.example.com/malicious.gif"
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 }
