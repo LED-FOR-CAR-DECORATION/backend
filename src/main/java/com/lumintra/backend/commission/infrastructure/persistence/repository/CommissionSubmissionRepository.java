@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface CommissionSubmissionRepository extends JpaRepository<CommissionSubmissionEntity, Long> {
 
@@ -14,4 +15,6 @@ public interface CommissionSubmissionRepository extends JpaRepository<Commission
     List<CommissionSubmissionEntity> findAllByCommissionIdAndStatusInOrderByVersionNumberAscSubmissionIdAsc(
             Long commissionId,
             Collection<CommissionSubmissionStatus> statuses);
+
+    Optional<CommissionSubmissionEntity> findTopByCommissionIdOrderByVersionNumberDesc(Long commissionId);
 }

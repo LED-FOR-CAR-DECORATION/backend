@@ -27,7 +27,7 @@ public class CommissionPricingController {
     @GetMapping("/pricing")
     @Operation(
             summary = "Get commission pricing tiers and rules",
-            description = "Retrieves active presets (BASIC, ADVANCED), the dynamic CUSTOM mode, and active ordered pricing rules built with reusable primitives (SINGLE_SELECT, MULTI_SELECT, QUANTITY, TEXT_INPUT) and deterministic modifiers (FLAT_ADD, BASE_PERCENT, SUBTOTAL_PERCENT)."
+            description = "Retrieves the active CUSTOM configurator (plus any active preset packages when configured) and active ordered pricing rules built with reusable primitives (SINGLE_SELECT, MULTI_SELECT, QUANTITY, TEXT_INPUT) and deterministic modifiers (FLAT_ADD, BASE_PERCENT, SUBTOTAL_PERCENT)."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

@@ -100,6 +100,9 @@ class CommissionPricingDataSeederTest {
 
         CommissionPriceConfigEntity matrixSize = savedConfigs.get(1);
         assertThat(matrixSize.isBasePrice()).isTrue();
+        assertThat(matrixSize.getOptions())
+                .extracting(CommissionPriceOptionEntity::getOptionCode)
+                .containsExactly("32x32", "32x64", "64x64");
 
         CommissionPriceConfigEntity frameRange = savedConfigs.get(2);
         assertThat(frameRange.getDependsOnOptionId()).isEqualTo(2L);
@@ -107,14 +110,14 @@ class CommissionPricingDataSeederTest {
 
         ArgumentCaptor<CommissionPricingTierEntity> tierCaptor =
                 ArgumentCaptor.forClass(CommissionPricingTierEntity.class);
-        verify(tierRepository, times(3)).save(tierCaptor.capture());
+        verify(tierRepository, times(1)).save(tierCaptor.capture());
 
         List<CommissionPricingTierEntity> savedTiers = tierCaptor.getAllValues();
         assertThat(savedTiers).extracting(CommissionPricingTierEntity::getTierCode)
-                .containsExactly("CUSTOM", "BASIC", "ADVANCED");
+                .containsExactly("CUSTOM");
 
         verify(invariantValidator, times(3)).validateRule(any());
-        verify(invariantValidator, times(3)).validateTier(any(), any());
+        verify(invariantValidator, times(1)).validateTier(any(), any());
     }
 
     @Test

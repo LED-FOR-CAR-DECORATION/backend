@@ -8,10 +8,12 @@ import com.lumintra.backend.commission.api.response.CustomerCommissionListRespon
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
+import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
+import com.lumintra.backend.commission.api.response.UploadCommissionDraftResponse;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionAttachmentEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
@@ -392,6 +394,38 @@ public class CommissionRequestMapper {
                 .staffReviewNote(submission.getStaffReviewNote())
                 .reviewedAt(submission.getReviewedAt())
                 .deliveredAt(submission.getDeliveredAt())
+                .createdAt(submission.getCreatedAt())
+                .build();
+    }
+
+    public RejectCommissionResponse toRejectResponse(CommissionRequestEntity entity) {
+        if (entity == null) {
+            return null;
+        }
+        return RejectCommissionResponse.builder()
+                .commissionId(entity.getCommissionId())
+                .status(entity.getStatus())
+                .assignedStaffId(entity.getAssignedStaffId())
+                .rejectionReason(entity.getRejectionReason())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
+    }
+
+    public UploadCommissionDraftResponse toUploadDraftResponse(
+            CommissionSubmissionEntity submission,
+            CommissionRequestEntity commission) {
+        if (submission == null || commission == null) {
+            return null;
+        }
+        return UploadCommissionDraftResponse.builder()
+                .submissionId(submission.getSubmissionId())
+                .commissionId(submission.getCommissionId())
+                .designerId(submission.getDesignerId())
+                .versionNumber(submission.getVersionNumber())
+                .imageUrl(submission.getImageUrl())
+                .designerNote(submission.getDesignerNote())
+                .submissionStatus(submission.getStatus())
+                .commissionStatus(commission.getStatus())
                 .createdAt(submission.getCreatedAt())
                 .build();
     }

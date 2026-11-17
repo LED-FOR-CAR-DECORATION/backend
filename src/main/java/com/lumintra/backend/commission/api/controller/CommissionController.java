@@ -8,6 +8,12 @@ import com.lumintra.backend.commission.api.response.CustomerCommissionListRespon
 import com.lumintra.backend.commission.application.GetCustomerCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.ListCustomerCommissionsUseCase;
 import com.lumintra.backend.commission.application.SubmitCommissionUseCase;
+import com.lumintra.backend.commission.api.request.SendCommissionMessageRequest;
+import com.lumintra.backend.commission.api.response.CommissionMessageResponse;
+import com.lumintra.backend.commission.application.ListCommissionMessagesUseCase;
+import com.lumintra.backend.commission.application.SendCommissionMessageUseCase;
+import com.lumintra.backend.commission.domain.model.CommissionMessageSenderRole;
+import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -36,6 +42,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Set;
 
 @Tag(
         name = "Customer Commissions",
@@ -46,9 +53,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CommissionController {
 
+    private static final Set<String> MANAGEMENT_CHAT_ROLES = Set.of("STAFF", "MANAGER", "ADMIN");
+
     private final ListCustomerCommissionsUseCase listCustomerCommissionsUseCase;
     private final GetCustomerCommissionDetailUseCase getCustomerCommissionDetailUseCase;
     private final SubmitCommissionUseCase submitCommissionUseCase;
+    private final ListCommissionMessagesUseCase listCommissionMessagesUseCase;
+    private final SendCommissionMessageUseCase sendCommissionMessageUseCase;
+    private final InternalEmployeeAccessService internalEmployeeAccessService;
 
     @Operation(
             summary = "List personal commission requests",
@@ -219,6 +231,34 @@ public class CommissionController {
     @PostMapping
     public ResponseEntity<ApiResponse<CustomerCommissionDetailResponse>> submitCommission(
             Authentication authentication,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = SubmitCommissionRequest.class),
+                            examples = @ExampleObject(
+                                    name = "CustomCommissionExample",
+                                    value = """
+                                        {
+                                          "title": "Cyberpunk Shiba Inu Pixel Art",
+                                          "description": "Pixel art shiba with blinking neon effects...",
+                                          "tierCode": "CUSTOM",
+                                          "selectedOptions": [
+                                            { "configId": 1, "optionIds": [2] },
+                                            { "configId": 2, "optionIds": [4, 8] },
+                                            { "configId": 3, "quantity": 4 },
+                                            { "configId": 4, "textValue": "Make the shiba have a glowing neon cyan outline, using the colors I have attached as image in the request" }
+                                          ],
+                                          "attachments": [
+                                            {
+                                              "imageUrl": "https://cdn.lumintra.com/commissions/references/42/ref-01.png",
+                                              "caption": "Neon color palette reference"
+                                            }
+                                          ]
+                                        }
+                                        """
+                            )
+                    )
+            )
             @Valid @RequestBody SubmitCommissionRequest request) {
         Long customerId = extractCustomerId(authentication);
         CustomerCommissionDetailResponse result = submitCommissionUseCase.execute(customerId, request);
@@ -370,6 +410,88 @@ public class CommissionController {
         Long customerId = extractCustomerId(authentication);
         CustomerCommissionDetailResponse result = getCustomerCommissionDetailUseCase.execute(customerId, id);
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    @Operation(
+            summary = "List commission chat messages",
+            description = """
+                    Retrieves chronological messages (`TEXT`, `IMAGE`, `DELIVERABLE_CARD`, `EXTRA_FEE_CARD`, `SYSTEM`) in the commission chat room once status is at least `PAID`. Restricted to the owning `CUSTOMER` or `STAFF`/`MANAGER`/`ADMIN`.
+                    
+                    **WebSocket Pairing:** Connect to `ws://<host>/ws` with STOMP header `Authorization: Bearer <token>`
+                    and subscribe to `/topic/commissions/{id}`. Note that WebSocket frames deliver `CommissionMessageResponse`
+                    directly without the `{ "data": ... }` REST envelope.
+                    """,
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'MANAGER', 'ADMIN')")
+    @GetMapping("/{id}/messages")
+    public ResponseEntity<ApiResponse<List<CommissionMessageResponse>>> listCommissionMessages(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "105")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id) {
+
+        boolean isCustomer = hasAuthority(authentication, "ROLE_CUSTOMER");
+        CommissionMessageSenderRole callerRole = isCustomer
+                ? CommissionMessageSenderRole.CUSTOMER
+                : CommissionMessageSenderRole.STAFF;
+        Long callerId = isCustomer
+                ? extractCustomerId(authentication)
+                : requireEmployeeId(authentication);
+
+        List<CommissionMessageResponse> messages = listCommissionMessagesUseCase.execute(id, callerId, callerRole);
+        return ResponseEntity.ok(ApiResponse.success(messages));
+    }
+
+    @Operation(
+            summary = "Send commission chat message",
+            description = """
+                    Persists a `TEXT` or `IMAGE` message in an active commission chat room (`PAID` through `AWAITING_ESTIMATE`)
+                    and broadcasts the saved `CommissionMessageResponse` payload to STOMP subscribers on `/topic/commissions/{id}`.
+
+                    **WebSocket Pairing:** Connect to `ws://<host>/ws` with STOMP header `Authorization: Bearer <token>`
+                    and subscribe to `/topic/commissions/{id}`. Note that WebSocket frames deliver `CommissionMessageResponse`
+                    directly without the `{ "data": ... }` REST envelope.
+                    """,
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'MANAGER', 'ADMIN')")
+    @PostMapping("/{id}/messages")
+    public ResponseEntity<ApiResponse<CommissionMessageResponse>> sendCommissionMessage(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "105")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody SendCommissionMessageRequest request) {
+
+        boolean isCustomer = hasAuthority(authentication, "ROLE_CUSTOMER");
+        CommissionMessageSenderRole senderRole = isCustomer
+                ? CommissionMessageSenderRole.CUSTOMER
+                : CommissionMessageSenderRole.STAFF;
+        Long callerId = isCustomer
+                ? extractCustomerId(authentication)
+                : requireEmployeeId(authentication);
+        boolean isPrivilegedManagement = hasAuthority(authentication, "ROLE_MANAGER")
+                || hasAuthority(authentication, "ROLE_ADMIN");
+
+        CommissionMessageResponse response = sendCommissionMessageUseCase.execute(
+                id, callerId, senderRole, isPrivilegedManagement, request
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    private Long requireEmployeeId(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AuthenticationCredentialsNotFoundException("Unauthorized");
+        }
+        return internalEmployeeAccessService.requireActiveEmployeeId(
+                authentication.getName(), MANAGEMENT_CHAT_ROLES
+        );
+    }
+
+    private boolean hasAuthority(Authentication authentication, String authority) {
+        return authentication != null
+                && authentication.getAuthorities() != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(a -> authority.equals(a.getAuthority()));
     }
 
     private Long extractCustomerId(Authentication authentication) {

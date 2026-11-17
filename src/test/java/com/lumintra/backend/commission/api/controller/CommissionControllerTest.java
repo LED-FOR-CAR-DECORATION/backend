@@ -428,7 +428,6 @@ class CommissionControllerTest {
                     { "configId": 2, "optionIds": [21] },
                     { "configId": 3, "optionIds": [30] }
                   ],
-                  "targetMatrixDimensions": "32x32",
                   "attachments": []
                 }
                 """;
@@ -625,6 +624,7 @@ class CommissionControllerTest {
 
         ArgumentCaptor<SubmitCommissionRequest> captor = ArgumentCaptor.forClass(SubmitCommissionRequest.class);
         verify(submitCommissionUseCase).execute(eq(10L), captor.capture());
+        assertThat(captor.getValue().tierCode()).isEqualTo("CUSTOM");
         assertThat(captor.getValue().selectedOptions()).hasSize(4);
         assertThat(captor.getValue().selectedOptions().get(2).quantity()).isEqualTo(2);
         assertThat(captor.getValue().selectedOptions().get(3).textValue()).isEqualTo("Purple and cyan neon palette");
