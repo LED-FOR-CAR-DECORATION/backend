@@ -54,4 +54,13 @@ public interface EmployeeRepository
               and e.account.status = com.lumintra.backend.iam.domain.model.AccountStatus.ACTIVE
             """)
     boolean isActiveDesigner(@Param("employeeId") Long employeeId);
+
+    @Query("""
+            select new com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot(e.employeeId, e.fullName, e.account.email)
+            from EmployeeEntity e
+            where e.role.roleName = 'DESIGNER'
+              and e.account.status = com.lumintra.backend.iam.domain.model.AccountStatus.ACTIVE
+            order by e.fullName, e.employeeId
+            """)
+    List<EmployeeProfileSnapshot> findActiveDesigners();
 }

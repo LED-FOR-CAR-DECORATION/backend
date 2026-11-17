@@ -16,6 +16,7 @@ import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUse
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
+import com.lumintra.backend.iam.domain.service.EmployeeLookupService;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,6 +58,19 @@ public class CommissionManagementController {
     private final ApproveCommissionRequestUseCase approveCommissionRequestUseCase;
     private final AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
     private final GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
+    private final EmployeeLookupService employeeLookupService;
+
+    @GetMapping("/designers")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    @Operation(summary = "List active designers for Commission assignment")
+    public ResponseEntity<ApiResponse<List<DesignerOption>>> listDesigners() {
+        var designers = employeeLookupService.findActiveDesigners().stream()
+                .map(profile -> new DesignerOption(profile.employeeId(), profile.fullName()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(designers));
+    }
+
+    public record DesignerOption(Long designerId, String fullName) {}
 
     @Operation(
             summary = "View staff commission queue",

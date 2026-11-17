@@ -68,6 +68,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @ActiveProfiles("test")
 class CommissionManagementControllerTest {
+    @MockitoBean
+    private com.lumintra.backend.iam.domain.service.EmployeeLookupService employeeLookupService;
 
     private static final String QUEUE_PATH = "/api/management/commissions";
     private static final String ASSIGNED_QUEUE_PATH = "/api/management/commissions/assigned";
