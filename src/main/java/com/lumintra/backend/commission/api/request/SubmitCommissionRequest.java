@@ -20,17 +20,12 @@ public record SubmitCommissionRequest(
         @Size(max = 2000, message = "Description must not exceed 2000 characters")
         String description,
 
-        @Schema(description = "Pricing tier code (e.g. BASIC, ADVANCED, CUSTOM)", example = "CUSTOM", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank(message = "Tier code is required")
+        @Schema(description = "Pricing tier code (defaults to CUSTOM when omitted; supports active presets if configured)", example = "CUSTOM", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Size(max = 50, message = "Tier code must not exceed 50 characters")
         String tierCode,
 
         @Schema(description = "Unified rule selections across active SINGLE_SELECT, MULTI_SELECT, QUANTITY, and TEXT_INPUT pricing rules")
         List<@Valid SelectedOptionItem> selectedOptions,
-
-        @Schema(description = "Optional target matrix dimensions (e.g. 16x16, 32x32, 64x64). When omitted and MATRIX_SIZE is selected, derived from MATRIX_SIZE option code", example = "32x32")
-        @Size(max = 50, message = "Target matrix dimensions must not exceed 50 characters")
-        String targetMatrixDimensions,
 
         @Schema(description = "Optional reference image attachments uploaded beforehand via media service (max 5)")
         @Size(max = 5, message = "A maximum of 5 reference attachments is allowed")
@@ -43,13 +38,10 @@ public record SubmitCommissionRequest(
         if (description != null) {
             description = description.trim();
         }
-        if (tierCode != null) {
+        if (tierCode != null && !tierCode.isBlank()) {
             tierCode = tierCode.trim();
-        }
-        if (targetMatrixDimensions != null && !targetMatrixDimensions.isBlank()) {
-            targetMatrixDimensions = targetMatrixDimensions.trim();
         } else {
-            targetMatrixDimensions = null;
+            tierCode = "CUSTOM";
         }
         if (selectedOptions == null) {
             selectedOptions = List.of();

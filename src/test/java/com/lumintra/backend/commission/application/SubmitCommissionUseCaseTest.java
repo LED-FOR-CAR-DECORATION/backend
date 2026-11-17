@@ -81,8 +81,8 @@ class SubmitCommissionUseCaseTest {
     private CommissionPriceOptionEntity animatedGifOption;
 
     private CommissionPriceConfigEntity matrixSizeConfig;
-    private CommissionPriceOptionEntity size16Option;
     private CommissionPriceOptionEntity size32Option;
+    private CommissionPriceOptionEntity size32x64Option;
 
     private CommissionPriceConfigEntity frameRangeConfig;
     private CommissionPriceOptionEntity frame1To5Option;
@@ -157,27 +157,27 @@ class SubmitCommissionUseCaseTest {
                 .options(new ArrayList<>())
                 .build();
 
-        size16Option = CommissionPriceOptionEntity.builder()
-                .optionId(20L)
-                .config(matrixSizeConfig)
-                .optionCode("16x16")
-                .optionLabel("16 x 16 Pixels")
-                .modifierType(ModifierType.FLAT_ADD)
-                .basePrice(new BigDecimal("0.00"))
-                .isActive(true)
-                .build();
-        matrixSizeConfig.getOptions().add(size16Option);
-
         size32Option = CommissionPriceOptionEntity.builder()
-                .optionId(21L)
+                .optionId(20L)
                 .config(matrixSizeConfig)
                 .optionCode("32x32")
                 .optionLabel("32 x 32 Pixels")
                 .modifierType(ModifierType.FLAT_ADD)
-                .basePrice(new BigDecimal("30000.00"))
+                .basePrice(new BigDecimal("0.00"))
                 .isActive(true)
                 .build();
         matrixSizeConfig.getOptions().add(size32Option);
+
+        size32x64Option = CommissionPriceOptionEntity.builder()
+                .optionId(21L)
+                .config(matrixSizeConfig)
+                .optionCode("32x64")
+                .optionLabel("32 x 64 Pixels")
+                .modifierType(ModifierType.FLAT_ADD)
+                .basePrice(new BigDecimal("30000.00"))
+                .isActive(true)
+                .build();
+        matrixSizeConfig.getOptions().add(size32x64Option);
 
         frameRangeConfig = CommissionPriceConfigEntity.builder()
                 .configId(3L)
@@ -224,7 +224,7 @@ class SubmitCommissionUseCaseTest {
                 .maxRevisions(1)
                 .isCustom(false)
                 .isActive(true)
-                .includedOptions(new HashSet<>(Set.of(staticImageOption, size16Option)))
+                .includedOptions(new HashSet<>(Set.of(staticImageOption, size32Option)))
                 .triggerOptions(new HashSet<>())
                 .build();
 
@@ -237,7 +237,7 @@ class SubmitCommissionUseCaseTest {
                 .maxRevisions(3)
                 .isCustom(false)
                 .isActive(true)
-                .includedOptions(new HashSet<>(Set.of(animatedGifOption, size32Option, frame1To5Option)))
+                .includedOptions(new HashSet<>(Set.of(animatedGifOption, size32x64Option, frame1To5Option)))
                 .triggerOptions(new HashSet<>())
                 .build();
 
@@ -270,7 +270,7 @@ class SubmitCommissionUseCaseTest {
     }
 
     @Test
-    @DisplayName("CMS-03 UTCID01 [N]: Submit commission with ADVANCED preset via unified selectedOptions succeeds")
+    @DisplayName("CMS-03 UTCID01 [N]: Submit commission with preset auto-derives targetMatrixDimensions from MATRIX_SIZE")
     void submitCommission_presetAdvanced_success_returnsCreated() {
         Long customerId = 42L;
         mockDefaultRules();
@@ -287,7 +287,6 @@ class SubmitCommissionUseCaseTest {
                         new SelectedOptionItem(2L, List.of(21L), null, null),
                         new SelectedOptionItem(3L, List.of(30L), null, null)
                 ),
-                "32x32",
                 List.of()
         );
 
@@ -296,7 +295,7 @@ class SubmitCommissionUseCaseTest {
         assertThat(response.commissionId()).isEqualTo(501L);
         assertThat(response.customerId()).isEqualTo(customerId);
         assertThat(response.tierCode()).isEqualTo("ADVANCED");
-        assertThat(response.targetMatrixDimensions()).isEqualTo("32x32");
+        assertThat(response.targetMatrixDimensions()).isEqualTo("32x64");
         assertThat(response.initialPrice()).isEqualByComparingTo("149000.00");
         assertThat(response.totalPrice()).isEqualByComparingTo("149000.00");
         assertThat(response.maxRevisions()).isEqualTo(3);
@@ -310,7 +309,7 @@ class SubmitCommissionUseCaseTest {
     }
 
     @Test
-    @DisplayName("CMS-03 UTCID02 [N]: Submit BASIC preset auto-derives targetMatrixDimensions and allows optional add-on")
+    @DisplayName("CMS-03 UTCID02 [N]: Submit preset with triggerOptions and optional add-on applies add-on surcharge on top of preset base")
     void submitCommission_presetBasicWithAddonAndTriggers_success() {
         CommissionPriceConfigEntity rushConfig = CommissionPriceConfigEntity.builder()
                 .configId(4L)
@@ -352,14 +351,12 @@ class SubmitCommissionUseCaseTest {
                         new SelectedOptionItem(2L, List.of(20L), null, null),
                         new SelectedOptionItem(4L, List.of(40L), null, null)
                 ),
-                null,
                 List.of()
         );
 
         CustomerCommissionDetailResponse response = useCase.execute(42L, request);
 
-        // Preset base 79,000 + 20% SUBTOTAL_PERCENT (15,800) = 94,800.00
-        assertThat(response.targetMatrixDimensions()).isEqualTo("16x16");
+        assertThat(response.targetMatrixDimensions()).isEqualTo("32x32");
         assertThat(response.initialPrice()).isEqualByComparingTo("94800.00");
         assertThat(response.totalPrice()).isEqualByComparingTo("94800.00");
     }
@@ -436,7 +433,7 @@ class SubmitCommissionUseCaseTest {
         stubSaveCommission(503L);
 
         // Math:
-        // Base = 100k (CUSTOM) + 30k (MATRIX_SIZE 32x32, isBasePrice=true) = 130,000.00
+        // Base = 100k (CUSTOM) + 30k (MATRIX_SIZE 32x64, isBasePrice=true) = 130,000.00
         // + BASE_PERCENT (ANIMATED_GIF 50% of 130k) = +65,000.00
         // + non-base FLAT_ADD (6-15 frames 30k) + QUANTITY (2 * 35k = 70k) = +100,000.00 -> RunningSubtotal = 295,000.00
         // + SUBTOTAL_PERCENT (COMMERCIAL 20% of 295k) = +59,000.00
@@ -444,7 +441,7 @@ class SubmitCommissionUseCaseTest {
         SubmitCommissionRequest request = new SubmitCommissionRequest(
                 "Custom Cyber City",
                 "Dense parallax cityscape",
-                "CUSTOM",
+                null,
                 List.of(
                         new SelectedOptionItem(1L, List.of(11L), null, null),
                         new SelectedOptionItem(2L, List.of(21L), null, null),
@@ -453,12 +450,13 @@ class SubmitCommissionUseCaseTest {
                         new SelectedOptionItem(5L, List.of(50L), null, null),
                         new SelectedOptionItem(6L, List.of(), null, "#00FFCC / #FF00AA")
                 ),
-                "32x32",
                 List.of()
         );
 
         CustomerCommissionDetailResponse response = useCase.execute(42L, request);
 
+        assertThat(response.tierCode()).isEqualTo("CUSTOM");
+        assertThat(response.targetMatrixDimensions()).isEqualTo("32x64");
         assertThat(response.initialPrice()).isEqualByComparingTo("354000.00");
         assertThat(response.totalPrice()).isEqualByComparingTo("354000.00");
         assertThat(response.maxRevisions()).isEqualTo(5);
@@ -503,11 +501,11 @@ class SubmitCommissionUseCaseTest {
                         new SelectedOptionItem(11L, List.of(101L), null, null),
                         new SelectedOptionItem(12L, List.of(102L), null, null)
                 ),
-                null,
                 List.of()
         );
 
         CustomerCommissionDetailResponse response = useCase.execute(42L, request);
+        assertThat(response.targetMatrixDimensions()).isEqualTo("32x32");
         assertThat(response.initialPrice()).isEqualByComparingTo("110000.00");
     }
 
@@ -515,7 +513,7 @@ class SubmitCommissionUseCaseTest {
     @DisplayName("CMS-03 UTCID05 [N]: Reference attachments are validated and persisted in order; no staff falls back to null")
     void submitCommission_attachmentsAndNoStaffFallback_succeeds() {
         mockDefaultRules();
-        when(tierRepository.findActiveWithIncludedOptionsByTierCode("BASIC")).thenReturn(Optional.of(basicTier));
+        when(tierRepository.findActiveWithIncludedOptionsByTierCode("CUSTOM")).thenReturn(Optional.of(customTier));
         when(staffAutoAssignmentService.assignNextAvailableStaff()).thenReturn(null);
         stubSaveCommission(505L);
 
@@ -527,12 +525,11 @@ class SubmitCommissionUseCaseTest {
                 });
 
         SubmitCommissionRequest request = new SubmitCommissionRequest(
-                "Pixel Tree", "Bonsai", "BASIC",
+                "Pixel Tree", "Bonsai", "CUSTOM",
                 List.of(
                         new SelectedOptionItem(1L, List.of(10L), null, null),
                         new SelectedOptionItem(2L, List.of(20L), null, null)
                 ),
-                null,
                 List.of(
                         new CommissionAttachmentItemRequest("https://cdn.lumintra.com/commissions/ref1.png", "Palette 1"),
                         new CommissionAttachmentItemRequest("https://cdn.lumintra.com/commissions/ref2.png", "Palette 2")
@@ -577,7 +574,6 @@ class SubmitCommissionUseCaseTest {
                         new SelectedOptionItem(2L, List.of(20L), null, null),
                         new SelectedOptionItem(4L, List.of(), 0, null)
                 ),
-                null,
                 List.of()
         );
 
@@ -593,7 +589,6 @@ class SubmitCommissionUseCaseTest {
         SubmitCommissionRequest request = new SubmitCommissionRequest(
                 "Test", "Desc", "UNKNOWN",
                 List.of(new SelectedOptionItem(1L, List.of(10L), null, null)),
-                null,
                 List.of()
         );
 
@@ -609,29 +604,25 @@ class SubmitCommissionUseCaseTest {
         mockDefaultRules();
         when(tierRepository.findActiveWithIncludedOptionsByTierCode("BASIC")).thenReturn(Optional.of(basicTier));
 
-        // Wrong bundled MATRIX_SIZE (32x32 instead of 16x16)
         SubmitCommissionRequest wrongBundle = new SubmitCommissionRequest(
                 "Wrong Bundle", "Desc", "BASIC",
                 List.of(
                         new SelectedOptionItem(1L, List.of(10L), null, null),
                         new SelectedOptionItem(2L, List.of(21L), null, null)
                 ),
-                null,
                 List.of()
         );
         assertThatThrownBy(() -> useCase.execute(42L, wrongBundle))
                 .isInstanceOf(PresetSelectionMismatchException.class)
                 .hasMessageContaining("BASIC");
 
-        // Missing triggerOption
-        basicTier.setTriggerOptions(Set.of(size32Option));
+        basicTier.setTriggerOptions(Set.of(size32x64Option));
         SubmitCommissionRequest missingTrigger = new SubmitCommissionRequest(
                 "Missing Trigger", "Desc", "BASIC",
                 List.of(
                         new SelectedOptionItem(1L, List.of(10L), null, null),
                         new SelectedOptionItem(2L, List.of(20L), null, null)
                 ),
-                null,
                 List.of()
         );
         assertThatThrownBy(() -> useCase.execute(42L, missingTrigger))
@@ -647,21 +638,18 @@ class SubmitCommissionUseCaseTest {
         mockDefaultRules();
         when(tierRepository.findActiveWithIncludedOptionsByTierCode("CUSTOM")).thenReturn(Optional.of(customTier));
 
-        // Eligible required child (FRAME_RANGE, isRequired=true) missing when ANIMATED_GIF selected
         SubmitCommissionRequest missingRequiredChild = new SubmitCommissionRequest(
                 "Missing Child", "Desc", "CUSTOM",
                 List.of(
                         new SelectedOptionItem(1L, List.of(11L), null, null),
                         new SelectedOptionItem(2L, List.of(21L), null, null)
                 ),
-                null,
                 List.of()
         );
         assertThatThrownBy(() -> useCase.execute(42L, missingRequiredChild))
                 .isInstanceOf(InvalidCommissionRuleSelectionException.class)
                 .hasMessageContaining("Required rule 'FRAME_RANGE'");
 
-        // Ineligible child selected when STATIC_IMAGE selected
         SubmitCommissionRequest ineligibleChild = new SubmitCommissionRequest(
                 "Ineligible Child", "Desc", "CUSTOM",
                 List.of(
@@ -669,7 +657,6 @@ class SubmitCommissionUseCaseTest {
                         new SelectedOptionItem(2L, List.of(21L), null, null),
                         new SelectedOptionItem(3L, List.of(30L), null, null)
                 ),
-                null,
                 List.of()
         );
         assertThatThrownBy(() -> useCase.execute(42L, ineligibleChild))
@@ -678,8 +665,8 @@ class SubmitCommissionUseCaseTest {
     }
 
     @Test
-    @DisplayName("CMS-03 UTCID10 [A]: QUANTITY out of bounds, targetMatrixDimensions mismatch, and untrusted URL throw appropriate exceptions")
-    void submitCommission_quantityBoundsAndMatrixMismatchAndBadUrl_throwExceptions() {
+    @DisplayName("CMS-03 UTCID10 [A]: QUANTITY out of bounds, missing required MATRIX_SIZE, and untrusted URL throw appropriate exceptions")
+    void submitCommission_quantityBoundsMissingRequiredAndBadUrl_throwExceptions() {
         CommissionPriceConfigEntity variantConfig = CommissionPriceConfigEntity.builder()
                 .configId(4L).ruleKey("VARIANTS").name("Variants")
                 .selectionType(SelectionType.QUANTITY).uiType(UiType.NUMBER)
@@ -701,32 +688,28 @@ class SubmitCommissionUseCaseTest {
                         new SelectedOptionItem(2L, List.of(20L), null, null),
                         new SelectedOptionItem(4L, List.of(), 5, null)
                 ),
-                null,
                 List.of()
         );
         assertThatThrownBy(() -> useCase.execute(42L, outOfBounds))
                 .isInstanceOf(InvalidCommissionRuleSelectionException.class)
                 .hasMessageContaining("between 1 and 3");
 
-        SubmitCommissionRequest matrixMismatch = new SubmitCommissionRequest(
-                "Bad Matrix", "Desc", "CUSTOM",
+        SubmitCommissionRequest missingMatrixSize = new SubmitCommissionRequest(
+                "Missing Matrix Size", "Desc", "CUSTOM",
                 List.of(
-                        new SelectedOptionItem(1L, List.of(10L), null, null),
-                        new SelectedOptionItem(2L, List.of(20L), null, null)
+                        new SelectedOptionItem(1L, List.of(10L), null, null)
                 ),
-                "64x64",
                 List.of()
         );
-        assertThatThrownBy(() -> useCase.execute(42L, matrixMismatch))
+        assertThatThrownBy(() -> useCase.execute(42L, missingMatrixSize))
                 .isInstanceOf(InvalidCommissionRuleSelectionException.class)
-                .hasMessageContaining("targetMatrixDimensions must match selected MATRIX_SIZE: 16x16");
+                .hasMessageContaining("MATRIX_SIZE");
 
         doThrow(new InvalidMediaUrlException("Invalid domain"))
                 .when(mediaUrlValidator).validateMediaUrl("https://evil.com/x.png");
         SubmitCommissionRequest badUrl = new SubmitCommissionRequest(
                 "Bad Url", "Desc", "CUSTOM",
                 List.of(),
-                null,
                 List.of(new CommissionAttachmentItemRequest("https://evil.com/x.png", "Bad"))
         );
         assertThatThrownBy(() -> useCase.execute(42L, badUrl))

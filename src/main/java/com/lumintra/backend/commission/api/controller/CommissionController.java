@@ -236,7 +236,6 @@ public class CommissionController {
                                             { "configId": 3, "quantity": 4 },
                                             { "configId": 4, "textValue": "Make the shiba have a glowing neon cyan outline, using the colors I have attached as image in the request" }
                                           ],
-                                          "targetMatrixDimensions": "32x32",
                                           "attachments": [
                                             {
                                               "imageUrl": "https://cdn.lumintra.com/commissions/references/42/ref-01.png",
