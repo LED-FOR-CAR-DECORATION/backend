@@ -11,6 +11,7 @@ import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
+import com.lumintra.backend.commission.api.response.PostDeliverableCardResponse;
 import com.lumintra.backend.commission.api.response.RejectCommissionDraftResponse;
 import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
@@ -21,6 +22,7 @@ import com.lumintra.backend.commission.application.AssignCommissionToDesignerUse
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
+import com.lumintra.backend.commission.application.PostDeliverableCardUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionDraftUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.UploadCommissionDraftUseCase;
@@ -74,6 +76,7 @@ public class CommissionManagementController {
     private final RejectCommissionRequestUseCase rejectCommissionRequestUseCase;
     private final UploadCommissionDraftUseCase uploadCommissionDraftUseCase;
     private final RejectCommissionDraftUseCase rejectCommissionDraftUseCase;
+    private final PostDeliverableCardUseCase postDeliverableCardUseCase;
     private final EmployeeLookupService employeeLookupService;
     private final InternalEmployeeAccessService internalEmployeeAccessService;
 
@@ -629,6 +632,74 @@ public class CommissionManagementController {
         boolean isPrivileged = isManagerOrAdmin(authentication);
         RejectCommissionDraftResponse response = rejectCommissionDraftUseCase.execute(id, request, callerStaffId, isPrivileged);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Approve draft and post Deliverable Card to customer chat (CMS-17)",
+            description = "Allows the assigned STAFF (or MANAGER/ADMIN override) to approve the Designer's latest draft pending staff review. Marks the draft STAFF_APPROVED, inserts a DELIVERABLE_CARD message into the commission chat, sets auto_complete_at to now + 7 days and transitions the commission from INTERNAL_REVIEW to PREVIEW_DELIVERED.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "Draft approved and Deliverable Card posted; commission transitioned to PREVIEW_DELIVERED",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PostDeliverableCardResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request - Invalid commission ID",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized - Missing or expired bearer token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden - Caller role is not STAFF/MANAGER/ADMIN, or ticket is locked by another staff member",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Commission request not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict - Commission is not in INTERNAL_REVIEW status or has no draft pending staff review",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PostMapping("/{id}/deliverable-card")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<PostDeliverableCardResponse>> postDeliverableCard(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "105")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id
+    ) {
+        Long callerStaffId = requireEmployeeId(authentication, MANAGEMENT_ROLES);
+        boolean isPrivileged = isManagerOrAdmin(authentication);
+        PostDeliverableCardResponse response = postDeliverableCardUseCase.execute(id, callerStaffId, isPrivileged);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
     private Long requireEmployeeId(Authentication authentication, Set<String> allowedRoles) {
