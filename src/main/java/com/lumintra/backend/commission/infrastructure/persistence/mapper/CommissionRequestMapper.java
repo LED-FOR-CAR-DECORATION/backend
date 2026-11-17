@@ -8,6 +8,7 @@ import com.lumintra.backend.commission.api.response.CustomerCommissionListRespon
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
+import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
@@ -393,6 +394,19 @@ public class CommissionRequestMapper {
                 .reviewedAt(submission.getReviewedAt())
                 .deliveredAt(submission.getDeliveredAt())
                 .createdAt(submission.getCreatedAt())
+                .build();
+    }
+
+    public RejectCommissionResponse toRejectResponse(CommissionRequestEntity entity) {
+        if (entity == null) {
+            return null;
+        }
+        return RejectCommissionResponse.builder()
+                .commissionId(entity.getCommissionId())
+                .status(entity.getStatus())
+                .assignedStaffId(entity.getAssignedStaffId())
+                .rejectionReason(entity.getRejectionReason())
+                .updatedAt(entity.getUpdatedAt())
                 .build();
     }
 }
