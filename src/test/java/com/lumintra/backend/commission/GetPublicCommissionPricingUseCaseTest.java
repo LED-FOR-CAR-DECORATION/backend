@@ -199,8 +199,8 @@ class GetPublicCommissionPricingUseCaseTest {
         CommissionPriceOptionEntity activeOpt = CommissionPriceOptionEntity.builder()
                 .optionId(1L)
                 .config(config)
-                .optionCode("16x16")
-                .optionLabel("16x16")
+                .optionCode("32x32")
+                .optionLabel("32x32")
                 .basePrice(BigDecimal.ZERO)
                 .isActive(true)
                 .displayOrder(1)
@@ -229,7 +229,7 @@ class GetPublicCommissionPricingUseCaseTest {
 
         assertThat(response.rules()).hasSize(1);
         assertThat(response.rules().get(0).options()).hasSize(1);
-        assertThat(response.rules().get(0).options().get(0).optionCode()).isEqualTo("16x16");
+        assertThat(response.rules().get(0).options().get(0).optionCode()).isEqualTo("32x32");
     }
 
     @Test
