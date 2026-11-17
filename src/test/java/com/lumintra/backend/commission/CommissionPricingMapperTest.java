@@ -2,6 +2,7 @@ package com.lumintra.backend.commission;
 
 import com.lumintra.backend.commission.api.response.PricingRuleResponse;
 import com.lumintra.backend.commission.api.response.PricingTierSummaryResponse;
+import com.lumintra.backend.commission.domain.model.ModifierType;
 import com.lumintra.backend.commission.domain.model.SelectionType;
 import com.lumintra.backend.commission.domain.model.UiType;
 import com.lumintra.backend.commission.domain.service.PricingInvariantValidator;
@@ -24,8 +25,8 @@ class CommissionPricingMapperTest {
     private final CommissionPricingMapper mapper = new CommissionPricingMapper(new PricingInvariantValidator());
 
     @Test
-    @DisplayName("CMS-01 Mapper UTCID01 [N]: toTierSummaryResponse maps preset tier and orders active bundledOptionIds")
-    void toTierSummaryResponse_mapsPresetTierWithOrderedBundledIds() {
+    @DisplayName("CMS-01 Mapper UTCID01 [N]: toTierSummaryResponse maps preset tier, modifier calculation, triggerOptionIds, and ordered bundledOptionIds")
+    void toTierSummaryResponse_mapsPresetTierWithOrderedBundledAndTriggerIds() {
         CommissionPricingTierEntity customTier = CommissionPricingTierEntity.builder()
                 .tierId(3L)
                 .tierCode("CUSTOM")
@@ -43,68 +44,102 @@ class CommissionPricingMapperTest {
         CommissionPriceConfigEntity matrixConfig = CommissionPriceConfigEntity.builder()
                 .configId(2L)
                 .ruleKey("MATRIX_SIZE")
+                .isBasePrice(true)
                 .displayOrder(2)
                 .build();
+        CommissionPriceConfigEntity subjectConfig = CommissionPriceConfigEntity.builder()
+                .configId(3L)
+                .ruleKey("ART_SUBJECT")
+                .displayOrder(0)
+                .build();
 
-        CommissionPriceOptionEntity opt1 = CommissionPriceOptionEntity.builder()
+        CommissionPriceOptionEntity matrixOpt = CommissionPriceOptionEntity.builder()
                 .optionId(20L)
                 .config(matrixConfig)
                 .optionCode("32x32")
-                .basePrice(new BigDecimal("20000.00"))
+                .modifierType(ModifierType.FLAT_ADD)
+                .basePrice(new BigDecimal("30000.00"))
                 .isActive(true)
                 .displayOrder(1)
                 .build();
-        CommissionPriceOptionEntity opt2 = CommissionPriceOptionEntity.builder()
+        CommissionPriceOptionEntity gifOpt = CommissionPriceOptionEntity.builder()
                 .optionId(10L)
                 .config(formatConfig)
-                .optionCode("STATIC_IMAGE")
-                .basePrice(BigDecimal.ZERO)
+                .optionCode("ANIMATED_GIF")
+                .modifierType(ModifierType.BASE_PERCENT)
+                .basePrice(new BigDecimal("50.00"))
+                .isActive(true)
+                .displayOrder(1)
+                .build();
+        CommissionPriceOptionEntity charTrigger = CommissionPriceOptionEntity.builder()
+                .optionId(5L)
+                .config(subjectConfig)
+                .optionCode("CHARACTER_ART")
                 .isActive(true)
                 .displayOrder(1)
                 .build();
 
-        CommissionPricingTierEntity basicTier = CommissionPricingTierEntity.builder()
-                .tierId(1L)
-                .tierCode("BASIC")
-                .name("Basic")
-                .description("Basic package")
-                .basePrice(new BigDecimal("79000.00"))
-                .maxRevisions(1)
+        CommissionPricingTierEntity advTier = CommissionPricingTierEntity.builder()
+                .tierId(2L)
+                .tierCode("ADVANCED")
+                .name("Advanced")
+                .description("Advanced package")
+                .basePrice(new BigDecimal("149000.00"))
+                .maxRevisions(3)
                 .isCustom(false)
                 .isActive(true)
-                .displayOrder(1)
-                .includedOptions(Set.of(opt1, opt2))
+                .displayOrder(2)
+                .triggerOptions(Set.of(charTrigger))
+                .includedOptions(Set.of(matrixOpt, gifOpt))
                 .build();
 
-        PricingTierSummaryResponse summary = mapper.toTierSummaryResponse(basicTier, customTier);
+        PricingTierSummaryResponse summary = mapper.toTierSummaryResponse(advTier, customTier);
 
         assertThat(summary).isNotNull();
-        assertThat(summary.tierCode()).isEqualTo("BASIC");
-        assertThat(summary.customCalculatedPrice()).isEqualByComparingTo("120000.00");
-        assertThat(summary.savingsAmount()).isEqualByComparingTo("41000.00");
+        assertThat(summary.tierCode()).isEqualTo("ADVANCED");
+        // 100k base + 30k matrix (130k base) + 50% of 130k (65k) = 195k
+        assertThat(summary.customCalculatedPrice()).isEqualByComparingTo("195000.00");
+        assertThat(summary.savingsAmount()).isEqualByComparingTo("46000.00");
+        assertThat(summary.triggerOptionIds()).containsExactly(5L);
         assertThat(summary.bundledOptionIds()).containsExactly(10L, 20L);
     }
 
     @Test
-    @DisplayName("CMS-01 Mapper UTCID02 [B]: toPricingRuleResponse handles null input and missing dependency lookup safely")
-    void toPricingRuleResponse_handlesNullAndUnresolvedDependency() {
+    @DisplayName("CMS-01 Mapper UTCID02 [B]: Handles null inputs, quantity bounds, isBasePrice, and missing dependency lookup safely")
+    void toPricingRuleResponse_handlesQuantityAndUnresolvedDependency() {
         assertThat(mapper.toPricingRuleResponse(null, Map.of())).isNull();
         assertThat(mapper.toTierSummaryResponse(null, null)).isNull();
         assertThat(mapper.toPricingOptionResponse(null)).isNull();
 
-        CommissionPriceConfigEntity dependentConfig = CommissionPriceConfigEntity.builder()
-                .configId(2L)
-                .ruleKey("FRAME_RANGE")
-                .name("Frame Range")
-                .selectionType(SelectionType.SINGLE_SELECT)
-                .uiType(UiType.RADIO)
+        CommissionPriceConfigEntity qtyConfig = CommissionPriceConfigEntity.builder()
+                .configId(4L)
+                .ruleKey("VARIANTS")
+                .name("Time-of-Day Variants")
+                .selectionType(SelectionType.QUANTITY)
+                .uiType(UiType.NUMBER)
+                .isBasePrice(false)
+                .minQuantity(0)
+                .maxQuantity(5)
                 .dependsOnOptionId(999L)
-                .options(List.of())
+                .options(List.of(CommissionPriceOptionEntity.builder()
+                        .optionId(50L)
+                        .optionCode("EXTRA_VARIANT")
+                        .optionLabel("Extra variant")
+                        .modifierType(ModifierType.FLAT_ADD)
+                        .basePrice(new BigDecimal("30000.00"))
+                        .isActive(true)
+                        .displayOrder(1)
+                        .build()))
                 .build();
 
-        PricingRuleResponse response = mapper.toPricingRuleResponse(dependentConfig, Map.of());
+        PricingRuleResponse response = mapper.toPricingRuleResponse(qtyConfig, Map.of());
+        assertThat(response.selectionType()).isEqualTo(SelectionType.QUANTITY);
+        assertThat(response.uiType()).isEqualTo(UiType.NUMBER);
+        assertThat(response.isBasePrice()).isFalse();
+        assertThat(response.minQuantity()).isEqualTo(0);
+        assertThat(response.maxQuantity()).isEqualTo(5);
         assertThat(response.dependsOnOptionId()).isEqualTo(999L);
         assertThat(response.dependsOnRuleKey()).isNull();
-        assertThat(response.dependsOnOptionCode()).isNull();
+        assertThat(response.options().get(0).modifierType()).isEqualTo(ModifierType.FLAT_ADD);
     }
 }

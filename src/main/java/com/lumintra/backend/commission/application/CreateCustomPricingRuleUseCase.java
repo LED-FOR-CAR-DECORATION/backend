@@ -46,6 +46,7 @@ public class CreateCustomPricingRuleUseCase {
                         .map(o -> CommissionPriceOptionEntity.create(
                                 o.optionCode(),
                                 o.optionLabel(),
+                                o.modifierType(),
                                 o.basePrice(),
                                 o.isDefault(),
                                 o.displayOrder()
@@ -58,6 +59,9 @@ public class CreateCustomPricingRuleUseCase {
                 request.description(),
                 request.selectionType(),
                 request.uiType(),
+                request.isBasePrice(),
+                request.minQuantity(),
+                request.maxQuantity(),
                 request.isRequired(),
                 request.displayOrder(),
                 request.dependsOnOptionId(),
@@ -77,7 +81,11 @@ public class CreateCustomPricingRuleUseCase {
                 .orElseThrow(() -> new InvalidRuleConfigurationException(
                         String.format("Parent option with ID %d does not exist.", dependsOnOptionId)
                 ));
-        invariantValidator.validateParentOptionDependency(parentOption);
+        invariantValidator.validateParentOptionDependency(
+                null,
+                parentOption,
+                id -> optionRepository.findById(id).orElse(null)
+        );
         return parentOption;
     }
 }

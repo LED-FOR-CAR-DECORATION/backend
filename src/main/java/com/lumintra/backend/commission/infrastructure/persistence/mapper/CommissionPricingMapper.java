@@ -67,6 +67,7 @@ public class CommissionPricingMapper {
 
         BigDecimal customCalculatedPrice;
         BigDecimal savingsAmount;
+        List<Long> triggerOptionIds = extractSortedOptionIds(tier.getTriggerOptions(), true);
         List<Long> bundledOptionIds;
 
         if (tier.isCustom()) {
@@ -76,19 +77,7 @@ public class CommissionPricingMapper {
         } else {
             customCalculatedPrice = invariantValidator.calculateCustomCalculatedPrice(tier, customTier);
             savingsAmount = invariantValidator.calculateSavingsAmount(customCalculatedPrice, tier.getBasePrice());
-
-            Set<CommissionPriceOptionEntity> options = tier.getIncludedOptions() != null
-                    ? tier.getIncludedOptions()
-                    : Collections.emptySet();
-
-            bundledOptionIds = options.stream()
-                    .filter(CommissionPriceOptionEntity::isActive)
-                    .sorted(Comparator.comparing((CommissionPriceOptionEntity o) -> o.getConfig() != null ? o.getConfig().getDisplayOrder() : 0)
-                            .thenComparing(CommissionPriceOptionEntity::getDisplayOrder)
-                            .thenComparing(o -> o.getOptionId() != null ? o.getOptionId() : 0L))
-                    .map(CommissionPriceOptionEntity::getOptionId)
-                    .filter(Objects::nonNull)
-                    .toList();
+            bundledOptionIds = extractSortedOptionIds(tier.getIncludedOptions(), true);
         }
 
         return PricingTierSummaryResponse.builder()
@@ -102,6 +91,7 @@ public class CommissionPricingMapper {
                 .maxRevisions(tier.getMaxRevisions())
                 .isCustom(tier.isCustom())
                 .displayOrder(tier.getDisplayOrder())
+                .triggerOptionIds(triggerOptionIds)
                 .bundledOptionIds(bundledOptionIds)
                 .build();
     }
@@ -144,6 +134,9 @@ public class CommissionPricingMapper {
                 .description(config.getDescription())
                 .selectionType(config.getSelectionType())
                 .uiType(config.getUiType())
+                .isBasePrice(config.isBasePrice())
+                .minQuantity(config.getMinQuantity())
+                .maxQuantity(config.getMaxQuantity())
                 .isRequired(config.isRequired())
                 .isSystem(config.isSystem())
                 .displayOrder(config.getDisplayOrder())
@@ -162,6 +155,7 @@ public class CommissionPricingMapper {
                 .optionId(option.getOptionId())
                 .optionCode(option.getOptionCode())
                 .optionLabel(option.getOptionLabel())
+                .modifierType(option.resolvedModifierType())
                 .basePrice(option.getBasePrice())
                 .isDefault(option.isDefault())
                 .displayOrder(option.getDisplayOrder())
@@ -199,6 +193,7 @@ public class CommissionPricingMapper {
 
         BigDecimal customCalculatedPrice;
         BigDecimal savingsAmount;
+        List<Long> triggerOptionIds = extractSortedOptionIds(tier.getTriggerOptions(), false);
         int includedOptionCount = tier.isCustom() || tier.getIncludedOptions() == null
                 ? 0
                 : tier.getIncludedOptions().size();
@@ -225,6 +220,7 @@ public class CommissionPricingMapper {
                 .isCustom(tier.isCustom())
                 .isActive(tier.isActive())
                 .displayOrder(tier.getDisplayOrder())
+                .triggerOptionIds(triggerOptionIds)
                 .includedOptionCount(includedOptionCount)
                 .build();
     }
@@ -242,6 +238,9 @@ public class CommissionPricingMapper {
                 .configName(config.getName())
                 .selectionType(config.getSelectionType())
                 .uiType(config.getUiType())
+                .isBasePrice(config.isBasePrice())
+                .minQuantity(config.getMinQuantity())
+                .maxQuantity(config.getMaxQuantity())
                 .isRequired(config.isRequired())
                 .isSystem(config.isSystem())
                 .isActive(config.isActive())
@@ -261,6 +260,7 @@ public class CommissionPricingMapper {
         BigDecimal customCalculatedPrice;
         BigDecimal savingsAmount;
         BigDecimal discountPercent;
+        List<Long> triggerOptionIds = extractSortedOptionIds(tier.getTriggerOptions(), false);
         List<BundledOptionResponse> bundledOptions;
         List<Long> bundledOptionIds;
 
@@ -276,9 +276,7 @@ public class CommissionPricingMapper {
                     : Collections.emptySet();
 
             bundledOptions = options.stream()
-                    .sorted(Comparator.comparing((CommissionPriceOptionEntity o) -> o.getConfig() != null ? o.getConfig().getDisplayOrder() : 0)
-                            .thenComparing(CommissionPriceOptionEntity::getDisplayOrder)
-                            .thenComparing(o -> o.getOptionId() != null ? o.getOptionId() : 0L))
+                    .sorted(optionOrdering())
                     .map(this::toBundledOptionResponse)
                     .toList();
 
@@ -312,6 +310,7 @@ public class CommissionPricingMapper {
                 .isCustom(tier.isCustom())
                 .isActive(tier.isActive())
                 .displayOrder(tier.getDisplayOrder())
+                .triggerOptionIds(triggerOptionIds)
                 .includedOptions(bundledOptions)
                 .includedOptionIds(bundledOptionIds)
                 .build();
@@ -351,6 +350,9 @@ public class CommissionPricingMapper {
                 .description(config.getDescription())
                 .selectionType(config.getSelectionType())
                 .uiType(config.getUiType())
+                .isBasePrice(config.isBasePrice())
+                .minQuantity(config.getMinQuantity())
+                .maxQuantity(config.getMaxQuantity())
                 .isRequired(config.isRequired())
                 .isSystem(config.isSystem())
                 .isActive(config.isActive())
@@ -370,6 +372,7 @@ public class CommissionPricingMapper {
                 .optionId(option.getOptionId())
                 .optionCode(option.getOptionCode())
                 .optionLabel(option.getOptionLabel())
+                .modifierType(option.resolvedModifierType())
                 .basePrice(option.getBasePrice())
                 .isDefault(option.isDefault())
                 .isActive(option.isActive())
@@ -387,7 +390,27 @@ public class CommissionPricingMapper {
                 .configName(option.getConfig() != null ? option.getConfig().getName() : null)
                 .optionCode(option.getOptionCode())
                 .optionLabel(option.getOptionLabel())
+                .modifierType(option.resolvedModifierType())
                 .basePrice(option.getBasePrice())
                 .build();
+    }
+
+    private List<Long> extractSortedOptionIds(Set<CommissionPriceOptionEntity> optionSet, boolean activeOnly) {
+        if (optionSet == null || optionSet.isEmpty()) {
+            return List.of();
+        }
+        return optionSet.stream()
+                .filter(Objects::nonNull)
+                .filter(opt -> !activeOnly || opt.isActive())
+                .sorted(optionOrdering())
+                .map(CommissionPriceOptionEntity::getOptionId)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private Comparator<CommissionPriceOptionEntity> optionOrdering() {
+        return Comparator.comparing((CommissionPriceOptionEntity o) -> o.getConfig() != null ? o.getConfig().getDisplayOrder() : 0)
+                .thenComparing(CommissionPriceOptionEntity::getDisplayOrder)
+                .thenComparing(o -> o.getOptionId() != null ? o.getOptionId() : 0L);
     }
 }

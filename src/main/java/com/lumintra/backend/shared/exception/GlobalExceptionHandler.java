@@ -19,6 +19,10 @@ import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
 import com.lumintra.backend.shared.exception.store.TagAlreadyExistsException;
+import com.lumintra.backend.shared.exception.store.SubscriptionNotFoundException;
+import com.lumintra.backend.shared.exception.store.InvalidSubscriptionDurationException;
+import com.lumintra.backend.shared.exception.store.PlanCodeAlreadyExistsException;
+import com.lumintra.backend.shared.exception.store.BundleNotFoundException;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -61,6 +65,21 @@ public class GlobalExceptionHandler {
         var status = ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
                 ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND;
         return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
+    }
+
+    @ExceptionHandler(SubscriptionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionNotFound(SubscriptionNotFoundException ex) {
+        return buildErrorResponse("SUBSCRIPTION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidSubscriptionDurationException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSubscriptionDuration(InvalidSubscriptionDurationException ex) {
+        return buildErrorResponse("INVALID_SUBSCRIPTION_DURATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(PlanCodeAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handlePlanCodeAlreadyExists(PlanCodeAlreadyExistsException ex) {
+        return buildErrorResponse("PLAN_CODE_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(BundleNotFoundException.class)
@@ -188,6 +207,31 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DeviceOwnershipMismatchException.class)
     public ResponseEntity<ErrorResponse> handleDeviceOwnershipMismatch(DeviceOwnershipMismatchException ex) {
         return buildErrorResponse("DEVICE_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(WarrantyNotActiveException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyNotActive(WarrantyNotActiveException ex) {
+        return buildErrorResponse("WARRANTY_NOT_ACTIVE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(WarrantyExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyExpired(WarrantyExpiredException ex) {
+        return buildErrorResponse("WARRANTY_EXPIRED", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(WarrantyClaimConflictException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyClaimConflict(WarrantyClaimConflictException ex) {
+        return buildErrorResponse("WARRANTY_CLAIM_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(WarrantyClaimNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleWarrantyClaimNotFound(WarrantyClaimNotFoundException ex) {
+        return buildErrorResponse("WARRANTY_CLAIM_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidWarrantyTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidWarrantyTransition(InvalidWarrantyTransitionException ex) {
+        return buildErrorResponse("INVALID_WARRANTY_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(OrderNotDeliveredYetException.class)

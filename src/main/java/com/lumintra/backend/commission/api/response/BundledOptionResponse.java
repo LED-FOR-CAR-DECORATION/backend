@@ -1,5 +1,6 @@
 package com.lumintra.backend.commission.api.response;
 
+import com.lumintra.backend.commission.domain.model.ModifierType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -23,6 +24,9 @@ public record BundledOptionResponse(
         @Schema(description = "Option display label", example = "Ảnh tĩnh (PNG)")
         String optionLabel,
 
-        @Schema(description = "Standard individual option price in VND", example = "0.00")
+        @Schema(description = "Pricing modifier calculation type", example = "FLAT_ADD")
+        ModifierType modifierType,
+
+        @Schema(description = "Standard individual option price in VND or percentage points", example = "0.00")
         BigDecimal basePrice
 ) {}

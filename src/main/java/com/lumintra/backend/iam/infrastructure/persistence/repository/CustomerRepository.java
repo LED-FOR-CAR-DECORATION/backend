@@ -55,4 +55,17 @@ public interface CustomerRepository extends JpaRepository<CustomerEntity, Long> 
             ORDER BY a.accountId ASC
             """)
     List<CustomerProfileSnapshot> findFirstCustomerProfile(Pageable pageable);
+
+    @Query("""
+            SELECT a.accountId
+            FROM UserAccountEntity a
+            LEFT JOIN CustomerEntity c ON c.accountId = a.accountId
+            WHERE a.accountType = com.lumintra.backend.iam.domain.model.AccountType.CUSTOMER
+              AND (
+                  LOWER(a.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(c.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR (c.phone IS NOT NULL AND c.phone LIKE CONCAT('%', :keyword, '%'))
+              )
+            """)
+    List<Long> findCustomerIdsByKeyword(@Param("keyword") String keyword);
 }

@@ -14,6 +14,7 @@ import com.lumintra.backend.commission.application.CreateCustomPricingRuleUseCas
 import com.lumintra.backend.commission.application.GetManagementCommissionPricingUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingRuleDetailUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingTierDetailUseCase;
+import com.lumintra.backend.commission.domain.model.ModifierType;
 import com.lumintra.backend.commission.domain.model.SelectionType;
 import com.lumintra.backend.commission.domain.model.UiType;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
@@ -99,6 +100,7 @@ class CommissionManagementPricingControllerTest {
                 .isCustom(false)
                 .isActive(true)
                 .displayOrder(1)
+                .triggerOptionIds(List.of())
                 .includedOptionCount(1)
                 .build();
 
@@ -113,6 +115,7 @@ class CommissionManagementPricingControllerTest {
                 .isCustom(false)
                 .isActive(false)
                 .displayOrder(3)
+                .triggerOptionIds(List.of())
                 .includedOptionCount(0)
                 .build();
 
@@ -245,6 +248,7 @@ class CommissionManagementPricingControllerTest {
                 .configName("Format Type")
                 .optionCode("STATIC_IMAGE")
                 .optionLabel("Static PNG")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(BigDecimal.ZERO)
                 .build();
 
@@ -262,6 +266,7 @@ class CommissionManagementPricingControllerTest {
                 .isCustom(false)
                 .isActive(true)
                 .displayOrder(1)
+                .triggerOptionIds(List.of())
                 .includedOptions(List.of(bundledOption))
                 .includedOptionIds(List.of(1L))
                 .build();
@@ -312,6 +317,7 @@ class CommissionManagementPricingControllerTest {
                 .optionId(1L)
                 .optionCode("STATIC_IMAGE")
                 .optionLabel("Ảnh tĩnh (PNG)")
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(BigDecimal.ZERO)
                 .isDefault(true)
                 .isActive(true)
@@ -325,6 +331,7 @@ class CommissionManagementPricingControllerTest {
                 .description("Select format")
                 .selectionType(SelectionType.SINGLE_SELECT)
                 .uiType(UiType.RADIO)
+                .isBasePrice(false)
                 .isRequired(true)
                 .isSystem(true)
                 .isActive(true)
@@ -624,5 +631,70 @@ class CommissionManagementPricingControllerTest {
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         verifyNoInteractions(createCustomPricingRuleUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-30 Controller UTCID10 [N]: Creating QUANTITY rule with NUMBER UI, bounds, and modifierType returns 201 CREATED")
+    void createCustomPricingRule_quantityRule_returns201CreatedWithBoundsAndModifier() throws Exception {
+        CreatePricingRuleRequest request = CreatePricingRuleRequest.builder()
+                .configCode("WEATHER_VARIANTS")
+                .configName("Biến thể thời tiết / thời gian")
+                .selectionType(SelectionType.QUANTITY)
+                .uiType(UiType.NUMBER)
+                .minQuantity(0)
+                .maxQuantity(5)
+                .isRequired(false)
+                .displayOrder(8)
+                .options(List.of(
+                        CreatePricingOptionRequest.builder()
+                                .optionCode("EXTRA_VARIANT")
+                                .optionLabel("Mỗi biến thể bổ sung")
+                                .modifierType(ModifierType.FLAT_ADD)
+                                .basePrice(new BigDecimal("35000.00"))
+                                .displayOrder(1)
+                                .build()
+                ))
+                .build();
+
+        ManagementPricingRuleResponse createdDto = ManagementPricingRuleResponse.builder()
+                .configId(105L)
+                .configCode("WEATHER_VARIANTS")
+                .configName("Biến thể thời tiết / thời gian")
+                .selectionType(SelectionType.QUANTITY)
+                .uiType(UiType.NUMBER)
+                .isBasePrice(false)
+                .minQuantity(0)
+                .maxQuantity(5)
+                .isRequired(false)
+                .isSystem(false)
+                .isActive(true)
+                .displayOrder(8)
+                .options(List.of(
+                        ManagementPricingOptionResponse.builder()
+                                .optionId(205L)
+                                .optionCode("EXTRA_VARIANT")
+                                .optionLabel("Mỗi biến thể bổ sung")
+                                .modifierType(ModifierType.FLAT_ADD)
+                                .basePrice(new BigDecimal("35000.00"))
+                                .isDefault(false)
+                                .isActive(true)
+                                .displayOrder(1)
+                                .build()
+                ))
+                .build();
+
+        when(createCustomPricingRuleUseCase.execute(any(CreatePricingRuleRequest.class))).thenReturn(createdDto);
+
+        mockMvc.perform(post(RULES_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.selectionType").value("QUANTITY"))
+                .andExpect(jsonPath("$.data.uiType").value("NUMBER"))
+                .andExpect(jsonPath("$.data.minQuantity").value(0))
+                .andExpect(jsonPath("$.data.maxQuantity").value(5))
+                .andExpect(jsonPath("$.data.options[0].modifierType").value("FLAT_ADD"));
     }
 }

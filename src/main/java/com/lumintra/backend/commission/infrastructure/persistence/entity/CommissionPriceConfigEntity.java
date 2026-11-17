@@ -4,6 +4,7 @@ import com.lumintra.backend.commission.domain.model.SelectionType;
 import com.lumintra.backend.commission.domain.model.UiType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -45,6 +46,17 @@ public class CommissionPriceConfigEntity {
     @Column(name = "ui_type", nullable = false, length = 50)
     private UiType uiType;
 
+    @Column(name = "is_base_price", nullable = false)
+    @ColumnDefault("false")
+    @Builder.Default
+    private boolean isBasePrice = false;
+
+    @Column(name = "min_quantity")
+    private Integer minQuantity;
+
+    @Column(name = "max_quantity")
+    private Integer maxQuantity;
+
     @Column(name = "is_required", nullable = false)
     @Builder.Default
     private boolean isRequired = false;
@@ -83,6 +95,9 @@ public class CommissionPriceConfigEntity {
             String description,
             SelectionType selectionType,
             UiType uiType,
+            Boolean isBasePrice,
+            Integer minQuantity,
+            Integer maxQuantity,
             Boolean isRequired,
             Integer displayOrder,
             Long dependsOnOptionId,
@@ -93,6 +108,9 @@ public class CommissionPriceConfigEntity {
                 .description(description)
                 .selectionType(selectionType)
                 .uiType(uiType)
+                .isBasePrice(Boolean.TRUE.equals(isBasePrice))
+                .minQuantity(minQuantity)
+                .maxQuantity(maxQuantity)
                 .isRequired(Boolean.TRUE.equals(isRequired))
                 .isSystem(false)
                 .isActive(true)

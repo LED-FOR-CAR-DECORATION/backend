@@ -1,5 +1,6 @@
 package com.lumintra.backend.commission.api.request;
 
+import com.lumintra.backend.commission.domain.model.ModifierType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -25,7 +26,10 @@ public record CreatePricingOptionRequest(
         @Schema(description = "Optional custom value string", example = "DETAILED", nullable = true)
         String optionValue,
 
-        @Schema(description = "Price surcharge in VND (must be non-negative)", example = "50000.00")
+        @Schema(description = "Deterministic price calculation modifier (FLAT_ADD, BASE_PERCENT, SUBTOTAL_PERCENT). Defaults to FLAT_ADD.", example = "FLAT_ADD", nullable = true)
+        ModifierType modifierType,
+
+        @Schema(description = "Price surcharge in VND (for FLAT_ADD / unit rate) or percentage points (for BASE_PERCENT / SUBTOTAL_PERCENT)", example = "50000.00")
         @NotNull(message = "Base price is required")
         @DecimalMin(value = "0.00", message = "Base price must be greater than or equal to 0.00")
         BigDecimal basePrice,

@@ -73,13 +73,14 @@ class CommissionManagementPricingSwaggerTest {
                 ManagementPricingTierSummaryResponse.class,
                 "tierId", "tierCode", "tierName", "basePrice",
                 "customCalculatedPrice", "savingsAmount", "maxRevisions",
-                "isCustom", "isActive", "displayOrder", "includedOptionCount"
+                "isCustom", "isActive", "displayOrder", "triggerOptionIds", "includedOptionCount"
         );
 
         assertSchemaOnRecordAndFields(
                 ManagementPricingRuleSummaryResponse.class,
                 "configId", "configCode", "configName", "selectionType",
-                "uiType", "isRequired", "isSystem", "isActive",
+                "uiType", "isBasePrice", "minQuantity", "maxQuantity",
+                "isRequired", "isSystem", "isActive",
                 "displayOrder", "dependsOnOptionId", "optionCount"
         );
 
@@ -88,35 +89,37 @@ class CommissionManagementPricingSwaggerTest {
                 "tierId", "tierCode", "tierName", "description",
                 "basePrice", "customCalculatedPrice", "savingsAmount", "discountPercent",
                 "maxRevisions", "extraRevisionFeePercent", "isCustom", "isActive", "displayOrder",
-                "includedOptions", "includedOptionIds"
+                "triggerOptionIds", "includedOptions", "includedOptionIds"
         );
 
         assertSchemaOnRecordAndFields(
                 BundledOptionResponse.class,
-                "optionId", "ruleKey", "configName", "optionCode", "optionLabel", "basePrice"
+                "optionId", "ruleKey", "configName", "optionCode", "optionLabel", "modifierType", "basePrice"
         );
 
         assertSchemaOnRecordAndFields(
                 ManagementPricingRuleResponse.class,
                 "configId", "configCode", "configName", "description",
-                "selectionType", "uiType", "isRequired", "isSystem", "isActive", "displayOrder",
+                "selectionType", "uiType", "isBasePrice", "minQuantity", "maxQuantity",
+                "isRequired", "isSystem", "isActive", "displayOrder",
                 "dependsOnOptionId", "dependsOnRuleKey", "dependsOnOptionCode", "options"
         );
 
         assertSchemaOnRecordAndFields(
                 ManagementPricingOptionResponse.class,
-                "optionId", "optionCode", "optionLabel", "basePrice", "isDefault", "isActive", "displayOrder"
+                "optionId", "optionCode", "optionLabel", "modifierType", "basePrice", "isDefault", "isActive", "displayOrder"
         );
 
         assertSchemaOnRecordAndFields(
                 CreatePricingRuleRequest.class,
                 "configCode", "configName", "description",
-                "selectionType", "uiType", "isRequired", "displayOrder", "dependsOnOptionId", "options"
+                "selectionType", "uiType", "isBasePrice", "minQuantity", "maxQuantity",
+                "isRequired", "displayOrder", "dependsOnOptionId", "options"
         );
 
         assertSchemaOnRecordAndFields(
                 CreatePricingOptionRequest.class,
-                "optionCode", "optionLabel", "optionValue", "basePrice", "isDefault", "displayOrder"
+                "optionCode", "optionLabel", "optionValue", "modifierType", "basePrice", "isDefault", "displayOrder"
         );
     }
 

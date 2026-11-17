@@ -29,6 +29,7 @@ class ManagedBundleControllerTest {
 
     @Autowired MockMvc mvc;
     @MockitoBean ManagedBundleRepository bundles;
+    @MockitoBean com.lumintra.backend.store.application.GetBundleDetailUseCase getBundleDetailUseCase;
     @MockitoBean JwtTokenProvider jwt;
     @MockitoBean TokenBlacklistService blacklist;
     @MockitoBean Tracer tracer;

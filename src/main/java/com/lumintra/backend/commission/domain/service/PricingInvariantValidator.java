@@ -1,24 +1,30 @@
 package com.lumintra.backend.commission.domain.service;
 
+import com.lumintra.backend.commission.domain.model.ModifierType;
 import com.lumintra.backend.commission.domain.model.SelectionType;
 import com.lumintra.backend.commission.domain.model.UiType;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionPriceConfigEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionPriceOptionEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionPricingTierEntity;
 import com.lumintra.backend.shared.exception.commission.InvalidRuleConfigurationException;
-import com.lumintra.backend.shared.exception.commission.PricingTierInvariantViolationException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class PricingInvariantValidator {
+
+    public static final int MAX_DEPENDENCY_DEPTH = 5;
+    private static final BigDecimal HUNDRED = new BigDecimal("100");
+    private static final BigDecimal MAX_PERCENT_VALUE = new BigDecimal("1000.00");
 
     public String normalizeAndValidateRuleKey(String rawCode) {
         String ruleKey = rawCode != null ? rawCode.trim() : "";
@@ -28,18 +34,70 @@ public class PricingInvariantValidator {
         return ruleKey;
     }
 
-    public void validateParentOptionDependency(CommissionPriceOptionEntity parentOption) {
-        if (parentOption != null
-                && parentOption.getConfig() != null
-                && parentOption.getConfig().getDependsOnOptionId() != null) {
+    /**
+     * Validates multi-level acyclic conditional dependency up to {@link #MAX_DEPENDENCY_DEPTH} levels.
+     */
+    public void validateParentOptionDependency(
+            Long currentConfigId,
+            CommissionPriceOptionEntity parentOption,
+            Function<Long, CommissionPriceOptionEntity> optionLookup) {
+        if (parentOption == null) {
+            return;
+        }
+
+        CommissionPriceConfigEntity parentConfig = parentOption.getConfig();
+        if (parentConfig == null) {
+            throw new InvalidRuleConfigurationException("Parent option must belong to a valid pricing rule.");
+        }
+        if (parentConfig.getSelectionType() != SelectionType.SINGLE_SELECT
+                && parentConfig.getSelectionType() != SelectionType.MULTI_SELECT) {
             throw new InvalidRuleConfigurationException(
-                    "Multi-level conditional dependencies are not supported. Parent rule is already dependent on another option."
+                    "Conditional dependencies can only target options from SINGLE_SELECT or MULTI_SELECT rules."
             );
+        }
+
+        Set<Long> visitedConfigIds = new HashSet<>();
+        if (currentConfigId != null) {
+            visitedConfigIds.add(currentConfigId);
+        }
+
+        CommissionPriceOptionEntity cursor = parentOption;
+        int depth = 0;
+
+        while (cursor != null) {
+            depth++;
+            if (depth > MAX_DEPENDENCY_DEPTH) {
+                throw new InvalidRuleConfigurationException(
+                        String.format("Conditional dependency depth exceeds maximum allowed depth of %d.", MAX_DEPENDENCY_DEPTH)
+                );
+            }
+
+            CommissionPriceConfigEntity cursorConfig = cursor.getConfig();
+            if (cursorConfig != null && cursorConfig.getConfigId() != null) {
+                if (!visitedConfigIds.add(cursorConfig.getConfigId())) {
+                    throw new InvalidRuleConfigurationException(
+                            "Circular conditional dependency detected in pricing rule hierarchy."
+                    );
+                }
+            }
+
+            Long nextParentOptionId = cursorConfig != null ? cursorConfig.getDependsOnOptionId() : null;
+            if (nextParentOptionId == null) {
+                break;
+            }
+            if (Objects.equals(nextParentOptionId, cursor.getOptionId())) {
+                throw new InvalidRuleConfigurationException(
+                        "Circular conditional dependency detected in pricing rule hierarchy."
+                );
+            }
+
+            cursor = optionLookup != null ? optionLookup.apply(nextParentOptionId) : null;
         }
     }
 
     /**
-     * Enforces revision limits, mandatory CUSTOM tier rules, and preset pricing invariants.
+     * Enforces revision limits, mandatory CUSTOM tier rules, non-negative preset basePrice,
+     * and transitive dependency integrity (without forcing CUSTOM price > preset price).
      */
     public void validateTier(CommissionPricingTierEntity tier, CommissionPricingTierEntity customTier) {
         if (tier == null) {
@@ -48,30 +106,21 @@ public class PricingInvariantValidator {
 
         validateRevisionLimit(tier);
 
+        if (tier.getBasePrice() == null || tier.getBasePrice().compareTo(BigDecimal.ZERO) < 0) {
+            throw new InvalidRuleConfigurationException(
+                    String.format("Tier '%s' basePrice must be non-negative.", tier.getTierCode())
+            );
+        }
+
         if (tier.isCustom()) {
             if (!tier.isActive()) {
                 throw new InvalidRuleConfigurationException("CUSTOM tier cannot be deactivated.");
-            }
-            if (tier.getBasePrice() == null || tier.getBasePrice().compareTo(BigDecimal.ZERO) < 0) {
-                throw new InvalidRuleConfigurationException("CUSTOM tier basePrice must be non-negative.");
             }
             return;
         }
 
         if (tier.isActive()) {
-            if (customTier == null || !customTier.isActive()) {
-                throw new InvalidRuleConfigurationException("Active CUSTOM tier reference is required to validate preset tier.");
-            }
-
             validateTierDependencyIntegrity(tier);
-
-            BigDecimal customCalculatedPrice = calculateCustomCalculatedPrice(tier, customTier);
-            if (tier.getBasePrice() == null || tier.getBasePrice().compareTo(customCalculatedPrice) >= 0) {
-                throw new PricingTierInvariantViolationException(String.format(
-                    "Pricing invariant violated for tier '%s': basePrice (%s) must be strictly less than custom calculated price (%s).",
-                    tier.getTierCode(), tier.getBasePrice(), customCalculatedPrice
-                ));
-            }
         }
     }
 
@@ -89,20 +138,57 @@ public class PricingInvariantValidator {
         }
     }
 
+    /**
+     * Calculates what the same bundled option selection would cost under CUSTOM mode using the
+     * 3-modifier pipeline: Base -> BASE_PERCENT -> non-base FLAT_ADD -> SUBTOTAL_PERCENT.
+     */
     public BigDecimal calculateCustomCalculatedPrice(CommissionPricingTierEntity tier, CommissionPricingTierEntity customTier) {
         if (customTier == null || customTier.getBasePrice() == null) {
             throw new InvalidRuleConfigurationException("Active CUSTOM tier reference is required to calculate custom price.");
         }
-        BigDecimal base = customTier.getBasePrice();
-        if (tier == null || tier.getIncludedOptions() == null) {
-            return base;
+        BigDecimal customBase = customTier.getBasePrice();
+        if (tier == null || tier.getIncludedOptions() == null || tier.getIncludedOptions().isEmpty()) {
+            return customBase;
         }
-        BigDecimal optionsSum = tier.getIncludedOptions().stream()
+
+        List<CommissionPriceOptionEntity> activeOptions = tier.getIncludedOptions().stream()
+                .filter(Objects::nonNull)
                 .filter(CommissionPriceOptionEntity::isActive)
+                .toList();
+
+        BigDecimal baseAddons = activeOptions.stream()
+                .filter(o -> o.resolvedModifierType() == ModifierType.FLAT_ADD
+                        && o.getConfig() != null && o.getConfig().isBasePrice())
                 .map(CommissionPriceOptionEntity::getBasePrice)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return base.add(optionsSum);
+
+        BigDecimal baseTotal = customBase.add(baseAddons);
+
+        BigDecimal basePercentAddons = activeOptions.stream()
+                .filter(o -> o.resolvedModifierType() == ModifierType.BASE_PERCENT)
+                .map(CommissionPriceOptionEntity::getBasePrice)
+                .filter(Objects::nonNull)
+                .map(pct -> baseTotal.multiply(pct).divide(HUNDRED, 2, RoundingMode.HALF_UP))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal nonBaseFlatAddons = activeOptions.stream()
+                .filter(o -> o.resolvedModifierType() == ModifierType.FLAT_ADD
+                        && (o.getConfig() == null || !o.getConfig().isBasePrice()))
+                .map(CommissionPriceOptionEntity::getBasePrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal runningSubtotal = baseTotal.add(basePercentAddons).add(nonBaseFlatAddons);
+
+        BigDecimal subtotalPercentAddons = activeOptions.stream()
+                .filter(o -> o.resolvedModifierType() == ModifierType.SUBTOTAL_PERCENT)
+                .map(CommissionPriceOptionEntity::getBasePrice)
+                .filter(Objects::nonNull)
+                .map(pct -> runningSubtotal.multiply(pct).divide(HUNDRED, 2, RoundingMode.HALF_UP))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return runningSubtotal.add(subtotalPercentAddons);
     }
 
     public BigDecimal calculateSavingsAmount(BigDecimal customCalculatedPrice, BigDecimal finalTierPrice) {
@@ -119,12 +205,12 @@ public class PricingInvariantValidator {
                 || savingsAmount.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
-        return savingsAmount.multiply(new BigDecimal("100"))
+        return savingsAmount.multiply(HUNDRED)
                 .divide(customCalculatedPrice, 2, RoundingMode.HALF_UP);
     }
 
     /**
-     * Validates compatibility between selectionType and uiType, non-priced text inputs, and default option count.
+     * Validates primitive/UI compatibility, base-bucket flags, quantity bounds, option modifiers, and defaults.
      */
     public void validateRule(CommissionPriceConfigEntity config) {
         if (config == null) {
@@ -134,34 +220,14 @@ public class PricingInvariantValidator {
         SelectionType sel = config.getSelectionType();
         UiType ui = config.getUiType();
 
-        if (sel == SelectionType.SINGLE_SELECT && (ui != UiType.RADIO && ui != UiType.DROPDOWN)) {
-            throw new InvalidRuleConfigurationException("SINGLE_SELECT rules only support RADIO or DROPDOWN UI types.");
-        }
-        if (sel == SelectionType.MULTI_SELECT && ui != UiType.CHECKBOX) {
-            throw new InvalidRuleConfigurationException("MULTI_SELECT rules only support CHECKBOX UI type.");
-        }
-        if (sel == SelectionType.TEXT_INPUT && ui != UiType.TEXT) {
-            throw new InvalidRuleConfigurationException("TEXT_INPUT rules only support TEXT UI type.");
-        }
-
-        if (sel == SelectionType.TEXT_INPUT && config.getOptions() != null) {
-            boolean hasNonZeroPrice = config.getOptions().stream()
-                    .anyMatch(o -> o.getBasePrice() != null && o.getBasePrice().compareTo(BigDecimal.ZERO) > 0);
-            if (hasNonZeroPrice) {
-                throw new InvalidRuleConfigurationException("TEXT_INPUT rules cannot have priced options.");
-            }
-        }
-
-        if (sel == SelectionType.SINGLE_SELECT && config.getOptions() != null) {
-            long defaultCount = config.getOptions().stream().filter(CommissionPriceOptionEntity::isDefault).count();
-            if (defaultCount > 1) {
-                throw new InvalidRuleConfigurationException("SINGLE_SELECT rule cannot have multiple default options.");
-            }
-        }
+        validateUiCompatibility(sel, ui);
+        validateBasePriceEligibility(config, sel);
+        validateQuantityBounds(config, sel);
+        validateOptionsForSelectionType(config, sel);
     }
 
     /**
-     * Validates invariants required when creating a custom commission pricing rule.
+     * Validates all invariants required when creating a custom commission pricing rule.
      */
     public void validateCustomRuleCreation(CommissionPriceConfigEntity config) {
         if (config == null) {
@@ -176,11 +242,16 @@ public class PricingInvariantValidator {
 
         List<CommissionPriceOptionEntity> options = config.getOptions();
         int optionCount = options != null ? options.size() : 0;
+        SelectionType sel = config.getSelectionType();
 
-        if ((config.getSelectionType() == SelectionType.SINGLE_SELECT
-                || config.getSelectionType() == SelectionType.MULTI_SELECT) && optionCount < 1) {
+        if ((sel == SelectionType.SINGLE_SELECT || sel == SelectionType.MULTI_SELECT) && optionCount < 1) {
             throw new InvalidRuleConfigurationException(
-                    String.format("%s rules must have at least one option.", config.getSelectionType())
+                    String.format("%s rules must have at least one option.", sel)
+            );
+        }
+        if (sel == SelectionType.QUANTITY && optionCount != 1) {
+            throw new InvalidRuleConfigurationException(
+                    "QUANTITY rules must define exactly one unit rate option."
             );
         }
 
@@ -198,30 +269,142 @@ public class PricingInvariantValidator {
                 }
                 if (option.getBasePrice() != null && option.getBasePrice().compareTo(BigDecimal.ZERO) < 0) {
                     throw new InvalidRuleConfigurationException(
-                            String.format("Option price must be non-negative for option: %s", option.getOptionCode().trim())
+                            String.format("Option price/rate must be non-negative for option: %s", option.getOptionCode().trim())
                     );
                 }
             }
         }
     }
 
-    private void validateTierDependencyIntegrity(CommissionPricingTierEntity tier) {
-        if (tier.getIncludedOptions() == null) {
+    private void validateUiCompatibility(SelectionType sel, UiType ui) {
+        if (sel == SelectionType.SINGLE_SELECT && (ui != UiType.RADIO && ui != UiType.DROPDOWN)) {
+            throw new InvalidRuleConfigurationException("SINGLE_SELECT rules only support RADIO or DROPDOWN UI types.");
+        }
+        if (sel == SelectionType.MULTI_SELECT && ui != UiType.CHECKBOX) {
+            throw new InvalidRuleConfigurationException("MULTI_SELECT rules only support CHECKBOX UI type.");
+        }
+        if (sel == SelectionType.QUANTITY && ui != UiType.NUMBER) {
+            throw new InvalidRuleConfigurationException("QUANTITY rules only support NUMBER UI type.");
+        }
+        if (sel == SelectionType.TEXT_INPUT && ui != UiType.TEXT) {
+            throw new InvalidRuleConfigurationException("TEXT_INPUT rules only support TEXT UI type.");
+        }
+    }
+
+    private void validateBasePriceEligibility(CommissionPriceConfigEntity config, SelectionType sel) {
+        if (!config.isBasePrice()) {
+            return;
+        }
+        if (sel != SelectionType.SINGLE_SELECT && sel != SelectionType.MULTI_SELECT) {
+            throw new InvalidRuleConfigurationException(
+                    "isBasePrice can only be enabled on SINGLE_SELECT or MULTI_SELECT rules."
+            );
+        }
+        if (config.getOptions() != null) {
+            boolean hasNonFlatModifier = config.getOptions().stream()
+                    .anyMatch(o -> o.resolvedModifierType() != ModifierType.FLAT_ADD);
+            if (hasNonFlatModifier) {
+                throw new InvalidRuleConfigurationException(
+                        "Rules marked with isBasePrice only allow FLAT_ADD options."
+                );
+            }
+        }
+    }
+
+    private void validateQuantityBounds(CommissionPriceConfigEntity config, SelectionType sel) {
+        Integer minQ = config.getMinQuantity();
+        Integer maxQ = config.getMaxQuantity();
+
+        if (sel == SelectionType.QUANTITY) {
+            if (minQ == null || maxQ == null) {
+                throw new InvalidRuleConfigurationException(
+                        "QUANTITY rules require both minQuantity and maxQuantity."
+                );
+            }
+            if (minQ < 0) {
+                throw new InvalidRuleConfigurationException("minQuantity must be greater than or equal to 0.");
+            }
+            if (maxQ < 1 || maxQ < minQ) {
+                throw new InvalidRuleConfigurationException(
+                        "maxQuantity must be at least 1 and greater than or equal to minQuantity."
+                );
+            }
+        } else if (minQ != null || maxQ != null) {
+            throw new InvalidRuleConfigurationException(
+                    "minQuantity and maxQuantity are only supported for QUANTITY rules."
+            );
+        }
+    }
+
+    private void validateOptionsForSelectionType(CommissionPriceConfigEntity config, SelectionType sel) {
+        List<CommissionPriceOptionEntity> options = config.getOptions();
+        if (options == null) {
             return;
         }
 
-        Set<Long> bundledOptionIds = tier.getIncludedOptions().stream()
+        if (sel == SelectionType.TEXT_INPUT) {
+            boolean hasPriceOrPercent = options.stream()
+                    .anyMatch(o -> o.resolvedModifierType() != ModifierType.FLAT_ADD
+                            || (o.getBasePrice() != null && o.getBasePrice().compareTo(BigDecimal.ZERO) > 0));
+            if (hasPriceOrPercent) {
+                throw new InvalidRuleConfigurationException("TEXT_INPUT rules cannot have priced or percentage options.");
+            }
+        }
+
+        if (sel == SelectionType.QUANTITY) {
+            boolean hasPercentModifier = options.stream()
+                    .anyMatch(o -> o.resolvedModifierType() != ModifierType.FLAT_ADD);
+            if (hasPercentModifier) {
+                throw new InvalidRuleConfigurationException("QUANTITY rules only support FLAT_ADD unit pricing.");
+            }
+        }
+
+        if (sel == SelectionType.SINGLE_SELECT) {
+            long defaultCount = options.stream().filter(CommissionPriceOptionEntity::isDefault).count();
+            if (defaultCount > 1) {
+                throw new InvalidRuleConfigurationException("SINGLE_SELECT rule cannot have multiple default options.");
+            }
+        }
+
+        for (CommissionPriceOptionEntity opt : options) {
+            ModifierType mt = opt.resolvedModifierType();
+            if ((mt == ModifierType.BASE_PERCENT || mt == ModifierType.SUBTOTAL_PERCENT)
+                    && opt.getBasePrice() != null
+                    && opt.getBasePrice().compareTo(MAX_PERCENT_VALUE) > 0) {
+                throw new InvalidRuleConfigurationException(
+                        String.format("Percentage modifier exceeds maximum allowed value (%s%%) for option: %s",
+                                MAX_PERCENT_VALUE, opt.getOptionCode())
+                );
+            }
+        }
+    }
+
+    private void validateTierDependencyIntegrity(CommissionPricingTierEntity tier) {
+        if (tier.getIncludedOptions() == null || tier.getIncludedOptions().isEmpty()) {
+            return;
+        }
+
+        Set<Long> satisfiedOptionIds = new HashSet<>();
+        tier.getIncludedOptions().stream()
                 .map(CommissionPriceOptionEntity::getOptionId)
                 .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+                .forEach(satisfiedOptionIds::add);
+
+        Set<CommissionPriceOptionEntity> triggers = tier.getTriggerOptions() != null
+                ? tier.getTriggerOptions()
+                : Collections.emptySet();
+        triggers.stream()
+                .map(CommissionPriceOptionEntity::getOptionId)
+                .filter(Objects::nonNull)
+                .forEach(satisfiedOptionIds::add);
 
         for (CommissionPriceOptionEntity option : tier.getIncludedOptions()) {
             if (option.getConfig() != null) {
                 Long parentOptionId = option.getConfig().getDependsOnOptionId();
-                if (parentOptionId != null && !bundledOptionIds.contains(parentOptionId)) {
+                if (parentOptionId != null && !satisfiedOptionIds.contains(parentOptionId)) {
                     throw new InvalidRuleConfigurationException(String.format(
-                        "Tier '%s' bundles dependent option '%s' without bundling its prerequisite option (ID %d).",
-                        tier.getTierCode(), option.getOptionCode(), parentOptionId
+                            "Tier '%s' bundles dependent option '%s' without bundling or triggering on its prerequisite option (ID %d).",
+                            tier.getTierCode(), option.getOptionCode(), parentOptionId
                     ));
                 }
             }

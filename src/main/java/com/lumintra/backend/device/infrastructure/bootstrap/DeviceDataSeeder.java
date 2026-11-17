@@ -108,7 +108,7 @@ public class DeviceDataSeeder implements ApplicationRunner {
         seededCount += seedIfAbsent(LedInstanceEntity.createWithState(
                 secondaryModel.getModelId(),
                 SEED_SERIAL_IN_TRANSIT,
-                "AA:BB:CC:11:22:03",
+                "24:D7:EB:18:24:0E",
                 "REV_1_0",
                 null,
                 null,
