@@ -75,6 +75,7 @@ class SubmitCommissionUseCaseTest {
     private CommissionRequestMapper commissionRequestMapper;
     private ObjectMapper objectMapper;
     private SubmitCommissionUseCase useCase;
+    private com.lumintra.backend.payment.domain.service.PaymentSessionPort paymentSessions;
 
     private CommissionPriceConfigEntity formatTypeConfig;
     private CommissionPriceOptionEntity staticImageOption;
@@ -97,6 +98,7 @@ class SubmitCommissionUseCaseTest {
         pricingInvariantValidator = new PricingInvariantValidator();
         commissionRequestMapper = new CommissionRequestMapper();
         objectMapper = new ObjectMapper();
+        paymentSessions = org.mockito.Mockito.mock(com.lumintra.backend.payment.domain.service.PaymentSessionPort.class);
         useCase = new SubmitCommissionUseCase(
                 tierRepository,
                 configRepository,
@@ -106,7 +108,8 @@ class SubmitCommissionUseCaseTest {
                 mediaUrlValidator,
                 pricingInvariantValidator,
                 commissionRequestMapper,
-                objectMapper
+                objectMapper,
+                new ApproveCommissionRequestUseCase(commissionRequestRepository, paymentSessions)
         );
 
         formatTypeConfig = CommissionPriceConfigEntity.builder()
@@ -267,6 +270,29 @@ class SubmitCommissionUseCaseTest {
                     entity.setCommissionId(id);
                     return entity;
                 });
+    }
+
+    @Test
+    void immediateCheckoutUsesTheSavedCommissionAndServerTotal() {
+        mockDefaultRules();
+        when(tierRepository.findActiveWithIncludedOptionsByTierCode("ADVANCED")).thenReturn(Optional.of(advancedTier));
+        when(staffAutoAssignmentService.assignNextAvailableStaff()).thenReturn(3L);
+        stubSaveCommission(501L);
+        when(paymentSessions.createSession(any())).thenReturn(
+                com.lumintra.backend.payment.api.response.PaymentSessionResponse.builder().paymentCode("CMS501").build());
+
+        var request = new SubmitCommissionRequest("Neon Cat", "Design brief", "ADVANCED", List.of(
+                new SelectedOptionItem(1L, List.of(11L), null, null),
+                new SelectedOptionItem(2L, List.of(21L), null, null),
+                new SelectedOptionItem(3L, List.of(30L), null, null)), "32x32", List.of(), true);
+
+        var response = useCase.execute(42L, request);
+        assertThat(response.status()).isEqualTo(CommissionStatus.PENDING_PAYMENT);
+        assertThat(response.activePaymentCode()).isEqualTo("CMS501");
+        var command = ArgumentCaptor.forClass(com.lumintra.backend.payment.domain.model.CreatePaymentSessionCommand.class);
+        verify(paymentSessions).createSession(command.capture());
+        assertThat(command.getValue().targetId()).isEqualTo(501L);
+        assertThat(command.getValue().amount()).isEqualByComparingTo("149000.00");
     }
 
     @Test

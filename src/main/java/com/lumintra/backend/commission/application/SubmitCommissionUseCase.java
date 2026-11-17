@@ -11,6 +11,7 @@ import com.lumintra.backend.commission.domain.model.CommissionPriceBreakdownSnap
 import com.lumintra.backend.commission.domain.model.CommissionPriceBreakdownSnapshot.OptionSnapshot;
 import com.lumintra.backend.commission.domain.model.CommissionPriceBreakdownSnapshot.RuleSelectionSnapshot;
 import com.lumintra.backend.commission.domain.model.SelectionType;
+import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.service.PricingInvariantValidator;
 import com.lumintra.backend.commission.domain.service.PricingInvariantValidator.ModifierCalculationResult;
 import com.lumintra.backend.commission.domain.service.PricingInvariantValidator.ModifierLineInput;
@@ -37,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -68,6 +70,7 @@ public class SubmitCommissionUseCase {
     private final PricingInvariantValidator pricingInvariantValidator;
     private final CommissionRequestMapper commissionRequestMapper;
     private final ObjectMapper objectMapper;
+    private final ApproveCommissionRequestUseCase commissionApproval;
 
     @Transactional
     public CustomerCommissionDetailResponse execute(Long customerId, SubmitCommissionRequest request) {
@@ -145,6 +148,13 @@ public class SubmitCommissionUseCase {
         List<CommissionAttachmentEntity> savedAttachments = persistAttachments(
                 commission.getCommissionId(), request.attachments()
         );
+        if (Boolean.TRUE.equals(request.openPaymentImmediately())) {
+            if (initialPrice.signum() == 0) {
+                commission.setStatus(CommissionStatus.PAID);
+            } else {
+                commissionApproval.openPayment(commission, initialPrice, Instant.now());
+            }
+        }
 
         log.info("Commission request created successfully [commissionId={}] [customerId={}] [status={}] [assignedStaffId={}]",
                 commission.getCommissionId(), customerId, commission.getStatus(), assignedStaffId);

@@ -66,8 +66,6 @@ public class ApproveCommissionRequestUseCase {
 
         // AC02: Set quote_expires_at (+72h), invoke paymentSessionPort.createSession, store active_payment_code
         Instant now = Instant.now();
-        Instant quoteExpiresAt = now.plus(DEFAULT_QUOTE_EXPIRATION);
-        commission.setQuoteExpiresAt(quoteExpiresAt);
 
         BigDecimal payableAmount = commission.getTotalPrice() != null && commission.getTotalPrice().compareTo(BigDecimal.ZERO) > 0
                 ? commission.getTotalPrice()
@@ -75,19 +73,7 @@ public class ApproveCommissionRequestUseCase {
                     ? commission.getInitialPrice()
                     : BigDecimal.ZERO);
 
-        CreatePaymentSessionCommand paymentCommand = new CreatePaymentSessionCommand(
-                PaymentTargetType.COMMISSION_INITIAL,
-                commission.getCommissionId(),
-                commission.getCustomerId(),
-                payableAmount,
-                DEFAULT_QUOTE_EXPIRATION
-        );
-
-        PaymentSessionResponse paymentSession = paymentSessionPort.createSession(paymentCommand);
-        commission.setActivePaymentCode(paymentSession.paymentCode());
-
-        // AC03: Transition PENDING_REVIEW to PENDING_PAYMENT
-        commission.setStatus(CommissionStatus.PENDING_PAYMENT);
+        PaymentSessionResponse paymentSession = openPayment(commission, payableAmount, now);
 
         CommissionRequestEntity saved = commissionRequestRepository.save(commission);
 
@@ -105,5 +91,15 @@ public class ApproveCommissionRequestUseCase {
                 .paymentSession(paymentSession)
                 .updatedAt(saved.getUpdatedAt() != null ? saved.getUpdatedAt() : now)
                 .build();
+    }
+
+    PaymentSessionResponse openPayment(CommissionRequestEntity commission, BigDecimal amount, Instant now) {
+        PaymentSessionResponse session = paymentSessionPort.createSession(new CreatePaymentSessionCommand(
+                PaymentTargetType.COMMISSION_INITIAL, commission.getCommissionId(), commission.getCustomerId(),
+                amount, DEFAULT_QUOTE_EXPIRATION));
+        commission.setQuoteExpiresAt(now.plus(DEFAULT_QUOTE_EXPIRATION));
+        commission.setActivePaymentCode(session.paymentCode());
+        commission.setStatus(CommissionStatus.PENDING_PAYMENT);
+        return session;
     }
 }

@@ -18,4 +18,5 @@ public interface EmployeeLookupService {
     java.util.List<Long> findActiveStaffEmployeeIds();
 
     boolean isActiveDesigner(Long employeeId);
+    java.util.List<EmployeeProfileSnapshot> findActiveDesigners();
 }

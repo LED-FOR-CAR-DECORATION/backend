@@ -34,8 +34,16 @@ public record SubmitCommissionRequest(
 
         @Schema(description = "Optional reference image attachments uploaded beforehand via media service (max 5)")
         @Size(max = 5, message = "A maximum of 5 reference attachments is allowed")
-        List<@Valid CommissionAttachmentItemRequest> attachments
+        List<@Valid CommissionAttachmentItemRequest> attachments,
+        @Schema(description = "Open initial checkout immediately for the server-calculated price")
+        Boolean openPaymentImmediately
 ) {
+    public SubmitCommissionRequest(String title, String description, String tierCode,
+                                   List<SelectedOptionItem> selectedOptions, String targetMatrixDimensions,
+                                   List<CommissionAttachmentItemRequest> attachments) {
+        this(title, description, tierCode, selectedOptions, targetMatrixDimensions, attachments, false);
+    }
+
     public SubmitCommissionRequest {
         if (title != null) {
             title = title.trim();
