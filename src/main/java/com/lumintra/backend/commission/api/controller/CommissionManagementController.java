@@ -1,9 +1,11 @@
 package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
+import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
@@ -27,6 +29,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,6 +46,7 @@ public class CommissionManagementController {
 
     private final GetStaffCommissionQueueUseCase getStaffCommissionQueueUseCase;
     private final GetManagementCommissionDetailUseCase getManagementCommissionDetailUseCase;
+    private final ApproveCommissionRequestUseCase approveCommissionRequestUseCase;
 
     @Operation(
             summary = "View staff commission queue",
@@ -193,6 +197,74 @@ public class CommissionManagementController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @Operation(
+            summary = "Approve commission request and open payment",
+            description = "Approves a customer artwork design request in PENDING_REVIEW state, locks assigned staff, sets quote expiration (+72h), initializes a SePay VietQR payment session, and transitions state to PENDING_PAYMENT.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Commission approved successfully and payment opened",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApproveCommissionResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid commission identifier (e.g. id <= 0)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized - Missing or expired bearer token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden - Caller role is not STAFF/MANAGER/ADMIN, or ticket is locked by another staff member",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Commission request not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict - Commission request is not in PENDING_REVIEW status",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PostMapping("/{id}/approve")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<ApproveCommissionResponse>> approveCommission(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "105")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id
+    ) {
+        Long callerStaffId = extractCallerId(authentication);
+        boolean isPrivileged = isManagerOrAdmin(authentication);
+        ApproveCommissionResponse response = approveCommissionRequestUseCase.execute(id, callerStaffId, isPrivileged);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     private Long extractCallerId(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new AuthenticationCredentialsNotFoundException("Authentication is required.");
@@ -220,5 +292,14 @@ public class CommissionManagementController {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_STAFF")
                             || a.getAuthority().equals("ROLE_MANAGER")
                             || a.getAuthority().equals("ROLE_ADMIN"));
+    }
+
+    private boolean isManagerOrAdmin(Authentication authentication) {
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return false;
+        }
+        return authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")
+                            || a.getAuthority().equals("ROLE_MANAGER"));
     }
 }

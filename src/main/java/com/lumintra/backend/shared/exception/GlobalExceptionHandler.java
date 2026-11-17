@@ -461,6 +461,16 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("PRESET_SELECTION_MISMATCH", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(CommissionStaffLockException.class)
+    public ResponseEntity<ErrorResponse> handleCommissionStaffLock(CommissionStaffLockException ex) {
+        return buildErrorResponse("COMMISSION_STAFF_LOCKED", ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(InvalidCommissionStatusTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCommissionStatusTransition(InvalidCommissionStatusTransitionException ex) {
+        return buildErrorResponse("INVALID_COMMISSION_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     // Helpers
     private ResponseEntity<ErrorResponse> buildErrorResponse(String code, String message, HttpStatus status) {
         return buildErrorResponse(code, message, status, List.of());

@@ -1,19 +1,26 @@
 package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
+import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
+import com.lumintra.backend.payment.api.response.PaymentSessionResponse;
+import com.lumintra.backend.payment.domain.model.PaymentStatus;
+import com.lumintra.backend.payment.domain.model.PaymentTargetType;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
+import com.lumintra.backend.shared.exception.commission.CommissionStaffLockException;
+import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
@@ -42,6 +49,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -56,6 +64,7 @@ class CommissionManagementControllerTest {
 
     private static final String QUEUE_PATH = "/api/management/commissions";
     private static final String DETAIL_PATH = "/api/management/commissions/{id}";
+    private static final String APPROVE_PATH = "/api/management/commissions/{id}/approve";
 
     @Autowired
     private MockMvc mockMvc;
@@ -65,6 +74,9 @@ class CommissionManagementControllerTest {
 
     @MockitoBean
     private GetManagementCommissionDetailUseCase getManagementCommissionDetailUseCase;
+
+    @MockitoBean
+    private ApproveCommissionRequestUseCase approveCommissionRequestUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -474,5 +486,160 @@ class CommissionManagementControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 
         verifyNoInteractions(getManagementCommissionDetailUseCase);
+    }
+
+    // =========================================================================
+    // CMS-09: Approve Commission Request Tests (POST /api/management/commissions/{id}/approve)
+    // =========================================================================
+
+    private ApproveCommissionResponse createSampleApproveResponse() {
+        PaymentSessionResponse paymentSession = PaymentSessionResponse.builder()
+                .paymentId(501L)
+                .paymentCode("LMTCMS105")
+                .targetType(PaymentTargetType.COMMISSION_INITIAL)
+                .targetId(105L)
+                .gateway("SEPAY")
+                .qrUrl("https://qr.sepay.vn/img?des=LMTCMS105")
+                .bankName("MBBank")
+                .accountNumber("0123456789")
+                .accountName("LUMINTRA")
+                .amount(BigDecimal.valueOf(420000.00))
+                .status(PaymentStatus.PENDING)
+                .expiresAt(Instant.parse("2026-11-20T11:00:00Z"))
+                .createdAt(Instant.parse("2026-11-17T11:00:00Z"))
+                .build();
+
+        return ApproveCommissionResponse.builder()
+                .commissionId(105L)
+                .title("Cyberpunk Neon Cat Animation")
+                .status(CommissionStatus.PENDING_PAYMENT)
+                .assignedStaffId(3L)
+                .quoteExpiresAt(Instant.parse("2026-11-20T11:00:00Z"))
+                .activePaymentCode("LMTCMS105")
+                .payableAmount(BigDecimal.valueOf(420000.00))
+                .paymentSession(paymentSession)
+                .updatedAt(Instant.parse("2026-11-17T11:00:00Z"))
+                .build();
+    }
+
+    @Test
+    @DisplayName("CMS-09 Controller UTCID01 [N]: Staff approves commission successfully (200 OK)")
+    void approveCommission_asStaff_returns200Ok() throws Exception {
+        ApproveCommissionResponse response = createSampleApproveResponse();
+        when(approveCommissionRequestUseCase.execute(eq(105L), eq(3L), eq(false))).thenReturn(response);
+
+        mockMvc.perform(post(APPROVE_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105))
+                .andExpect(jsonPath("$.data.status").value("PENDING_PAYMENT"))
+                .andExpect(jsonPath("$.data.assignedStaffId").value(3))
+                .andExpect(jsonPath("$.data.activePaymentCode").value("LMTCMS105"))
+                .andExpect(jsonPath("$.data.payableAmount").value(420000.00))
+                .andExpect(jsonPath("$.data.paymentSession.paymentCode").value("LMTCMS105"))
+                .andExpect(jsonPath("$.data.paymentSession.qrUrl").value("https://qr.sepay.vn/img?des=LMTCMS105"));
+    }
+
+    @Test
+    @DisplayName("CMS-09 Controller UTCID02 [N]: Manager approves commission successfully with privileged override flag (200 OK)")
+    void approveCommission_asManager_returns200Ok() throws Exception {
+        ApproveCommissionResponse response = createSampleApproveResponse();
+        when(approveCommissionRequestUseCase.execute(eq(105L), eq(2L), eq(true))).thenReturn(response);
+
+        mockMvc.perform(post(APPROVE_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("2").roles("MANAGER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105))
+                .andExpect(jsonPath("$.data.status").value("PENDING_PAYMENT"));
+    }
+
+    @Test
+    @DisplayName("CMS-09 Controller UTCID03 [N]: Admin approves commission successfully with privileged override flag (200 OK)")
+    void approveCommission_asAdmin_returns200Ok() throws Exception {
+        ApproveCommissionResponse response = createSampleApproveResponse();
+        when(approveCommissionRequestUseCase.execute(eq(105L), eq(1L), eq(true))).thenReturn(response);
+
+        mockMvc.perform(post(APPROVE_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105));
+    }
+
+    @Test
+    @DisplayName("CMS-09 Controller UTCID04 [A]: Unauthenticated request returns 401 UNAUTHORIZED")
+    void approveCommission_unauthenticated_returns401Unauthorized() throws Exception {
+        mockMvc.perform(post(APPROVE_PATH, 105L)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(approveCommissionRequestUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-09 Controller UTCID05 [A]: Unauthorized role (CUSTOMER) receives 403 FORBIDDEN")
+    void approveCommission_customerRole_returns403Forbidden() throws Exception {
+        mockMvc.perform(post(APPROVE_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("12").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(approveCommissionRequestUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-09 Controller UTCID06 [A]: Commission staff lock violation returns 403 FORBIDDEN (COMMISSION_STAFF_LOCKED)")
+    void approveCommission_staffLockViolation_returns403Forbidden() throws Exception {
+        when(approveCommissionRequestUseCase.execute(eq(105L), eq(3L), eq(false)))
+                .thenThrow(new CommissionStaffLockException("Commission request 105 is locked by assigned staff 7"));
+
+        mockMvc.perform(post(APPROVE_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMISSION_STAFF_LOCKED"))
+                .andExpect(jsonPath("$.message").value("Commission request 105 is locked by assigned staff 7"));
+    }
+
+    @Test
+    @DisplayName("CMS-09 Controller UTCID07 [A]: Commission ticket not found returns 404 NOT_FOUND (COMMISSION_NOT_FOUND)")
+    void approveCommission_notFound_returns404NotFound() throws Exception {
+        when(approveCommissionRequestUseCase.execute(eq(999L), eq(3L), eq(false)))
+                .thenThrow(new CommissionNotFoundException("Commission request not found with id: 999"));
+
+        mockMvc.perform(post(APPROVE_PATH, 999L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COMMISSION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CMS-09 Controller UTCID08 [A]: Invalid commission status transition returns 409 CONFLICT (INVALID_COMMISSION_STATUS_TRANSITION)")
+    void approveCommission_invalidStatus_returns409Conflict() throws Exception {
+        when(approveCommissionRequestUseCase.execute(eq(105L), eq(3L), eq(false)))
+                .thenThrow(new InvalidCommissionStatusTransitionException(
+                        "Cannot approve commission in status IN_PROGRESS (must be PENDING_REVIEW)"));
+
+        mockMvc.perform(post(APPROVE_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_COMMISSION_STATUS_TRANSITION"))
+                .andExpect(jsonPath("$.message").value("Cannot approve commission in status IN_PROGRESS (must be PENDING_REVIEW)"));
+    }
+
+    @Test
+    @DisplayName("CMS-09 Controller UTCID09 [B]: Non-positive commission ID parameter returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void approveCommission_nonPositiveId_returns400BadRequest() throws Exception {
+        mockMvc.perform(post(APPROVE_PATH, 0L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(approveCommissionRequestUseCase);
     }
 }
