@@ -2,6 +2,7 @@ package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.request.RejectCommissionDraftRequest;
 import com.lumintra.backend.commission.api.request.RejectCommissionRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.request.UploadCommissionDraftRequest;
@@ -10,6 +11,7 @@ import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
+import com.lumintra.backend.commission.api.response.RejectCommissionDraftResponse;
 import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
@@ -19,6 +21,7 @@ import com.lumintra.backend.commission.application.AssignCommissionToDesignerUse
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
+import com.lumintra.backend.commission.application.RejectCommissionDraftUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.UploadCommissionDraftUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
@@ -70,6 +73,7 @@ public class CommissionManagementController {
     private final GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
     private final RejectCommissionRequestUseCase rejectCommissionRequestUseCase;
     private final UploadCommissionDraftUseCase uploadCommissionDraftUseCase;
+    private final RejectCommissionDraftUseCase rejectCommissionDraftUseCase;
     private final EmployeeLookupService employeeLookupService;
     private final InternalEmployeeAccessService internalEmployeeAccessService;
 
@@ -556,6 +560,75 @@ public class CommissionManagementController {
         Long designerId = requireEmployeeId(authentication, DESIGNER_ROLES);
         UploadCommissionDraftResponse response = uploadCommissionDraftUseCase.execute(id, request, designerId);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Reject designer draft internally (CMS-16)",
+            description = "Allows assigned staff (or manager/admin) to reject a designer's draft internally during INTERNAL_REVIEW. Marks the draft STAFF_REJECTED, consumes 0 customer revision quota, and transitions the commission to INTERNAL_REVISION_REQUIRED.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Draft rejected internally and commission transitioned to INTERNAL_REVISION_REQUIRED",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request - Validation failure (blank reviewNote or non-positive IDs)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized - Missing or expired bearer token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden - Caller lacks STAFF/MANAGER/ADMIN role or ticket is locked by another staff member",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Commission request or pending draft submission not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict - Commission is not in INTERNAL_REVIEW status or submission is not PENDING_STAFF_REVIEW",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PostMapping("/{id}/reviews")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<RejectCommissionDraftResponse>> rejectCommissionDraft(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "105")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody RejectCommissionDraftRequest request
+    ) {
+        Long callerStaffId = requireEmployeeId(authentication, MANAGEMENT_ROLES);
+        boolean isPrivileged = isManagerOrAdmin(authentication);
+        RejectCommissionDraftResponse response = rejectCommissionDraftUseCase.execute(id, request, callerStaffId, isPrivileged);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     private Long requireEmployeeId(Authentication authentication, Set<String> allowedRoles) {
