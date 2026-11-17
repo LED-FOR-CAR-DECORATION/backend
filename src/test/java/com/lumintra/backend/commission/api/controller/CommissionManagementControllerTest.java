@@ -7,6 +7,7 @@ import java.util.Set;
 
 import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.request.RejectCommissionRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
 import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
@@ -15,6 +16,7 @@ import com.lumintra.backend.commission.api.response.DesignerCommissionQueueRespo
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
+import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
@@ -22,6 +24,7 @@ import com.lumintra.backend.commission.application.AssignCommissionToDesignerUse
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
+import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
@@ -90,6 +93,7 @@ class CommissionManagementControllerTest {
     private static final String DETAIL_PATH = "/api/management/commissions/{id}";
     private static final String APPROVE_PATH = "/api/management/commissions/{id}/approve";
     private static final String ASSIGN_PATH = "/api/management/commissions/{id}/assign";
+    private static final String REJECT_PATH = "/api/management/commissions/{id}/reject";
 
     @Autowired
     private MockMvc mockMvc;
@@ -108,6 +112,9 @@ class CommissionManagementControllerTest {
 
     @MockitoBean
     private GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
+
+    @MockitoBean
+    private RejectCommissionRequestUseCase rejectCommissionRequestUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -885,5 +892,181 @@ class CommissionManagementControllerTest {
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         verifyNoInteractions(getDesignerCommissionQueueUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-08 Controller UTCID01 [N]: Staff rejects commission in PENDING_REVIEW -> returns 200 OK with RejectCommissionResponse")
+    void rejectCommission_validStaff_returns200Ok() throws Exception {
+        RejectCommissionResponse response = RejectCommissionResponse.builder()
+                .commissionId(105L)
+                .status(CommissionStatus.CANCELLED)
+                .assignedStaffId(3L)
+                .rejectionReason("Artwork request exceeds hardware matrix limits.")
+                .updatedAt(Instant.parse("2026-11-17T14:30:00Z"))
+                .build();
+
+        when(rejectCommissionRequestUseCase.execute(eq(105L), any(RejectCommissionRequest.class), eq(3L), eq(false)))
+                .thenReturn(response);
+
+        String requestBody = """
+                {
+                    "rejectionReason": "Artwork request exceeds hardware matrix limits."
+                }
+                """;
+
+        mockMvc.perform(post(REJECT_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105))
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.data.assignedStaffId").value(3))
+                .andExpect(jsonPath("$.data.rejectionReason").value("Artwork request exceeds hardware matrix limits."));
+
+        ArgumentCaptor<RejectCommissionRequest> captor = ArgumentCaptor.forClass(RejectCommissionRequest.class);
+        verify(rejectCommissionRequestUseCase).execute(eq(105L), captor.capture(), eq(3L), eq(false));
+        assertThat(captor.getValue().rejectionReason()).isEqualTo("Artwork request exceeds hardware matrix limits.");
+    }
+
+    @Test
+    @DisplayName("CMS-08 Controller UTCID02 [B]: Blank rejectionReason returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void rejectCommission_blankRejectionReason_returns400BadRequest() throws Exception {
+        String invalidBody = """
+                {
+                    "rejectionReason": "   "
+                }
+                """;
+
+        mockMvc.perform(post(REJECT_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(rejectCommissionRequestUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-08 Controller UTCID03 [B]: Non-positive commission id returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void rejectCommission_nonPositiveId_returns400BadRequest() throws Exception {
+        String requestBody = """
+                {
+                    "rejectionReason": "Artwork request exceeds hardware matrix limits."
+                }
+                """;
+
+        mockMvc.perform(post(REJECT_PATH, 0L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(rejectCommissionRequestUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-08 Controller UTCID04 [A]: Unauthenticated request returns 401 UNAUTHORIZED")
+    void rejectCommission_unauthenticated_returns401Unauthorized() throws Exception {
+        String requestBody = """
+                {
+                    "rejectionReason": "Artwork request exceeds hardware matrix limits."
+                }
+                """;
+
+        mockMvc.perform(post(REJECT_PATH, 105L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(rejectCommissionRequestUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-08 Controller UTCID05 [A]: Caller with CUSTOMER role returns 403 FORBIDDEN")
+    void rejectCommission_customerRole_returns403Forbidden() throws Exception {
+        String requestBody = """
+                {
+                    "rejectionReason": "Artwork request exceeds hardware matrix limits."
+                }
+                """;
+
+        mockMvc.perform(post(REJECT_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("501").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(rejectCommissionRequestUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-08 Controller UTCID06 [A]: Rejection throws CommissionStaffLockException -> returns 403 FORBIDDEN")
+    void rejectCommission_lockedByAnotherStaff_returns403Forbidden() throws Exception {
+        when(rejectCommissionRequestUseCase.execute(eq(105L), any(RejectCommissionRequest.class), eq(4L), eq(false)))
+                .thenThrow(new CommissionStaffLockException("Commission request 105 is locked by assigned staff 3"));
+
+        String requestBody = """
+                {
+                    "rejectionReason": "Reject attempt by unassigned staff."
+                }
+                """;
+
+        mockMvc.perform(post(REJECT_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("4").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMISSION_STAFF_LOCKED"));
+    }
+
+    @Test
+    @DisplayName("CMS-08 Controller UTCID07 [A]: Rejection throws CommissionNotFoundException -> returns 404 NOT_FOUND")
+    void rejectCommission_notFound_returns404NotFound() throws Exception {
+        when(rejectCommissionRequestUseCase.execute(eq(999L), any(RejectCommissionRequest.class), eq(3L), eq(false)))
+                .thenThrow(new CommissionNotFoundException("Commission request not found with id: 999"));
+
+        String requestBody = """
+                {
+                    "rejectionReason": "Not found."
+                }
+                """;
+
+        mockMvc.perform(post(REJECT_PATH, 999L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COMMISSION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CMS-08 Controller UTCID08 [A]: Rejection throws InvalidCommissionStatusTransitionException -> returns 409 CONFLICT")
+    void rejectCommission_invalidStatus_returns409Conflict() throws Exception {
+        when(rejectCommissionRequestUseCase.execute(eq(105L), any(RejectCommissionRequest.class), eq(3L), eq(false)))
+                .thenThrow(new InvalidCommissionStatusTransitionException("Cannot reject commission in status PAID (must be PENDING_REVIEW)"));
+
+        String requestBody = """
+                {
+                    "rejectionReason": "Invalid transition."
+                }
+                """;
+
+        mockMvc.perform(post(REJECT_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_COMMISSION_STATUS_TRANSITION"));
     }
 }

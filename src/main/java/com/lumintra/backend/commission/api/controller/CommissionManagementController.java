@@ -2,12 +2,14 @@ package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.request.RejectCommissionRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
 import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
+import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
@@ -15,6 +17,7 @@ import com.lumintra.backend.commission.application.AssignCommissionToDesignerUse
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
+import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.iam.domain.service.EmployeeLookupService;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
@@ -61,6 +64,7 @@ public class CommissionManagementController {
     private final ApproveCommissionRequestUseCase approveCommissionRequestUseCase;
     private final AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
     private final GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
+    private final RejectCommissionRequestUseCase rejectCommissionRequestUseCase;
     private final EmployeeLookupService employeeLookupService;
     private final InternalEmployeeAccessService internalEmployeeAccessService;
 
@@ -409,6 +413,75 @@ public class CommissionManagementController {
         Long callerStaffId = requireEmployeeId(authentication, MANAGEMENT_ROLES);
         boolean isPrivileged = isManagerOrAdmin(authentication);
         AssignCommissionResponse response = assignCommissionToDesignerUseCase.execute(id, request, callerStaffId, isPrivileged);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Reject an initial commission request (CMS-08)",
+            description = "Allows assigned staff or manager/admin to reject an unfeasible or inappropriate commission request in PENDING_REVIEW status, providing a mandatory rejection reason and transitioning status to CANCELLED.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Commission request successfully rejected and cancelled",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request - Validation failure (blank rejection reason or invalid ID)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized - Missing or expired bearer token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden - Caller role is not STAFF/MANAGER/ADMIN, or ticket is locked by another staff member",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Commission request not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict - Commission request is not in PENDING_REVIEW status",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PostMapping("/{id}/reject")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<RejectCommissionResponse>> rejectCommission(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "105")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody RejectCommissionRequest request
+    ) {
+        Long callerStaffId = requireEmployeeId(authentication, MANAGEMENT_ROLES);
+        boolean isPrivileged = isManagerOrAdmin(authentication);
+        RejectCommissionResponse response = rejectCommissionRequestUseCase.execute(id, request, callerStaffId, isPrivileged);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
