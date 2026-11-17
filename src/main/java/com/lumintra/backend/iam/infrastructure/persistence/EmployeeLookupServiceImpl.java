@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -54,5 +55,26 @@ public class EmployeeLookupServiceImpl implements EmployeeLookupService {
                         Function.identity(),
                         (existing, replacement) -> existing
                 ));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<Long> findActiveStaffEmployeeIds() {
+        return employeeRepository.findActiveStaffEmployeeIds();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isActiveDesigner(Long employeeId) {
+        if (employeeId == null || employeeId <= 0) {
+            return false;
+        }
+        return employeeRepository.isActiveDesigner(employeeId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EmployeeProfileSnapshot> findActiveDesigners() {
+        return employeeRepository.findActiveDesigners();
     }
 }

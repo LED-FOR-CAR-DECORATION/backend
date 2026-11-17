@@ -14,4 +14,9 @@ public interface EmployeeLookupService {
     Optional<EmployeeProfileSnapshot> findProfileByEmployeeId(Long employeeId);
 
     Map<Long, EmployeeProfileSnapshot> findProfilesByEmployeeIds(Collection<Long> employeeIds);
+
+    java.util.List<Long> findActiveStaffEmployeeIds();
+
+    boolean isActiveDesigner(Long employeeId);
+    java.util.List<EmployeeProfileSnapshot> findActiveDesigners();
 }

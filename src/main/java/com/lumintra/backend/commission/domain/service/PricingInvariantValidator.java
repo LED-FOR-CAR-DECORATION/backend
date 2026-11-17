@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -139,6 +140,24 @@ public class PricingInvariantValidator {
     }
 
     /**
+     * Line item evaluated by the deterministic 4-stage modifier pipeline.
+     */
+    public record ModifierLineInput(
+            CommissionPriceConfigEntity config,
+            CommissionPriceOptionEntity option,
+            int quantity
+    ) {}
+
+    /**
+     * Breakdown produced by {@link #calculateModifierPipeline(BigDecimal, List)}.
+     */
+    public record ModifierCalculationResult(
+            BigDecimal baseBucketTotal,
+            BigDecimal finalTotal,
+            List<BigDecimal> lineAmounts
+    ) {}
+
+    /**
      * Calculates what the same bundled option selection would cost under CUSTOM mode using the
      * 3-modifier pipeline: Base -> BASE_PERCENT -> non-base FLAT_ADD -> SUBTOTAL_PERCENT.
      */
@@ -151,44 +170,88 @@ public class PricingInvariantValidator {
             return customBase;
         }
 
-        List<CommissionPriceOptionEntity> activeOptions = tier.getIncludedOptions().stream()
+        List<ModifierLineInput> lines = tier.getIncludedOptions().stream()
                 .filter(Objects::nonNull)
                 .filter(CommissionPriceOptionEntity::isActive)
+                .map(opt -> new ModifierLineInput(opt.getConfig(), opt, 1))
                 .toList();
 
-        BigDecimal baseAddons = activeOptions.stream()
-                .filter(o -> o.resolvedModifierType() == ModifierType.FLAT_ADD
-                        && o.getConfig() != null && o.getConfig().isBasePrice())
-                .map(CommissionPriceOptionEntity::getBasePrice)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return calculateModifierPipeline(customBase, lines).finalTotal();
+    }
 
-        BigDecimal baseTotal = customBase.add(baseAddons);
+    /**
+     * Evaluates selected/charged option lines across the deterministic 4-stage modifier pipeline:
+     * Base (= startingBase + isBasePrice FLAT_ADD) -> + BASE_PERCENT of Base
+     * -> + non-base FLAT_ADD (including QUANTITY unit*qty) = RunningSubtotal -> + SUBTOTAL_PERCENT of RunningSubtotal.
+     */
+    public ModifierCalculationResult calculateModifierPipeline(BigDecimal startingBase, List<ModifierLineInput> lines) {
+        BigDecimal resolvedStart = startingBase != null ? startingBase : BigDecimal.ZERO;
+        if (lines == null || lines.isEmpty()) {
+            BigDecimal zeroScaled = resolvedStart.setScale(2, RoundingMode.HALF_UP);
+            return new ModifierCalculationResult(zeroScaled, zeroScaled, List.of());
+        }
 
-        BigDecimal basePercentAddons = activeOptions.stream()
-                .filter(o -> o.resolvedModifierType() == ModifierType.BASE_PERCENT)
-                .map(CommissionPriceOptionEntity::getBasePrice)
-                .filter(Objects::nonNull)
-                .map(pct -> baseTotal.multiply(pct).divide(HUNDRED, 2, RoundingMode.HALF_UP))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal[] computed = new BigDecimal[lines.size()];
+        Arrays.fill(computed, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
 
-        BigDecimal nonBaseFlatAddons = activeOptions.stream()
-                .filter(o -> o.resolvedModifierType() == ModifierType.FLAT_ADD
-                        && (o.getConfig() == null || !o.getConfig().isBasePrice()))
-                .map(CommissionPriceOptionEntity::getBasePrice)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal baseAddons = BigDecimal.ZERO;
+        for (int i = 0; i < lines.size(); i++) {
+            ModifierLineInput line = lines.get(i);
+            CommissionPriceOptionEntity opt = line.option();
+            CommissionPriceConfigEntity cfg = line.config() != null ? line.config() : (opt != null ? opt.getConfig() : null);
+            if (opt != null && opt.resolvedModifierType() == ModifierType.FLAT_ADD && cfg != null && cfg.isBasePrice()) {
+                BigDecimal amount = multiplyOptionAmount(opt, line.quantity());
+                computed[i] = amount;
+                baseAddons = baseAddons.add(amount);
+            }
+        }
+
+        BigDecimal baseTotal = resolvedStart.add(baseAddons).setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal basePercentAddons = BigDecimal.ZERO;
+        for (int i = 0; i < lines.size(); i++) {
+            CommissionPriceOptionEntity opt = lines.get(i).option();
+            if (opt != null && opt.resolvedModifierType() == ModifierType.BASE_PERCENT) {
+                BigDecimal pct = opt.getBasePrice() != null ? opt.getBasePrice() : BigDecimal.ZERO;
+                BigDecimal amount = baseTotal.multiply(pct).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+                computed[i] = amount;
+                basePercentAddons = basePercentAddons.add(amount);
+            }
+        }
+
+        BigDecimal nonBaseFlatAddons = BigDecimal.ZERO;
+        for (int i = 0; i < lines.size(); i++) {
+            ModifierLineInput line = lines.get(i);
+            CommissionPriceOptionEntity opt = line.option();
+            CommissionPriceConfigEntity cfg = line.config() != null ? line.config() : (opt != null ? opt.getConfig() : null);
+            if (opt != null && opt.resolvedModifierType() == ModifierType.FLAT_ADD && (cfg == null || !cfg.isBasePrice())) {
+                BigDecimal amount = multiplyOptionAmount(opt, line.quantity());
+                computed[i] = amount;
+                nonBaseFlatAddons = nonBaseFlatAddons.add(amount);
+            }
+        }
 
         BigDecimal runningSubtotal = baseTotal.add(basePercentAddons).add(nonBaseFlatAddons);
 
-        BigDecimal subtotalPercentAddons = activeOptions.stream()
-                .filter(o -> o.resolvedModifierType() == ModifierType.SUBTOTAL_PERCENT)
-                .map(CommissionPriceOptionEntity::getBasePrice)
-                .filter(Objects::nonNull)
-                .map(pct -> runningSubtotal.multiply(pct).divide(HUNDRED, 2, RoundingMode.HALF_UP))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal subtotalPercentAddons = BigDecimal.ZERO;
+        for (int i = 0; i < lines.size(); i++) {
+            CommissionPriceOptionEntity opt = lines.get(i).option();
+            if (opt != null && opt.resolvedModifierType() == ModifierType.SUBTOTAL_PERCENT) {
+                BigDecimal pct = opt.getBasePrice() != null ? opt.getBasePrice() : BigDecimal.ZERO;
+                BigDecimal amount = runningSubtotal.multiply(pct).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+                computed[i] = amount;
+                subtotalPercentAddons = subtotalPercentAddons.add(amount);
+            }
+        }
 
-        return runningSubtotal.add(subtotalPercentAddons);
+        BigDecimal finalTotal = runningSubtotal.add(subtotalPercentAddons).setScale(2, RoundingMode.HALF_UP);
+        return new ModifierCalculationResult(baseTotal, finalTotal, List.of(computed));
+    }
+
+    private BigDecimal multiplyOptionAmount(CommissionPriceOptionEntity opt, int quantity) {
+        BigDecimal unit = opt.getBasePrice() != null ? opt.getBasePrice() : BigDecimal.ZERO;
+        int effectiveQty = Math.max(0, quantity);
+        return unit.multiply(BigDecimal.valueOf(effectiveQty)).setScale(2, RoundingMode.HALF_UP);
     }
 
     public BigDecimal calculateSavingsAmount(BigDecimal customCalculatedPrice, BigDecimal finalTierPrice) {
