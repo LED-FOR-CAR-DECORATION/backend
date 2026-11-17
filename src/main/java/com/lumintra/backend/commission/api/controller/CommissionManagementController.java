@@ -4,6 +4,7 @@ import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.request.RejectCommissionRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.request.UploadCommissionDraftRequest;
 import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
 import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
@@ -12,12 +13,14 @@ import com.lumintra.backend.commission.api.response.ManagementCommissionDetailRe
 import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
+import com.lumintra.backend.commission.api.response.UploadCommissionDraftResponse;
 import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.AssignCommissionToDesignerUseCase;
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
+import com.lumintra.backend.commission.application.UploadCommissionDraftUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.iam.domain.service.EmployeeLookupService;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
@@ -33,6 +36,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
@@ -65,6 +69,7 @@ public class CommissionManagementController {
     private final AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
     private final GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
     private final RejectCommissionRequestUseCase rejectCommissionRequestUseCase;
+    private final UploadCommissionDraftUseCase uploadCommissionDraftUseCase;
     private final EmployeeLookupService employeeLookupService;
     private final InternalEmployeeAccessService internalEmployeeAccessService;
 
@@ -483,6 +488,74 @@ public class CommissionManagementController {
         boolean isPrivileged = isManagerOrAdmin(authentication);
         RejectCommissionResponse response = rejectCommissionRequestUseCase.execute(id, request, callerStaffId, isPrivileged);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Upload graphic commission draft submission (CMS-15)",
+            description = "Allows the assigned DESIGNER to submit an artwork draft version (COMMISSION_SUBMISSION) using an image uploaded via MED-01 (purpose COMMISSION_DRAFT). Transitions commission status from IN_PROGRESS or INTERNAL_REVISION_REQUIRED to INTERNAL_REVIEW.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "Draft submission created and commission transitioned to INTERNAL_REVIEW",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request - Validation failure (blank imageUrl, invalid ID, or unauthorized MED-01 URL domain)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized - Missing or expired bearer token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden - Caller does not have DESIGNER role or is not the assigned designer for this commission",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Commission request not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict - Commission request is not in IN_PROGRESS or INTERNAL_REVISION_REQUIRED status",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PostMapping("/{id}/drafts")
+    @PreAuthorize("hasRole('DESIGNER')")
+    public ResponseEntity<ApiResponse<UploadCommissionDraftResponse>> uploadCommissionDraft(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "105")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody UploadCommissionDraftRequest request
+    ) {
+        Long designerId = requireEmployeeId(authentication, DESIGNER_ROLES);
+        UploadCommissionDraftResponse response = uploadCommissionDraftUseCase.execute(id, request, designerId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
     private Long requireEmployeeId(Authentication authentication, Set<String> allowedRoles) {

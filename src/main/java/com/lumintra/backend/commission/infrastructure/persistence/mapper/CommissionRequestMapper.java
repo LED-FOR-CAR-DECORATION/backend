@@ -13,6 +13,7 @@ import com.lumintra.backend.commission.api.response.ManagementCommissionDetailRe
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
+import com.lumintra.backend.commission.api.response.UploadCommissionDraftResponse;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionAttachmentEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
@@ -407,6 +408,25 @@ public class CommissionRequestMapper {
                 .assignedStaffId(entity.getAssignedStaffId())
                 .rejectionReason(entity.getRejectionReason())
                 .updatedAt(entity.getUpdatedAt())
+                .build();
+    }
+
+    public UploadCommissionDraftResponse toUploadDraftResponse(
+            CommissionSubmissionEntity submission,
+            CommissionRequestEntity commission) {
+        if (submission == null || commission == null) {
+            return null;
+        }
+        return UploadCommissionDraftResponse.builder()
+                .submissionId(submission.getSubmissionId())
+                .commissionId(submission.getCommissionId())
+                .designerId(submission.getDesignerId())
+                .versionNumber(submission.getVersionNumber())
+                .imageUrl(submission.getImageUrl())
+                .designerNote(submission.getDesignerNote())
+                .submissionStatus(submission.getStatus())
+                .commissionStatus(commission.getStatus())
+                .createdAt(submission.getCreatedAt())
                 .build();
     }
 }
