@@ -14,7 +14,7 @@ import com.lumintra.backend.commission.application.CreateCustomPricingRuleUseCas
 import com.lumintra.backend.commission.application.GetManagementCommissionPricingUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingRuleDetailUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingTierDetailUseCase;
-import com.lumintra.backend.commission.application.UpdateCustomPricingRuleUseCase;
+import com.lumintra.backend.commission.application.UpdatePricingRuleUseCase;
 import com.lumintra.backend.commission.api.request.UpdatePricingRuleRequest;
 import com.lumintra.backend.commission.domain.model.ModifierType;
 import com.lumintra.backend.commission.domain.model.SelectionType;
@@ -84,7 +84,7 @@ class CommissionManagementPricingControllerTest {
     private CreateCustomPricingRuleUseCase createCustomPricingRuleUseCase;
 
     @MockitoBean
-    private UpdateCustomPricingRuleUseCase updateCustomPricingRuleUseCase;
+    private UpdatePricingRuleUseCase updatePricingRuleUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -98,8 +98,8 @@ class CommissionManagementPricingControllerTest {
     @Test
     void managerCanUpdateCustomCriterion() throws Exception {
         var update = new UpdatePricingRuleRequest("Background", "Choose a background", true,
-                List.of(new UpdatePricingRuleRequest.OptionUpdate(20L, "Solid", new BigDecimal("50000"))));
-        when(updateCustomPricingRuleUseCase.execute(eq(10L), any(UpdatePricingRuleRequest.class)))
+                List.of(new UpdatePricingRuleRequest.OptionUpdate(20L, "Solid", new BigDecimal("50000"))), null);
+        when(updatePricingRuleUseCase.execute(eq(10L), any(UpdatePricingRuleRequest.class)))
                 .thenReturn(ManagementPricingRuleResponse.builder().configId(10L).configName("Background").build());
 
         mockMvc.perform(patch(RULES_PATH + "/10")
@@ -108,7 +108,7 @@ class CommissionManagementPricingControllerTest {
                         .content(objectMapper.writeValueAsString(update)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.configName").value("Background"));
-        verify(updateCustomPricingRuleUseCase).execute(10L, update);
+        verify(updatePricingRuleUseCase).execute(10L, update);
     }
 
     private ManagementCommissionPricingResponse buildSampleManagementSummaryResponse() {
