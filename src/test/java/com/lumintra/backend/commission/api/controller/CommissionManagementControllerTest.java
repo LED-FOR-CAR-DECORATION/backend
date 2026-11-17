@@ -1,5 +1,10 @@
 package com.lumintra.backend.commission.api.controller;
 
+import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
+import org.junit.jupiter.api.BeforeEach;
+
+import java.util.Set;
+
 import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
@@ -70,6 +75,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CommissionManagementControllerTest {
     @MockitoBean
     private com.lumintra.backend.iam.domain.service.EmployeeLookupService employeeLookupService;
+
+    @MockitoBean
+    private InternalEmployeeAccessService internalEmployeeAccessService;
+
+    @BeforeEach
+    void resolveTestEmployeeIds() {
+        when(internalEmployeeAccessService.requireActiveEmployeeId(any(String.class), any()))
+                .thenAnswer(call -> Long.valueOf(call.<String>getArgument(0)));
+    }
 
     private static final String QUEUE_PATH = "/api/management/commissions";
     private static final String ASSIGNED_QUEUE_PATH = "/api/management/commissions/assigned";
@@ -663,6 +677,8 @@ class CommissionManagementControllerTest {
     @Test
     @DisplayName("CMS-13 Controller UTCID07 [N]: Valid assign request returns 200 OK with AssignCommissionResponse")
     void assignCommission_validRequest_returns200Ok() throws Exception {
+        when(internalEmployeeAccessService.requireActiveEmployeeId("103", Set.of("STAFF", "MANAGER", "ADMIN")))
+                .thenReturn(3L);
         AssignCommissionResponse response = AssignCommissionResponse.builder()
                 .commissionId(101L)
                 .status(CommissionStatus.IN_PROGRESS)
@@ -682,7 +698,7 @@ class CommissionManagementControllerTest {
                 """;
 
         mockMvc.perform(post(ASSIGN_PATH, 101L)
-                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .with(SecurityMockMvcRequestPostProcessors.user("103").roles("STAFF"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody)
                         .accept(MediaType.APPLICATION_JSON))
