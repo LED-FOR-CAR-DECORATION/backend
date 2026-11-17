@@ -95,4 +95,21 @@ public class CommissionMessageEntity {
                 .metadataJson(metadataJson)
                 .build();
     }
+
+    public static CommissionMessageEntity createDeliverableCard(
+            Long commissionId,
+            Long staffId,
+            String content,
+            String mediaUrl,
+            String metadataJson) {
+        return create(
+                commissionId,
+                staffId,
+                CommissionMessageSenderRole.STAFF,
+                CommissionMessageType.DELIVERABLE_CARD,
+                content,
+                mediaUrl,
+                metadataJson
+        );
+    }
 }

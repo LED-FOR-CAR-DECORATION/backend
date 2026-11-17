@@ -92,6 +92,20 @@ public class CommissionSubmissionEntity {
                 .build();
     }
 
+    public boolean isPendingStaffReview() {
+        return this.status == CommissionSubmissionStatus.PENDING_STAFF_REVIEW;
+    }
+
+    /**
+     * CMS-17 AC02: Staff approves this draft for customer delivery.
+     */
+    public void approveByStaff(Long staffId, Instant approvedAt) {
+        this.status = CommissionSubmissionStatus.STAFF_APPROVED;
+        this.reviewerStaffId = staffId;
+        this.reviewedAt = approvedAt;
+        this.deliveredAt = approvedAt;
+    }
+
     public boolean isCustomerVisible() {
         return this.status != null && this.status.isCustomerVisible();
     }

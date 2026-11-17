@@ -157,6 +157,16 @@ public class CommissionRequestEntity {
         return candidateCustomerId != null && Objects.equals(this.customerId, candidateCustomerId);
     }
 
+    /**
+     * CMS-17 AC02: Records the staff-approved submission as delivered preview, starts the
+     * auto-complete countdown and transitions the commission to PREVIEW_DELIVERED.
+     */
+    public void deliverPreview(Long submissionId, Instant autoCompleteAt) {
+        this.approvedSubmissionId = submissionId;
+        this.autoCompleteAt = autoCompleteAt;
+        this.status = CommissionStatus.PREVIEW_DELIVERED;
+    }
+
     public String resolveActivePaymentCode() {
         if (this.status != null && this.status.isPaymentPending()) {
             return this.activePaymentCode;
