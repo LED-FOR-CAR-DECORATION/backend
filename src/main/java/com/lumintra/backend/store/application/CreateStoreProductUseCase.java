@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +33,18 @@ public class CreateStoreProductUseCase {
 
     @Transactional
     public CreatedStoreProductResponse execute(CreateStoreProductRequest request) {
+        return create(request, null);
+    }
+
+    @Transactional
+    public CreatedStoreProductResponse submitDesignerDraft(CreateStoreProductRequest request, long designerEmployeeId) {
+        var draft = new CreateStoreProductRequest(request.productName(), ProductType.CHARACTER, BigDecimal.ZERO,
+                request.description(), request.thumbnailUrl(), request.galleryUrls(), request.tagIds(),
+                request.characterVersionId(), null);
+        return create(draft, designerEmployeeId);
+    }
+
+    private CreatedStoreProductResponse create(CreateStoreProductRequest request, Long designerEmployeeId) {
         var ids =
                 request.tagIds() == null
                         ? List.<Long>of()
@@ -55,7 +68,11 @@ public class CreateStoreProductUseCase {
 
         CreatedStoreProductResponse.LedDetails createdLed = null;
         if (product.getProductType() == ProductType.CHARACTER) {
-            characters.linkVersion(request.characterVersionId(), product.getProductId());
+            if (designerEmployeeId == null) {
+                characters.linkVersion(request.characterVersionId(), product.getProductId());
+            } else {
+                characters.linkOwnedVersion(request.characterVersionId(), product.getProductId(), designerEmployeeId);
+            }
         } else if (request.ledDetails() != null) {
             var details = request.ledDetails();
             var spec = details.spec() == null ? Map.<String, Object>of() : details.spec();

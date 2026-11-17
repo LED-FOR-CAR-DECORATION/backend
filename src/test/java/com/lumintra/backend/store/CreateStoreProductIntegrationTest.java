@@ -27,6 +27,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
@@ -73,6 +74,28 @@ class CreateStoreProductIntegrationTest {
     @Autowired EntityManager em;
     @Autowired ProductRepository products;
     @Autowired CharacterVersionRepository versions;
+
+    @Test
+    void designerDraftUsesZeroPriceAndCanOnlyLinkAnOwnedVersion() {
+        long versionId = new TransactionTemplate(transactions).execute(tx -> {
+            var character = CharacterEntity.create(42L, "Designer draft", null);
+            em.persist(character);
+            var version = CharacterVersionEntity.create(character, null, 1, null, null, true);
+            em.persist(version);
+            return version.getVersionId();
+        });
+
+        var draft = request(ProductType.CHARACTER, null, versionId, null);
+        long before = products.count();
+        assertThatThrownBy(() -> useCase.submitDesignerDraft(draft, 43L)).isInstanceOf(AccessDeniedException.class);
+        assertThat(products.count()).isEqualTo(before);
+        assertThat(versions.findById(versionId).orElseThrow().getProductId()).isNull();
+
+        var result = useCase.submitDesignerDraft(draft, 42L);
+        assertThat(result.basePrice()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(result.status()).isEqualTo(ProductStatus.UNPUBLISHED);
+        assertThat(versions.findById(versionId).orElseThrow().getProductId()).isEqualTo(result.productId());
+    }
 
     @Test
     void createsUnpublishedLedWithExistingTagsAndSharedModelId() {
