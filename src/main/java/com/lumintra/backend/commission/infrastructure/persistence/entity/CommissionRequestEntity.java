@@ -167,6 +167,20 @@ public class CommissionRequestEntity {
         this.status = CommissionStatus.PREVIEW_DELIVERED;
     }
 
+    /**
+     * CMS-18 AC02: Finalizes the commission with the customer-accepted submission,
+     * stops the auto-complete countdown and transitions PREVIEW_DELIVERED to COMPLETED.
+     */
+    public void complete(Long acceptedSubmissionId) {
+        if (this.status != CommissionStatus.PREVIEW_DELIVERED) {
+            throw new IllegalStateException(
+                    "Commission " + this.commissionId + " must be PREVIEW_DELIVERED to complete (was " + this.status + ")");
+        }
+        this.approvedSubmissionId = acceptedSubmissionId;
+        this.autoCompleteAt = null;
+        this.status = CommissionStatus.COMPLETED;
+    }
+
     public String resolveActivePaymentCode() {
         if (this.status != null && this.status.isPaymentPending()) {
             return this.activePaymentCode;
