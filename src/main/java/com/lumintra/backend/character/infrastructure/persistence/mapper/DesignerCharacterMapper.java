@@ -4,6 +4,7 @@ import com.lumintra.backend.character.api.response.DesignerCharacterItem;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterEntity;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterVersionEntity;
 
+import java.util.Comparator;
 import java.util.List;
 
 public final class DesignerCharacterMapper {
@@ -16,15 +17,15 @@ public final class DesignerCharacterMapper {
         DesignerCharacterItem.CurrentVersionSummary currentVersionSummary = null;
 
         if (versions != null && !versions.isEmpty()) {
-            CharacterVersionEntity current = versions.stream()
-                    .filter(CharacterVersionEntity::isCurrent)
-                    .findFirst()
+            // Luôn luôn chọn version có versionNumber lớn nhất (bản mới nhất) để hiển thị thumbnail
+            CharacterVersionEntity latest = versions.stream()
+                    .max(Comparator.comparingInt(CharacterVersionEntity::getVersionNumber))
                     .orElse(versions.get(0));
 
             currentVersionSummary = new DesignerCharacterItem.CurrentVersionSummary(
-                    current.getVersionId(),
-                    current.getVersionNumber(),
-                    current.getPreviewGifUrl()
+                    latest.getVersionId(),
+                    latest.getVersionNumber(),
+                    latest.getPreviewGifUrl()
             );
         }
 

@@ -17,4 +17,10 @@ public interface CommissionSubmissionRepository extends JpaRepository<Commission
             Collection<CommissionSubmissionStatus> statuses);
 
     Optional<CommissionSubmissionEntity> findTopByCommissionIdOrderByVersionNumberDesc(Long commissionId);
+
+    Optional<CommissionSubmissionEntity> findBySubmissionIdAndCommissionId(Long submissionId, Long commissionId);
+
+    Optional<CommissionSubmissionEntity> findTopByCommissionIdAndStatusOrderByVersionNumberDesc(
+            Long commissionId,
+            CommissionSubmissionStatus status);
 }
