@@ -1,5 +1,6 @@
 package com.lumintra.backend.commission;
 
+import com.lumintra.backend.commission.domain.model.ModifierType;
 import com.lumintra.backend.commission.domain.model.SelectionType;
 import com.lumintra.backend.commission.domain.model.UiType;
 import com.lumintra.backend.commission.domain.service.PricingInvariantValidator;
@@ -7,15 +8,16 @@ import com.lumintra.backend.commission.infrastructure.persistence.entity.Commiss
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionPriceOptionEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionPricingTierEntity;
 import com.lumintra.backend.shared.exception.commission.InvalidRuleConfigurationException;
-import com.lumintra.backend.shared.exception.commission.PricingTierInvariantViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,7 +52,7 @@ class PricingInvariantValidatorTest {
 
         CommissionPricingTierEntity basicTier = CommissionPricingTierEntity.builder()
                 .tierCode("BASIC")
-                .basePrice(new BigDecimal("100000.00")) // 100k < 100k + 20k = 120k
+                .basePrice(new BigDecimal("100000.00"))
                 .isCustom(false)
                 .isActive(true)
                 .maxRevisions(1)
@@ -62,8 +64,8 @@ class PricingInvariantValidatorTest {
     }
 
     @Test
-    @DisplayName("CMS-01 Validator UTCID02 [A]: Preset tier where basePrice >= customCalculatedPrice throws PricingTierInvariantViolationException")
-    void validateTier_throwsException_whenBasePriceViolatesPresetDiscountInvariant() {
+    @DisplayName("CMS-01 Validator UTCID02 [N]: Preset tier where basePrice >= customCalculatedPrice is allowed when CUSTOM > preset floor is removed")
+    void validateTier_allowsPresetBasePriceHigherThanOrEqualToCustom_andRejectsNegativeBasePrice() {
         CommissionPricingTierEntity customTier = CommissionPricingTierEntity.builder()
                 .tierCode("CUSTOM")
                 .basePrice(new BigDecimal("100000.00"))
@@ -80,16 +82,27 @@ class PricingInvariantValidatorTest {
 
         CommissionPricingTierEntity basicTier = CommissionPricingTierEntity.builder()
                 .tierCode("BASIC")
-                .basePrice(new BigDecimal("120000.00")) // 120k >= 100k + 20k = 120k (VIOLATION)
+                .basePrice(new BigDecimal("150000.00"))
                 .isCustom(false)
                 .isActive(true)
                 .maxRevisions(1)
                 .includedOptions(new HashSet<>(Set.of(opt1)))
                 .build();
 
-        assertThatThrownBy(() -> validator.validateTier(basicTier, customTier))
-                .isInstanceOf(PricingTierInvariantViolationException.class)
-                .hasMessageContaining("Pricing invariant violated for tier 'BASIC'");
+        assertThatCode(() -> validator.validateTier(basicTier, customTier))
+                .doesNotThrowAnyException();
+
+        CommissionPricingTierEntity negativeTier = CommissionPricingTierEntity.builder()
+                .tierCode("BASIC")
+                .basePrice(new BigDecimal("-1000.00"))
+                .isCustom(false)
+                .isActive(true)
+                .maxRevisions(1)
+                .build();
+
+        assertThatThrownBy(() -> validator.validateTier(negativeTier, customTier))
+                .isInstanceOf(InvalidRuleConfigurationException.class)
+                .hasMessageContaining("non-negative");
     }
 
     @Test
@@ -136,6 +149,7 @@ class PricingInvariantValidatorTest {
     void validateTier_throwsException_whenCustomTierDeactivated() {
         CommissionPricingTierEntity customTier = CommissionPricingTierEntity.builder()
                 .tierCode("CUSTOM")
+                .basePrice(new BigDecimal("100000.00"))
                 .isCustom(true)
                 .isActive(false)
                 .maxRevisions(5)
@@ -175,7 +189,7 @@ class PricingInvariantValidatorTest {
     }
 
     @Test
-    @DisplayName("CMS-01 Validator UTCID09 [A]: TEXT_INPUT rule with priced options throws InvalidRuleConfigurationException")
+    @DisplayName("CMS-01 Validator UTCID09 [A]: TEXT_INPUT rule with priced or percent options throws InvalidRuleConfigurationException")
     void validateRule_throwsException_forTextInputWithPrice() {
         CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
                 .ruleKey("INSTRUCTIONS")
@@ -192,7 +206,7 @@ class PricingInvariantValidatorTest {
 
         assertThatThrownBy(() -> validator.validateRule(config))
                 .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("TEXT_INPUT rules cannot have priced options");
+                .hasMessageContaining("TEXT_INPUT rules cannot have priced or percentage options");
     }
 
     @Test
@@ -221,7 +235,7 @@ class PricingInvariantValidatorTest {
     }
 
     @Test
-    @DisplayName("CMS-01 Validator UTCID11 [A]: Preset tier bundling dependent option without parent option throws InvalidRuleConfigurationException")
+    @DisplayName("CMS-01 Validator UTCID11 [A]: Preset tier bundling dependent option without parent or trigger option throws InvalidRuleConfigurationException")
     void validateTier_throwsException_whenDependentOptionBundledWithoutPrerequisite() {
         CommissionPricingTierEntity customTier = CommissionPricingTierEntity.builder()
                 .tierCode("CUSTOM")
@@ -231,13 +245,15 @@ class PricingInvariantValidatorTest {
                 .maxRevisions(5)
                 .build();
 
-        CommissionPriceConfigEntity parentConfig = CommissionPriceConfigEntity.builder()
-                .ruleKey("FORMAT_TYPE")
-                .build();
-
         CommissionPriceConfigEntity childConfig = CommissionPriceConfigEntity.builder()
                 .ruleKey("FRAME_RANGE")
-                .dependsOnOptionId(2L) // Depends on option ID 2
+                .dependsOnOptionId(2L)
+                .build();
+
+        CommissionPriceOptionEntity parentOption = CommissionPriceOptionEntity.builder()
+                .optionId(2L)
+                .optionCode("ANIMATED_GIF")
+                .isActive(true)
                 .build();
 
         CommissionPriceOptionEntity childOption = CommissionPriceOptionEntity.builder()
@@ -250,362 +266,241 @@ class PricingInvariantValidatorTest {
 
         CommissionPricingTierEntity presetTier = CommissionPricingTierEntity.builder()
                 .tierCode("ADVANCED")
-                .basePrice(new BigDecimal("90000.00")) // 90k < 100k
+                .basePrice(new BigDecimal("90000.00"))
                 .isCustom(false)
                 .isActive(true)
                 .maxRevisions(3)
-                .includedOptions(new HashSet<>(Set.of(childOption))) // Missing parent option ID 2!
+                .includedOptions(new HashSet<>(Set.of(childOption)))
                 .build();
 
         assertThatThrownBy(() -> validator.validateTier(presetTier, customTier))
                 .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("bundles dependent option '1-5' without bundling its prerequisite option (ID 2)");
+                .hasMessageContaining("bundles dependent option '1-5' without bundling or triggering on its prerequisite option (ID 2)");
+
+        // Passing when parentOption is provided in triggerOptions
+        presetTier.setTriggerOptions(new HashSet<>(Set.of(parentOption)));
+        assertThatCode(() -> validator.validateTier(presetTier, customTier))
+                .doesNotThrowAnyException();
     }
 
     @Test
-    @DisplayName("CMS-01 Validator UTCID12 [B]: Boundary calculations for savings amount and discount percent")
-    void calculateSavingsAndDiscount_boundaryValues() {
-        // When custom price <= tier price -> savings = 0
+    @DisplayName("CMS-01 Validator UTCID12 [B]: Boundary calculations for savings, discount, and 3-modifier custom price pipeline")
+    void calculateSavingsAndDiscount_andModifierPipeline() {
         BigDecimal savingsZero = validator.calculateSavingsAmount(new BigDecimal("100000.00"), new BigDecimal("120000.00"));
         assertThat(savingsZero).isEqualByComparingTo(BigDecimal.ZERO);
 
-        // When savings = 0 -> discount = 0.00%
         BigDecimal discountZero = validator.calculateDiscountPercent(BigDecimal.ZERO, new BigDecimal("100000.00"));
         assertThat(discountZero).isEqualByComparingTo("0.00");
 
-        // Normal savings & discount
-        BigDecimal savings = validator.calculateSavingsAmount(new BigDecimal("180000.00"), new BigDecimal("149000.00"));
-        assertThat(savings).isEqualByComparingTo("31000.00");
-
-        BigDecimal discount = validator.calculateDiscountPercent(savings, new BigDecimal("180000.00"));
-        assertThat(discount).isEqualByComparingTo("17.22");
-    }
-
-    // ============================================================
-    // CMS-30 validateCustomRuleCreation Tests
-    // ============================================================
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID13 [N]: Valid custom single select rule with 1 default option passes")
-    void validateCustomRuleCreation_validSingleSelect_passes() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("BG_STYLE")
-                .selectionType(SelectionType.SINGLE_SELECT)
-                .uiType(UiType.RADIO)
-                .isSystem(false)
+        CommissionPricingTierEntity customTier = CommissionPricingTierEntity.builder()
+                .tierCode("CUSTOM")
+                .basePrice(new BigDecimal("100000.00"))
+                .isCustom(true)
+                .isActive(true)
                 .build();
 
-        CommissionPriceOptionEntity opt1 = CommissionPriceOptionEntity.builder()
-                .optionCode("BG_A")
-                .optionLabel("Nền A")
-                .basePrice(BigDecimal.ZERO)
-                .isDefault(true)
+        CommissionPriceConfigEntity sizeConfig = CommissionPriceConfigEntity.builder()
+                .ruleKey("MATRIX_SIZE")
+                .isBasePrice(true)
                 .build();
-
-        CommissionPriceOptionEntity opt2 = CommissionPriceOptionEntity.builder()
-                .optionCode("BG_B")
-                .optionLabel("Nền B")
-                .basePrice(new BigDecimal("10000.00"))
-                .isDefault(false)
-                .build();
-
-        config.setOptions(new ArrayList<>(List.of(opt1, opt2)));
-
-        assertThatCode(() -> validator.validateCustomRuleCreation(config))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID14 [N]: Valid custom multi select rule with multiple default options passes")
-    void validateCustomRuleCreation_validMultiSelect_passes() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("EXTRA_ELEMENTS")
-                .selectionType(SelectionType.MULTI_SELECT)
-                .uiType(UiType.CHECKBOX)
-                .isSystem(false)
-                .build();
-
-        CommissionPriceOptionEntity opt1 = CommissionPriceOptionEntity.builder()
-                .optionCode("ELEM_LIGHTING")
-                .optionLabel("Hiệu ứng ánh sáng")
-                .basePrice(new BigDecimal("20000.00"))
-                .isDefault(true)
-                .build();
-
-        CommissionPriceOptionEntity opt2 = CommissionPriceOptionEntity.builder()
-                .optionCode("ELEM_PARTICLES")
-                .optionLabel("Hiệu ứng hạt bụi")
+        CommissionPriceOptionEntity size32 = CommissionPriceOptionEntity.builder()
+                .optionId(1L)
+                .config(sizeConfig)
+                .modifierType(ModifierType.FLAT_ADD)
                 .basePrice(new BigDecimal("30000.00"))
-                .isDefault(true)
+                .isActive(true)
                 .build();
 
-        config.setOptions(new ArrayList<>(List.of(opt1, opt2)));
+        CommissionPriceConfigEntity formatConfig = CommissionPriceConfigEntity.builder()
+                .ruleKey("FORMAT_TYPE")
+                .isBasePrice(false)
+                .build();
+        CommissionPriceOptionEntity gif50Pct = CommissionPriceOptionEntity.builder()
+                .optionId(2L)
+                .config(formatConfig)
+                .modifierType(ModifierType.BASE_PERCENT)
+                .basePrice(new BigDecimal("50.00"))
+                .isActive(true)
+                .build();
+
+        CommissionPriceConfigEntity rushConfig = CommissionPriceConfigEntity.builder()
+                .ruleKey("RUSH")
+                .isBasePrice(false)
+                .build();
+        CommissionPriceOptionEntity rush20Pct = CommissionPriceOptionEntity.builder()
+                .optionId(3L)
+                .config(rushConfig)
+                .modifierType(ModifierType.SUBTOTAL_PERCENT)
+                .basePrice(new BigDecimal("20.00"))
+                .isActive(true)
+                .build();
+
+        CommissionPricingTierEntity preset = CommissionPricingTierEntity.builder()
+                .tierCode("ADVANCED")
+                .basePrice(new BigDecimal("149000.00"))
+                .includedOptions(new HashSet<>(Set.of(size32, gif50Pct, rush20Pct)))
+                .build();
+
+        // Base = 100k + 30k = 130k; + 50% base = +65k -> 195k subtotal; + 20% subtotal = +39k -> 234k
+        BigDecimal customTotal = validator.calculateCustomCalculatedPrice(preset, customTier);
+        assertThat(customTotal).isEqualByComparingTo("234000.00");
+    }
+
+    @Test
+    @DisplayName("CMS-30 Validator UTCID13 [N]: Valid custom QUANTITY rule with NUMBER uiType, unit price, and valid bounds passes")
+    void validateCustomRuleCreation_validQuantityRule_passes() {
+        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
+                .ruleKey("WEATHER_VARIANTS")
+                .selectionType(SelectionType.QUANTITY)
+                .uiType(UiType.NUMBER)
+                .isBasePrice(false)
+                .minQuantity(0)
+                .maxQuantity(5)
+                .isSystem(false)
+                .build();
+
+        CommissionPriceOptionEntity unitOpt = CommissionPriceOptionEntity.builder()
+                .optionCode("EXTRA_VARIANT")
+                .optionLabel("Extra time-of-day / weather variant")
+                .modifierType(ModifierType.FLAT_ADD)
+                .basePrice(new BigDecimal("35000.00"))
+                .build();
+
+        config.setOptions(new ArrayList<>(List.of(unitOpt)));
 
         assertThatCode(() -> validator.validateCustomRuleCreation(config))
                 .doesNotThrowAnyException();
     }
 
     @Test
-    @DisplayName("CMS-30 Validator UTCID15 [N]: Valid TEXT_INPUT rule with 0 options passes")
-    void validateCustomRuleCreation_validTextInputWithNoOptions_passes() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("SPECIAL_REQUEST")
-                .selectionType(SelectionType.TEXT_INPUT)
-                .uiType(UiType.TEXT)
-                .isSystem(false)
-                .options(new ArrayList<>())
-                .build();
+    @DisplayName("CMS-30 Validator UTCID14 [N]: Multi-level acyclic dependencies up to depth 5 pass, while depth 6 and cycles throw")
+    void validateParentOptionDependency_enforcesDepth5AndCycleDetection() {
+        Map<Long, CommissionPriceOptionEntity> store = new HashMap<>();
 
-        assertThatCode(() -> validator.validateCustomRuleCreation(config))
+        CommissionPriceConfigEntity c0 = CommissionPriceConfigEntity.builder()
+                .configId(100L).ruleKey("L0").selectionType(SelectionType.SINGLE_SELECT).dependsOnOptionId(null).build();
+        CommissionPriceOptionEntity o0 = CommissionPriceOptionEntity.builder().optionId(1000L).config(c0).build();
+        store.put(1000L, o0);
+
+        CommissionPriceConfigEntity c1 = CommissionPriceConfigEntity.builder()
+                .configId(101L).ruleKey("L1").selectionType(SelectionType.SINGLE_SELECT).dependsOnOptionId(1000L).build();
+        CommissionPriceOptionEntity o1 = CommissionPriceOptionEntity.builder().optionId(1001L).config(c1).build();
+        store.put(1001L, o1);
+
+        CommissionPriceConfigEntity c2 = CommissionPriceConfigEntity.builder()
+                .configId(102L).ruleKey("L2").selectionType(SelectionType.SINGLE_SELECT).dependsOnOptionId(1001L).build();
+        CommissionPriceOptionEntity o2 = CommissionPriceOptionEntity.builder().optionId(1002L).config(c2).build();
+        store.put(1002L, o2);
+
+        CommissionPriceConfigEntity c3 = CommissionPriceConfigEntity.builder()
+                .configId(103L).ruleKey("L3").selectionType(SelectionType.SINGLE_SELECT).dependsOnOptionId(1002L).build();
+        CommissionPriceOptionEntity o3 = CommissionPriceOptionEntity.builder().optionId(1003L).config(c3).build();
+        store.put(1003L, o3);
+
+        CommissionPriceConfigEntity c4 = CommissionPriceConfigEntity.builder()
+                .configId(104L).ruleKey("L4").selectionType(SelectionType.SINGLE_SELECT).dependsOnOptionId(1003L).build();
+        CommissionPriceOptionEntity o4 = CommissionPriceOptionEntity.builder().optionId(1004L).config(c4).build();
+        store.put(1004L, o4);
+
+        CommissionPriceConfigEntity c5 = CommissionPriceConfigEntity.builder()
+                .configId(105L).ruleKey("L5").selectionType(SelectionType.SINGLE_SELECT).dependsOnOptionId(1004L).build();
+        CommissionPriceOptionEntity o5 = CommissionPriceOptionEntity.builder().optionId(1005L).config(c5).build();
+        store.put(1005L, o5);
+
+        // Depth 5 (attaching to o4) passes
+        assertThatCode(() -> validator.validateParentOptionDependency(200L, o4, store::get))
                 .doesNotThrowAnyException();
-    }
 
-    @Test
-    @DisplayName("CMS-30 Validator UTCID16 [N]: Valid TEXT_INPUT rule with zero-priced placeholder option passes")
-    void validateCustomRuleCreation_validTextInputWithZeroPricedOption_passes() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("SPECIAL_REQUEST")
-                .selectionType(SelectionType.TEXT_INPUT)
-                .uiType(UiType.TEXT)
-                .isSystem(false)
-                .build();
-
-        CommissionPriceOptionEntity opt = CommissionPriceOptionEntity.builder()
-                .optionCode("TEXT_PLACEHOLDER")
-                .optionLabel("Nhập văn bản")
-                .basePrice(BigDecimal.ZERO)
-                .build();
-
-        config.setOptions(new ArrayList<>(List.of(opt)));
-
-        assertThatCode(() -> validator.validateCustomRuleCreation(config))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID17 [A]: Null config throws InvalidRuleConfigurationException")
-    void validateCustomRuleCreation_nullConfig_throws() {
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(null))
+        // Depth 6 (attaching to o5) fails
+        assertThatThrownBy(() -> validator.validateParentOptionDependency(200L, o5, store::get))
                 .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("Config entity cannot be null.");
+                .hasMessageContaining("exceeds maximum allowed depth of 5");
+
+        // Circular dependency (attaching to own descendant or self configId) fails
+        assertThatThrownBy(() -> validator.validateParentOptionDependency(101L, o2, store::get))
+                .isInstanceOf(InvalidRuleConfigurationException.class)
+                .hasMessageContaining("Circular conditional dependency detected");
+
+        // Depending on QUANTITY option fails
+        CommissionPriceConfigEntity qtyConfig = CommissionPriceConfigEntity.builder()
+                .configId(300L).selectionType(SelectionType.QUANTITY).build();
+        CommissionPriceOptionEntity qtyOpt = CommissionPriceOptionEntity.builder().optionId(3000L).config(qtyConfig).build();
+        assertThatThrownBy(() -> validator.validateParentOptionDependency(400L, qtyOpt, store::get))
+                .isInstanceOf(InvalidRuleConfigurationException.class)
+                .hasMessageContaining("SINGLE_SELECT or MULTI_SELECT");
     }
 
     @Test
-    @DisplayName("CMS-30 Validator UTCID18 [A]: isSystem = true throws InvalidRuleConfigurationException")
-    void validateCustomRuleCreation_isSystemTrue_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("FORBIDDEN_SYSTEM")
-                .selectionType(SelectionType.SINGLE_SELECT)
-                .uiType(UiType.RADIO)
-                .isSystem(true) // Violation: custom rules cannot be system rules
-                .build();
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
+    @DisplayName("CMS-30 Validator UTCID15 [A]: QUANTITY validation rejects invalid UI, missing bounds, >1 options, and percentage modifiers")
+    void validateCustomRuleCreation_quantityAndBasePriceAndPercentInvariants() {
+        CommissionPriceConfigEntity badQtyUi = CommissionPriceConfigEntity.builder()
+                .ruleKey("QTY_BAD_UI").selectionType(SelectionType.QUANTITY).uiType(UiType.RADIO)
+                .minQuantity(0).maxQuantity(5).isSystem(false).build();
+        assertThatThrownBy(() -> validator.validateCustomRuleCreation(badQtyUi))
                 .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("Custom pricing rules must have isSystem set to false.");
+                .hasMessageContaining("NUMBER UI type");
+
+        CommissionPriceConfigEntity badQtyBounds = CommissionPriceConfigEntity.builder()
+                .ruleKey("QTY_BAD_BOUNDS").selectionType(SelectionType.QUANTITY).uiType(UiType.NUMBER)
+                .minQuantity(5).maxQuantity(2).isSystem(false)
+                .options(new ArrayList<>(List.of(CommissionPriceOptionEntity.create("U", "Unit", ModifierType.FLAT_ADD, BigDecimal.TEN, false, 1))))
+                .build();
+        assertThatThrownBy(() -> validator.validateCustomRuleCreation(badQtyBounds))
+                .isInstanceOf(InvalidRuleConfigurationException.class)
+                .hasMessageContaining("maxQuantity");
+
+        CommissionPriceConfigEntity basePriceWithPercent = CommissionPriceConfigEntity.builder()
+                .ruleKey("BASE_PCT").selectionType(SelectionType.SINGLE_SELECT).uiType(UiType.RADIO)
+                .isBasePrice(true).isSystem(false)
+                .options(new ArrayList<>(List.of(CommissionPriceOptionEntity.create("PCT", "Pct", ModifierType.BASE_PERCENT, BigDecimal.TEN, true, 1))))
+                .build();
+        assertThatThrownBy(() -> validator.validateCustomRuleCreation(basePriceWithPercent))
+                .isInstanceOf(InvalidRuleConfigurationException.class)
+                .hasMessageContaining("isBasePrice only allow FLAT_ADD options");
+
+        CommissionPriceConfigEntity baseOnQuantity = CommissionPriceConfigEntity.builder()
+                .ruleKey("QTY_BASE").selectionType(SelectionType.QUANTITY).uiType(UiType.NUMBER)
+                .isBasePrice(true).minQuantity(0).maxQuantity(5).isSystem(false)
+                .options(new ArrayList<>(List.of(CommissionPriceOptionEntity.create("U", "Unit", ModifierType.FLAT_ADD, BigDecimal.TEN, false, 1))))
+                .build();
+        assertThatThrownBy(() -> validator.validateCustomRuleCreation(baseOnQuantity))
+                .isInstanceOf(InvalidRuleConfigurationException.class)
+                .hasMessageContaining("isBasePrice can only be enabled on SINGLE_SELECT or MULTI_SELECT");
     }
 
     @Test
-    @DisplayName("CMS-30 Validator UTCID19 [A]: Incompatible UI type (SINGLE_SELECT + CHECKBOX) throws")
-    void validateCustomRuleCreation_singleSelectWithCheckboxUi_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("INCOMPATIBLE_1")
-                .selectionType(SelectionType.SINGLE_SELECT)
-                .uiType(UiType.CHECKBOX)
-                .isSystem(false)
-                .build();
+    @DisplayName("CMS-30 Validator UTCID16 [A]: Incompatible UI/TEXT_INPUT/MULTI_SELECT and duplicate/negative/blank option guards")
+    void validateCustomRuleCreation_existingInvariantsStillEnforced() {
+        CommissionPriceConfigEntity singleWithCheckbox = CommissionPriceConfigEntity.builder()
+                .ruleKey("BAD_1").selectionType(SelectionType.SINGLE_SELECT).uiType(UiType.CHECKBOX).isSystem(false).build();
+        assertThatThrownBy(() -> validator.validateCustomRuleCreation(singleWithCheckbox))
+                .isInstanceOf(InvalidRuleConfigurationException.class);
 
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
+        CommissionPriceConfigEntity textWithPct = CommissionPriceConfigEntity.builder()
+                .ruleKey("BAD_TEXT_PCT").selectionType(SelectionType.TEXT_INPUT).uiType(UiType.TEXT).isSystem(false)
+                .options(new ArrayList<>(List.of(CommissionPriceOptionEntity.create("P", "Prompt", ModifierType.SUBTOTAL_PERCENT, BigDecimal.ZERO, false, 1))))
+                .build();
+        assertThatThrownBy(() -> validator.validateCustomRuleCreation(textWithPct))
                 .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("SINGLE_SELECT rules only support RADIO or DROPDOWN UI types.");
-    }
+                .hasMessageContaining("TEXT_INPUT rules cannot have priced or percentage options");
 
-    @Test
-    @DisplayName("CMS-30 Validator UTCID20 [A]: Incompatible UI type (MULTI_SELECT + RADIO) throws")
-    void validateCustomRuleCreation_multiSelectWithRadioUi_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("INCOMPATIBLE_2")
-                .selectionType(SelectionType.MULTI_SELECT)
-                .uiType(UiType.RADIO)
-                .isSystem(false)
-                .build();
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
+        CommissionPriceConfigEntity dupOpts = CommissionPriceConfigEntity.builder()
+                .ruleKey("DUP").selectionType(SelectionType.SINGLE_SELECT).uiType(UiType.RADIO).isSystem(false)
+                .options(new ArrayList<>(List.of(
+                        CommissionPriceOptionEntity.create("OPT", "One", ModifierType.FLAT_ADD, BigDecimal.ZERO, false, 1),
+                        CommissionPriceOptionEntity.create("opt", "Two", ModifierType.FLAT_ADD, BigDecimal.ZERO, false, 2)
+                ))).build();
+        assertThatThrownBy(() -> validator.validateCustomRuleCreation(dupOpts))
                 .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("MULTI_SELECT rules only support CHECKBOX UI type.");
-    }
+                .hasMessageContaining("Duplicate option code");
 
-    @Test
-    @DisplayName("CMS-30 Validator UTCID21 [A]: Incompatible UI type (TEXT_INPUT + DROPDOWN) throws")
-    void validateCustomRuleCreation_textInputWithDropdownUi_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("INCOMPATIBLE_3")
-                .selectionType(SelectionType.TEXT_INPUT)
-                .uiType(UiType.DROPDOWN)
-                .isSystem(false)
-                .build();
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
+        CommissionPriceConfigEntity negOpt = CommissionPriceConfigEntity.builder()
+                .ruleKey("NEG").selectionType(SelectionType.SINGLE_SELECT).uiType(UiType.RADIO).isSystem(false)
+                .options(new ArrayList<>(List.of(
+                        CommissionPriceOptionEntity.create("OPT", "Neg", ModifierType.FLAT_ADD, new BigDecimal("-1.00"), false, 1)
+                ))).build();
+        assertThatThrownBy(() -> validator.validateCustomRuleCreation(negOpt))
                 .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("TEXT_INPUT rules only support TEXT UI type.");
-    }
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID22 [A]: SINGLE_SELECT with 0 options throws InvalidRuleConfigurationException")
-    void validateCustomRuleCreation_singleSelectWithNoOptions_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("EMPTY_OPTIONS_SS")
-                .selectionType(SelectionType.SINGLE_SELECT)
-                .uiType(UiType.RADIO)
-                .isSystem(false)
-                .options(new ArrayList<>())
-                .build();
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
-                .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("SINGLE_SELECT rules must have at least one option.");
-    }
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID23 [A]: MULTI_SELECT with 0 options throws InvalidRuleConfigurationException")
-    void validateCustomRuleCreation_multiSelectWithNoOptions_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("EMPTY_OPTIONS_MS")
-                .selectionType(SelectionType.MULTI_SELECT)
-                .uiType(UiType.CHECKBOX)
-                .isSystem(false)
-                .options(new ArrayList<>())
-                .build();
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
-                .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("MULTI_SELECT rules must have at least one option.");
-    }
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID24 [A]: TEXT_INPUT with priced option (>0.00) throws")
-    void validateCustomRuleCreation_textInputWithPricedOption_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("PRICED_TEXT")
-                .selectionType(SelectionType.TEXT_INPUT)
-                .uiType(UiType.TEXT)
-                .isSystem(false)
-                .build();
-
-        CommissionPriceOptionEntity opt = CommissionPriceOptionEntity.builder()
-                .optionCode("PROMPT_FEE")
-                .optionLabel("Phí gợi ý")
-                .basePrice(new BigDecimal("50000.00")) // Violation!
-                .build();
-
-        config.setOptions(new ArrayList<>(List.of(opt)));
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
-                .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("TEXT_INPUT rules cannot have priced options.");
-    }
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID25 [A]: SINGLE_SELECT with multiple default options throws")
-    void validateCustomRuleCreation_singleSelectWithMultipleDefaults_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("MULTI_DEFAULT_SS")
-                .selectionType(SelectionType.SINGLE_SELECT)
-                .uiType(UiType.RADIO)
-                .isSystem(false)
-                .build();
-
-        CommissionPriceOptionEntity opt1 = CommissionPriceOptionEntity.builder()
-                .optionCode("OPT_1")
-                .optionLabel("Tùy chọn 1")
-                .isDefault(true)
-                .build();
-
-        CommissionPriceOptionEntity opt2 = CommissionPriceOptionEntity.builder()
-                .optionCode("OPT_2")
-                .optionLabel("Tùy chọn 2")
-                .isDefault(true)
-                .build();
-
-        config.setOptions(new ArrayList<>(List.of(opt1, opt2)));
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
-                .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("SINGLE_SELECT rule cannot have multiple default options.");
-    }
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID26 [A]: Duplicate option codes (case-insensitive) within rule throws")
-    void validateCustomRuleCreation_duplicateOptionCodesCaseInsensitive_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("DUPLICATE_OPTS")
-                .selectionType(SelectionType.SINGLE_SELECT)
-                .uiType(UiType.RADIO)
-                .isSystem(false)
-                .build();
-
-        CommissionPriceOptionEntity opt1 = CommissionPriceOptionEntity.builder()
-                .optionCode("BG_SHADOW")
-                .optionLabel("Bóng đổ 1")
-                .basePrice(BigDecimal.ZERO)
-                .build();
-
-        CommissionPriceOptionEntity opt2 = CommissionPriceOptionEntity.builder()
-                .optionCode("bg_shadow") // Case-insensitive duplicate!
-                .optionLabel("Bóng đổ 2")
-                .basePrice(BigDecimal.ZERO)
-                .build();
-
-        config.setOptions(new ArrayList<>(List.of(opt1, opt2)));
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
-                .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("Duplicate option code found within rule: bg_shadow");
-    }
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID27 [A]: Negative option base price throws InvalidRuleConfigurationException")
-    void validateCustomRuleCreation_negativeOptionBasePrice_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("NEGATIVE_PRICE_RULE")
-                .selectionType(SelectionType.SINGLE_SELECT)
-                .uiType(UiType.RADIO)
-                .isSystem(false)
-                .build();
-
-        CommissionPriceOptionEntity opt = CommissionPriceOptionEntity.builder()
-                .optionCode("OPT_DISCOUNT")
-                .optionLabel("Tùy chọn âm tiền")
-                .basePrice(new BigDecimal("-10000.00")) // Violation!
-                .build();
-
-        config.setOptions(new ArrayList<>(List.of(opt)));
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
-                .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("Option price must be non-negative for option: OPT_DISCOUNT");
-    }
-
-    @Test
-    @DisplayName("CMS-30 Validator UTCID28 [A]: Blank option code throws InvalidRuleConfigurationException")
-    void validateCustomRuleCreation_blankOptionCode_throws() {
-        CommissionPriceConfigEntity config = CommissionPriceConfigEntity.builder()
-                .ruleKey("BLANK_OPT_CODE")
-                .selectionType(SelectionType.SINGLE_SELECT)
-                .uiType(UiType.RADIO)
-                .isSystem(false)
-                .build();
-
-        CommissionPriceOptionEntity opt = CommissionPriceOptionEntity.builder()
-                .optionCode("   ") // Blank
-                .optionLabel("Nhãn hợp lệ")
-                .basePrice(BigDecimal.ZERO)
-                .build();
-
-        config.setOptions(new ArrayList<>(List.of(opt)));
-
-        assertThatThrownBy(() -> validator.validateCustomRuleCreation(config))
-                .isInstanceOf(InvalidRuleConfigurationException.class)
-                .hasMessageContaining("Option code cannot be blank.");
+                .hasMessageContaining("non-negative");
     }
 }

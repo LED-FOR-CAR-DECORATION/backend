@@ -17,11 +17,20 @@ public record ManagementPricingRuleSummaryResponse(
         @Schema(description = "Display name of the rule", example = "Định dạng hiển thị (Format Type)")
         String configName,
 
-        @Schema(description = "Selection cardinality type", example = "SINGLE_SELECT")
+        @Schema(description = "Selection cardinality or input primitive type", example = "SINGLE_SELECT")
         SelectionType selectionType,
 
         @Schema(description = "UI component presentation type", example = "RADIO")
         UiType uiType,
+
+        @Schema(description = "Whether this rule contributes to the Base price bucket", example = "false")
+        boolean isBasePrice,
+
+        @Schema(description = "Minimum allowed quantity when selectionType is QUANTITY", example = "0", nullable = true)
+        Integer minQuantity,
+
+        @Schema(description = "Maximum allowed quantity when selectionType is QUANTITY", example = "5", nullable = true)
+        Integer maxQuantity,
 
         @Schema(description = "Whether selection is mandatory", example = "true")
         boolean isRequired,

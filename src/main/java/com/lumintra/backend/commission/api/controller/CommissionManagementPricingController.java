@@ -269,7 +269,7 @@ public class CommissionManagementPricingController {
     @PostMapping("/rules")
     @Operation(
             summary = "Create custom commission pricing rule",
-            description = "Creates a new custom commission pricing rule with associated options, validating invariants and uniqueness."
+            description = "Creates a new custom commission pricing rule using reusable primitives (SINGLE_SELECT, MULTI_SELECT, QUANTITY, TEXT_INPUT), deterministic modifiers (FLAT_ADD, BASE_PERCENT, SUBTOTAL_PERCENT), and optional acyclic multi-level visibility dependencies (depth <= 5)."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

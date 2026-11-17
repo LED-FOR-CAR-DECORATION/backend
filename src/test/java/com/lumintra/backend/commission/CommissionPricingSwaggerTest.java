@@ -5,6 +5,9 @@ import com.lumintra.backend.commission.api.response.PricingOptionResponse;
 import com.lumintra.backend.commission.api.response.PricingRuleResponse;
 import com.lumintra.backend.commission.api.response.PricingTierSummaryResponse;
 import com.lumintra.backend.commission.api.response.PublicCommissionPricingResponse;
+import com.lumintra.backend.commission.domain.model.ModifierType;
+import com.lumintra.backend.commission.domain.model.SelectionType;
+import com.lumintra.backend.commission.domain.model.UiType;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -62,8 +65,12 @@ class CommissionPricingSwaggerTest {
     }
 
     @Test
-    @DisplayName("CMS-01 SWG-02: PublicCommissionPricingResponse records declare @Schema on record and fields")
-    void responseDtos_declareSchemaAnnotations() throws NoSuchFieldException {
+    @DisplayName("CMS-01 SWG-02: PublicCommissionPricingResponse records and enums declare @Schema on types and fields")
+    void responseDtosAndEnums_declareSchemaAnnotations() throws NoSuchFieldException {
+        assertThat(SelectionType.class.getAnnotation(Schema.class)).isNotNull();
+        assertThat(UiType.class.getAnnotation(Schema.class)).isNotNull();
+        assertThat(ModifierType.class.getAnnotation(Schema.class)).isNotNull();
+
         assertSchemaOnRecordAndFields(
                 PublicCommissionPricingResponse.class,
                 "tiers", "rules"
@@ -73,19 +80,21 @@ class CommissionPricingSwaggerTest {
                 PricingTierSummaryResponse.class,
                 "tierId", "tierCode", "tierName", "description",
                 "basePrice", "customCalculatedPrice", "savingsAmount",
-                "maxRevisions", "isCustom", "displayOrder", "bundledOptionIds"
+                "maxRevisions", "isCustom", "displayOrder",
+                "triggerOptionIds", "bundledOptionIds"
         );
 
         assertSchemaOnRecordAndFields(
                 PricingRuleResponse.class,
                 "configId", "ruleKey", "configName", "description",
-                "selectionType", "uiType", "isRequired", "isSystem", "displayOrder",
+                "selectionType", "uiType", "isBasePrice", "minQuantity", "maxQuantity",
+                "isRequired", "isSystem", "displayOrder",
                 "dependsOnOptionId", "dependsOnRuleKey", "dependsOnOptionCode", "options"
         );
 
         assertSchemaOnRecordAndFields(
                 PricingOptionResponse.class,
-                "optionId", "optionCode", "optionLabel", "basePrice", "isDefault", "displayOrder"
+                "optionId", "optionCode", "optionLabel", "modifierType", "basePrice", "isDefault", "displayOrder"
         );
     }
 

@@ -4,6 +4,7 @@ import com.lumintra.backend.commission.domain.model.SelectionType;
 import com.lumintra.backend.commission.domain.model.UiType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -27,7 +28,7 @@ public record CreatePricingRuleRequest(
         @Schema(description = "Detailed prompt or helper description", example = "Chọn mức độ chi tiết của phông nền")
         String description,
 
-        @Schema(description = "Selection cardinality type", example = "SINGLE_SELECT")
+        @Schema(description = "Selection cardinality or input primitive type", example = "SINGLE_SELECT")
         @NotNull(message = "Selection type is required")
         SelectionType selectionType,
 
@@ -35,13 +36,24 @@ public record CreatePricingRuleRequest(
         @NotNull(message = "UI type is required")
         UiType uiType,
 
+        @Schema(description = "Whether this rule contributes to the Base price bucket used by BASE_PERCENT modifiers (allowed on FLAT_ADD choice rules only)", example = "false", nullable = true)
+        Boolean isBasePrice,
+
+        @Schema(description = "Minimum allowed count when selectionType is QUANTITY", example = "0", nullable = true)
+        @Min(value = 0, message = "minQuantity must be greater than or equal to 0")
+        Integer minQuantity,
+
+        @Schema(description = "Maximum allowed count when selectionType is QUANTITY", example = "5", nullable = true)
+        @Min(value = 1, message = "maxQuantity must be greater than or equal to 1")
+        Integer maxQuantity,
+
         @Schema(description = "Whether selection is mandatory", example = "true")
         Boolean isRequired,
 
         @Schema(description = "Display order sequence", example = "4")
         Integer displayOrder,
 
-        @Schema(description = "Parent option ID this rule conditionally depends on", example = "2", nullable = true)
+        @Schema(description = "Parent option ID this rule conditionally depends on (acyclic multi-level up to depth 5)", example = "2", nullable = true)
         Long dependsOnOptionId,
 
         @Schema(description = "List of selectable options configured for this rule")
