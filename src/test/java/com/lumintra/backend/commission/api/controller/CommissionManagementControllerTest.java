@@ -18,6 +18,8 @@ import com.lumintra.backend.commission.api.response.DesignerCommissionQueueRespo
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
+import com.lumintra.backend.commission.api.response.CommissionMessageResponse;
+import com.lumintra.backend.commission.api.response.PostDeliverableCardResponse;
 import com.lumintra.backend.commission.api.response.RejectCommissionDraftResponse;
 import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
@@ -28,9 +30,12 @@ import com.lumintra.backend.commission.application.AssignCommissionToDesignerUse
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
+import com.lumintra.backend.commission.application.PostDeliverableCardUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionDraftUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.UploadCommissionDraftUseCase;
+import com.lumintra.backend.commission.domain.model.CommissionMessageSenderRole;
+import com.lumintra.backend.commission.domain.model.CommissionMessageType;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
@@ -105,6 +110,7 @@ class CommissionManagementControllerTest {
     private static final String REJECT_PATH = "/api/management/commissions/{id}/reject";
     private static final String DRAFTS_PATH = "/api/management/commissions/{id}/drafts";
     private static final String REVIEWS_PATH = "/api/management/commissions/{id}/reviews";
+    private static final String DELIVERABLE_CARD_PATH = "/api/management/commissions/{id}/deliverable-card";
 
     @Autowired
     private MockMvc mockMvc;
@@ -132,6 +138,9 @@ class CommissionManagementControllerTest {
 
     @MockitoBean
     private RejectCommissionDraftUseCase rejectCommissionDraftUseCase;
+
+    @MockitoBean
+    private PostDeliverableCardUseCase postDeliverableCardUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -1484,6 +1493,146 @@ class CommissionManagementControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_COMMISSION_STATUS_TRANSITION"));
+    }
+
+    private PostDeliverableCardResponse createSampleDeliverableCardResponse() {
+        CommissionMessageResponse card = CommissionMessageResponse.builder()
+                .messageId(1201L)
+                .commissionId(105L)
+                .senderId(3L)
+                .senderRole(CommissionMessageSenderRole.STAFF)
+                .messageType(CommissionMessageType.DELIVERABLE_CARD)
+                .content("Preview version 1 is ready for your review.")
+                .mediaUrl("https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif")
+                .metadataJson("{\"submissionId\":42,\"versionNumber\":1}")
+                .createdAt(Instant.parse("2026-11-17T10:00:00Z"))
+                .build();
+        return PostDeliverableCardResponse.builder()
+                .commissionId(105L)
+                .commissionStatus(CommissionStatus.PREVIEW_DELIVERED)
+                .approvedSubmissionId(42L)
+                .versionNumber(1)
+                .submissionStatus(CommissionSubmissionStatus.STAFF_APPROVED)
+                .autoCompleteAt(Instant.parse("2026-11-24T10:00:00Z"))
+                .deliverableCard(card)
+                .build();
+    }
+
+    @Test
+    @DisplayName("CMS-17 Controller UTCID01 [N]: Assigned STAFF posts deliverable card -> returns 201 CREATED with PostDeliverableCardResponse")
+    void postDeliverableCard_assignedStaff_returns201Created() throws Exception {
+        when(postDeliverableCardUseCase.execute(105L, 3L, false)).thenReturn(createSampleDeliverableCardResponse());
+
+        mockMvc.perform(post(DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.commissionId").value(105))
+                .andExpect(jsonPath("$.data.commissionStatus").value("PREVIEW_DELIVERED"))
+                .andExpect(jsonPath("$.data.approvedSubmissionId").value(42))
+                .andExpect(jsonPath("$.data.versionNumber").value(1))
+                .andExpect(jsonPath("$.data.submissionStatus").value("STAFF_APPROVED"))
+                .andExpect(jsonPath("$.data.autoCompleteAt").value("2026-11-24T10:00:00Z"))
+                .andExpect(jsonPath("$.data.deliverableCard.messageId").value(1201))
+                .andExpect(jsonPath("$.data.deliverableCard.senderRole").value("STAFF"))
+                .andExpect(jsonPath("$.data.deliverableCard.messageType").value("DELIVERABLE_CARD"));
+
+        verify(postDeliverableCardUseCase).execute(105L, 3L, false);
+    }
+
+    @Test
+    @DisplayName("CMS-17 Controller UTCID02 [N]: MANAGER caller is passed as privileged override -> returns 201 CREATED")
+    void postDeliverableCard_manager_passesPrivilegedFlag() throws Exception {
+        when(postDeliverableCardUseCase.execute(105L, 9L, true)).thenReturn(createSampleDeliverableCardResponse());
+
+        mockMvc.perform(post(DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("9").roles("MANAGER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated());
+
+        verify(postDeliverableCardUseCase).execute(105L, 9L, true);
+    }
+
+    @Test
+    @DisplayName("CMS-17 Controller UTCID03 [B]: Non-positive id returns 400 BAD_REQUEST")
+    void postDeliverableCard_nonPositiveId_returns400BadRequest() throws Exception {
+        mockMvc.perform(post(DELIVERABLE_CARD_PATH, 0L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(postDeliverableCardUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-17 Controller UTCID04 [A]: Unauthenticated request returns 401 UNAUTHORIZED")
+    void postDeliverableCard_unauthenticated_returns401Unauthorized() throws Exception {
+        mockMvc.perform(post(DELIVERABLE_CARD_PATH, 105L)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(postDeliverableCardUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-17 Controller UTCID05 [A]: DESIGNER role returns 403 FORBIDDEN")
+    void postDeliverableCard_designerRole_returns403Forbidden() throws Exception {
+        mockMvc.perform(post(DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(postDeliverableCardUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-17 Controller UTCID06 [A]: CUSTOMER role returns 403 FORBIDDEN")
+    void postDeliverableCard_customerRole_returns403Forbidden() throws Exception {
+        mockMvc.perform(post(DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("501").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(postDeliverableCardUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-17 Controller UTCID07 [A]: Use case throws CommissionStaffLockException -> returns 403 COMMISSION_STAFF_LOCKED")
+    void postDeliverableCard_lockedByAnotherStaff_returns403Forbidden() throws Exception {
+        when(postDeliverableCardUseCase.execute(105L, 4L, false))
+                .thenThrow(new CommissionStaffLockException("Commission request 105 is locked by assigned staff 3"));
+
+        mockMvc.perform(post(DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("4").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMISSION_STAFF_LOCKED"));
+    }
+
+    @Test
+    @DisplayName("CMS-17 Controller UTCID08 [A]: Use case throws CommissionNotFoundException -> returns 404 COMMISSION_NOT_FOUND")
+    void postDeliverableCard_notFound_returns404NotFound() throws Exception {
+        when(postDeliverableCardUseCase.execute(999L, 3L, false))
+                .thenThrow(new CommissionNotFoundException("Commission request not found with id: 999"));
+
+        mockMvc.perform(post(DELIVERABLE_CARD_PATH, 999L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COMMISSION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CMS-17 Controller UTCID09 [A]: Use case throws InvalidCommissionStatusTransitionException -> returns 409 CONFLICT")
+    void postDeliverableCard_invalidStatus_returns409Conflict() throws Exception {
+        when(postDeliverableCardUseCase.execute(105L, 3L, false))
+                .thenThrow(new InvalidCommissionStatusTransitionException("Cannot post deliverable card for commission in status IN_PROGRESS (must be INTERNAL_REVIEW)"));
+
+        mockMvc.perform(post(DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVALID_COMMISSION_STATUS_TRANSITION"));
