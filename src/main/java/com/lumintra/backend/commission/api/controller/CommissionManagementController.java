@@ -19,7 +19,8 @@ import com.lumintra.backend.commission.application.GetManagementCommissionDetail
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
-import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
+import com.lumintra.backend.iam.domain.service.EmployeeLookupService;
+import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,6 +46,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Set;
 
 @Tag(
         name = "Commission Management",
@@ -54,6 +56,8 @@ import java.util.List;
 @RequestMapping("/api/management/commissions")
 @RequiredArgsConstructor
 public class CommissionManagementController {
+    private static final Set<String> MANAGEMENT_ROLES = Set.of("STAFF", "MANAGER", "ADMIN");
+    private static final Set<String> DESIGNER_ROLES = Set.of("DESIGNER");
 
     private final GetStaffCommissionQueueUseCase getStaffCommissionQueueUseCase;
     private final GetManagementCommissionDetailUseCase getManagementCommissionDetailUseCase;
@@ -61,6 +65,20 @@ public class CommissionManagementController {
     private final AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
     private final GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
     private final RejectCommissionRequestUseCase rejectCommissionRequestUseCase;
+    private final EmployeeLookupService employeeLookupService;
+    private final InternalEmployeeAccessService internalEmployeeAccessService;
+
+    @GetMapping("/designers")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    @Operation(summary = "List active designers for Commission assignment")
+    public ResponseEntity<ApiResponse<List<DesignerOption>>> listDesigners() {
+        var designers = employeeLookupService.findActiveDesigners().stream()
+                .map(profile -> new DesignerOption(profile.employeeId(), profile.fullName()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(designers));
+    }
+
+    public record DesignerOption(Long designerId, String fullName) {}
 
     @Operation(
             summary = "View staff commission queue",
@@ -196,7 +214,7 @@ public class CommissionManagementController {
             Authentication authentication,
             @Valid @ModelAttribute DesignerCommissionQueueFilterRequest filterRequest
     ) {
-        Long designerId = extractCallerId(authentication);
+        Long designerId = requireEmployeeId(authentication, DESIGNER_ROLES);
         DesignerCommissionQueueResponse response = getDesignerCommissionQueueUseCase.execute(designerId, filterRequest);
         return ResponseEntity.ok(ApiResponse.success(response.items(), response.meta()));
     }
@@ -255,8 +273,8 @@ public class CommissionManagementController {
             @Parameter(description = "Unique commission request identifier", example = "105")
             @PathVariable("id") @Positive(message = "id must be greater than 0") Long id
     ) {
-        Long callerId = extractCallerId(authentication);
         boolean isPrivileged = hasPrivilegedManagementRole(authentication);
+        Long callerId = requireEmployeeId(authentication, isPrivileged ? MANAGEMENT_ROLES : DESIGNER_ROLES);
         ManagementCommissionDetailResponse response = getManagementCommissionDetailUseCase.execute(id, callerId, isPrivileged);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -323,7 +341,7 @@ public class CommissionManagementController {
             @Parameter(description = "Unique commission request identifier", example = "105")
             @PathVariable("id") @Positive(message = "id must be greater than 0") Long id
     ) {
-        Long callerStaffId = extractCallerId(authentication);
+        Long callerStaffId = requireEmployeeId(authentication, MANAGEMENT_ROLES);
         boolean isPrivileged = isManagerOrAdmin(authentication);
         ApproveCommissionResponse response = approveCommissionRequestUseCase.execute(id, callerStaffId, isPrivileged);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -392,7 +410,7 @@ public class CommissionManagementController {
             @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
             @Valid @RequestBody AssignCommissionRequest request
     ) {
-        Long callerStaffId = extractCallerId(authentication);
+        Long callerStaffId = requireEmployeeId(authentication, MANAGEMENT_ROLES);
         boolean isPrivileged = isManagerOrAdmin(authentication);
         AssignCommissionResponse response = assignCommissionToDesignerUseCase.execute(id, request, callerStaffId, isPrivileged);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -461,29 +479,17 @@ public class CommissionManagementController {
             @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
             @Valid @RequestBody RejectCommissionRequest request
     ) {
-        Long callerStaffId = extractCallerId(authentication);
+        Long callerStaffId = requireEmployeeId(authentication, MANAGEMENT_ROLES);
         boolean isPrivileged = isManagerOrAdmin(authentication);
         RejectCommissionResponse response = rejectCommissionRequestUseCase.execute(id, request, callerStaffId, isPrivileged);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    private Long extractCallerId(Authentication authentication) {
+    private Long requireEmployeeId(Authentication authentication, Set<String> allowedRoles) {
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new AuthenticationCredentialsNotFoundException("Authentication is required.");
         }
-        String name = authentication.getName();
-        if (name == null || name.isBlank()) {
-            throw new InvalidCredentialsException("Invalid authentication principal");
-        }
-        try {
-            long id = Long.parseLong(name.trim());
-            if (id <= 0) {
-                throw new InvalidCredentialsException("Invalid user ID in token");
-            }
-            return id;
-        } catch (NumberFormatException ex) {
-            throw new InvalidCredentialsException("Invalid user ID in token");
-        }
+        return internalEmployeeAccessService.requireActiveEmployeeId(authentication.getName(), allowedRoles);
     }
 
     private boolean hasPrivilegedManagementRole(Authentication authentication) {
