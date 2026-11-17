@@ -5,6 +5,8 @@ import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResp
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse.CustomerDeliveredPreviewItem;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse.CustomerCommissionSummaryItem;
+import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
+import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
@@ -131,6 +133,69 @@ public class CommissionRequestMapper {
                 .assignedDesignerName(designer != null ? designer.fullName() : null)
                 .isSlaOverdue(entity.isSlaOverdue())
                 .quoteExpiresAt(entity.getQuoteExpiresAt())
+                .slaDueAt(entity.getSlaDueAt())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
+    }
+
+    public DesignerCommissionQueueResponse toDesignerQueueResponse(
+            Page<CommissionRequestEntity> page,
+            Map<Long, CustomerProfileSnapshot> customerProfiles,
+            Map<Long, EmployeeProfileSnapshot> employeeProfiles) {
+        if (page == null) {
+            return DesignerCommissionQueueResponse.builder()
+                    .items(List.of())
+                    .meta(null)
+                    .build();
+        }
+
+        List<DesignerCommissionQueueItem> items = page.getContent().stream()
+                .map(entity -> toDesignerQueueItem(entity, customerProfiles, employeeProfiles))
+                .toList();
+
+        return DesignerCommissionQueueResponse.builder()
+                .items(items)
+                .meta(PaginationMeta.from(page))
+                .build();
+    }
+
+    public DesignerCommissionQueueItem toDesignerQueueItem(
+            CommissionRequestEntity entity,
+            Map<Long, CustomerProfileSnapshot> customerProfiles,
+            Map<Long, EmployeeProfileSnapshot> employeeProfiles) {
+        if (entity == null) {
+            return null;
+        }
+
+        CustomerProfileSnapshot customer = entity.getCustomerId() != null && customerProfiles != null
+                ? customerProfiles.get(entity.getCustomerId())
+                : null;
+
+        EmployeeProfileSnapshot staff = entity.getAssignedStaffId() != null && employeeProfiles != null
+                ? employeeProfiles.get(entity.getAssignedStaffId())
+                : null;
+
+        EmployeeProfileSnapshot designer = entity.getAssignedDesignerId() != null && employeeProfiles != null
+                ? employeeProfiles.get(entity.getAssignedDesignerId())
+                : null;
+
+        return DesignerCommissionQueueItem.builder()
+                .commissionId(entity.getCommissionId())
+                .customerId(entity.getCustomerId())
+                .customerName(customer != null ? customer.fullName() : null)
+                .customerEmail(customer != null ? customer.email() : null)
+                .title(entity.getTitle())
+                .tierCode(entity.getTierCode())
+                .targetMatrixDimensions(entity.getTargetMatrixDimensions())
+                .status(entity.getStatus())
+                .revisionsUsed(entity.getRevisionsUsed())
+                .maxRevisions(entity.getMaxRevisions())
+                .assignedStaffId(entity.getAssignedStaffId())
+                .assignedStaffName(staff != null ? staff.fullName() : null)
+                .assignedDesignerId(entity.getAssignedDesignerId())
+                .assignedDesignerName(designer != null ? designer.fullName() : null)
+                .isSlaOverdue(entity.isSlaOverdue())
                 .slaDueAt(entity.getSlaDueAt())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())

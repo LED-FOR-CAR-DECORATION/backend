@@ -1,14 +1,18 @@
 package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
+import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
 import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
+import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
+import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.AssignCommissionToDesignerUseCase;
+import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
@@ -52,6 +56,7 @@ public class CommissionManagementController {
     private final GetManagementCommissionDetailUseCase getManagementCommissionDetailUseCase;
     private final ApproveCommissionRequestUseCase approveCommissionRequestUseCase;
     private final AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
+    private final GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
 
     @Operation(
             summary = "View staff commission queue",
@@ -139,6 +144,56 @@ public class CommissionManagementController {
             @Valid @ModelAttribute StaffCommissionQueueFilterRequest filterRequest
     ) {
         StaffCommissionQueueResponse response = getStaffCommissionQueueUseCase.execute(filterRequest);
+        return ResponseEntity.ok(ApiResponse.success(response.items(), response.meta()));
+    }
+
+    @Operation(
+            summary = "View designer commission queue (CMS-14)",
+            description = "Retrieves a paginated list of commission requests assigned specifically to the authenticated designer, with optional filtering by status and sorting by submission date.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Designer commission queue retrieved successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request - Invalid pagination or filter parameters",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized - Missing or expired bearer token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden - Caller role is not DESIGNER",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @GetMapping("/assigned")
+    @PreAuthorize("hasRole('DESIGNER')")
+    public ResponseEntity<ApiResponse<List<DesignerCommissionQueueItem>>> getDesignerCommissionQueue(
+            Authentication authentication,
+            @Valid @ModelAttribute DesignerCommissionQueueFilterRequest filterRequest
+    ) {
+        Long designerId = extractCallerId(authentication);
+        DesignerCommissionQueueResponse response = getDesignerCommissionQueueUseCase.execute(designerId, filterRequest);
         return ResponseEntity.ok(ApiResponse.success(response.items(), response.meta()));
     }
 

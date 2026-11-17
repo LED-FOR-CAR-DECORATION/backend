@@ -1,9 +1,12 @@
 package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
+import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
 import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
+import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
+import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
@@ -11,6 +14,7 @@ import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.AssignCommissionToDesignerUseCase;
+import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
@@ -66,6 +70,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CommissionManagementControllerTest {
 
     private static final String QUEUE_PATH = "/api/management/commissions";
+    private static final String ASSIGNED_QUEUE_PATH = "/api/management/commissions/assigned";
     private static final String DETAIL_PATH = "/api/management/commissions/{id}";
     private static final String APPROVE_PATH = "/api/management/commissions/{id}/approve";
     private static final String ASSIGN_PATH = "/api/management/commissions/{id}/assign";
@@ -84,6 +89,9 @@ class CommissionManagementControllerTest {
 
     @MockitoBean
     private AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
+
+    @MockitoBean
+    private GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -743,5 +751,121 @@ class CommissionManagementControllerTest {
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(assignCommissionToDesignerUseCase);
+    }
+
+    private DesignerCommissionQueueResponse createSampleDesignerQueueResponse() {
+        DesignerCommissionQueueItem item = DesignerCommissionQueueItem.builder()
+                .commissionId(101L)
+                .customerId(12L)
+                .customerName("Alice Customer")
+                .customerEmail("alice@example.com")
+                .title("Cyberpunk Neon Cat Animation")
+                .tierCode("ADVANCED")
+                .targetMatrixDimensions("32x64")
+                .status(CommissionStatus.IN_PROGRESS)
+                .revisionsUsed(0)
+                .maxRevisions(2)
+                .assignedStaffId(3L)
+                .assignedStaffName("Staff John")
+                .assignedDesignerId(5L)
+                .assignedDesignerName("Designer David")
+                .isSlaOverdue(false)
+                .slaDueAt(Instant.parse("2026-11-20T12:00:00Z"))
+                .createdAt(Instant.parse("2026-11-17T10:00:00Z"))
+                .updatedAt(Instant.parse("2026-11-17T12:00:00Z"))
+                .build();
+
+        PaginationMeta meta = PaginationMeta.builder()
+                .page(0)
+                .size(20)
+                .totalElements(1)
+                .totalPages(1)
+                .hasNext(false)
+                .hasPrevious(false)
+                .build();
+
+        return DesignerCommissionQueueResponse.builder()
+                .items(List.of(item))
+                .meta(meta)
+                .build();
+    }
+
+    @Test
+    @DisplayName("CMS-14 Controller UTCID01 [N]: Authenticated DESIGNER retrieves assigned queue successfully (200 OK)")
+    void getDesignerCommissionQueue_validDesigner_returns200OkWithItemsAndPagination() throws Exception {
+        when(getDesignerCommissionQueueUseCase.execute(eq(5L), any(DesignerCommissionQueueFilterRequest.class)))
+                .thenReturn(createSampleDesignerQueueResponse());
+
+        mockMvc.perform(get(ASSIGNED_QUEUE_PATH)
+                        .param("status", "IN_PROGRESS")
+                        .param("sortDirection", "DESC")
+                        .param("page", "0")
+                        .param("size", "20")
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].commissionId").value(101))
+                .andExpect(jsonPath("$.data[0].customerId").value(12))
+                .andExpect(jsonPath("$.data[0].customerName").value("Alice Customer"))
+                .andExpect(jsonPath("$.data[0].customerEmail").value("alice@example.com"))
+                .andExpect(jsonPath("$.data[0].title").value("Cyberpunk Neon Cat Animation"))
+                .andExpect(jsonPath("$.data[0].tierCode").value("ADVANCED"))
+                .andExpect(jsonPath("$.data[0].targetMatrixDimensions").value("32x64"))
+                .andExpect(jsonPath("$.data[0].status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data[0].revisionsUsed").value(0))
+                .andExpect(jsonPath("$.data[0].maxRevisions").value(2))
+                .andExpect(jsonPath("$.data[0].assignedStaffId").value(3))
+                .andExpect(jsonPath("$.data[0].assignedStaffName").value("Staff John"))
+                .andExpect(jsonPath("$.data[0].assignedDesignerId").value(5))
+                .andExpect(jsonPath("$.data[0].assignedDesignerName").value("Designer David"))
+                .andExpect(jsonPath("$.data[0].isSlaOverdue").value(false))
+                .andExpect(jsonPath("$.data[0].slaDueAt").value("2026-11-20T12:00:00Z"))
+                .andExpect(jsonPath("$.meta.page").value(0))
+                .andExpect(jsonPath("$.meta.size").value(20))
+                .andExpect(jsonPath("$.meta.totalElements").value(1));
+
+        ArgumentCaptor<DesignerCommissionQueueFilterRequest> captor = ArgumentCaptor.forClass(DesignerCommissionQueueFilterRequest.class);
+        verify(getDesignerCommissionQueueUseCase).execute(eq(5L), captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(CommissionStatus.IN_PROGRESS);
+        assertThat(captor.getValue().sortDirection()).isEqualTo("DESC");
+        assertThat(captor.getValue().page()).isEqualTo(0);
+        assertThat(captor.getValue().size()).isEqualTo(20);
+    }
+
+    @Test
+    @DisplayName("CMS-14 Controller UTCID02 [B]: Negative page or zero size returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void getDesignerCommissionQueue_invalidPaginationOrFilter_returns400BadRequest() throws Exception {
+        mockMvc.perform(get(ASSIGNED_QUEUE_PATH)
+                        .param("page", "-1")
+                        .param("size", "0")
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(getDesignerCommissionQueueUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-14 Controller UTCID03 [A]: Unauthenticated request returns 401 UNAUTHORIZED")
+    void getDesignerCommissionQueue_unauthenticated_returns401Unauthorized() throws Exception {
+        mockMvc.perform(get(ASSIGNED_QUEUE_PATH)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(getDesignerCommissionQueueUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-14 Controller UTCID04 [A]: Caller with STAFF or CUSTOMER role returns 403 FORBIDDEN")
+    void getDesignerCommissionQueue_unauthorizedRoleStaffOrCustomer_returns403Forbidden() throws Exception {
+        mockMvc.perform(get(ASSIGNED_QUEUE_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(getDesignerCommissionQueueUseCase);
     }
 }
