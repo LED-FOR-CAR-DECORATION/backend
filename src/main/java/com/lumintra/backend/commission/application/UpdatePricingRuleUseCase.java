@@ -8,6 +8,7 @@ import com.lumintra.backend.commission.domain.service.PricingInvariantValidator;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionPriceConfigEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionPriceOptionEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionPriceConfigRepository;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionPricingTierRepository;
 import com.lumintra.backend.shared.exception.commission.CommissionRuleNotFoundException;
 import com.lumintra.backend.shared.exception.commission.InvalidRuleConfigurationException;
 import lombok.RequiredArgsConstructor;
@@ -26,14 +27,16 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UpdatePricingRuleUseCase {
     private final CommissionPriceConfigRepository configRepository;
+    private final CommissionPricingTierRepository tierRepository;
     private final PricingInvariantValidator invariantValidator;
     private final GetManagementPricingRuleDetailUseCase getRuleDetail;
 
     @Transactional
     public ManagementPricingRuleResponse execute(Long ruleId, UpdatePricingRuleRequest request) {
-        CommissionPriceConfigEntity rule = configRepository.findById(ruleId)
-                .orElseThrow(() -> new CommissionRuleNotFoundException(
-                        "Commission pricing rule with ID " + ruleId + " not found."));
+        CommissionPriceConfigEntity rule = findRule(ruleId);
+        if (!rule.isActive()) {
+            throw new InvalidRuleConfigurationException("Tiêu chí này đã bị ẩn.");
+        }
         Map<Long, CommissionPriceOptionEntity> optionsById = new HashMap<>();
         for (CommissionPriceOptionEntity option : rule.getOptions()) {
             optionsById.put(option.getOptionId(), option);
@@ -57,6 +60,9 @@ public class UpdatePricingRuleUseCase {
         if (newOptions != null && !newOptions.isEmpty()) {
             appendOptions(rule, newOptions);
         }
+        if (request.removedOptionIds() != null && !request.removedOptionIds().isEmpty()) {
+            removeOptions(rule, optionsById, request.removedOptionIds());
+        }
 
         if (rule.isSystem()) {
             invariantValidator.validateRule(rule);
@@ -67,6 +73,57 @@ public class UpdatePricingRuleUseCase {
             configRepository.flush();
         }
         return getRuleDetail.execute(ruleId);
+    }
+
+    @Transactional
+    public void delete(Long ruleId) {
+        CommissionPriceConfigEntity rule = findRule(ruleId);
+        if (!rule.isActive()) return;
+        if (rule.isSystem()) {
+            throw new InvalidRuleConfigurationException("Không thể xóa tiêu chí hệ thống.");
+        }
+        Set<Long> optionIds = new HashSet<>();
+        for (CommissionPriceOptionEntity option : rule.getOptions()) {
+            optionIds.add(option.getOptionId());
+        }
+        ensureOptionsUnused(optionIds);
+        rule.setActive(false);
+    }
+
+    private CommissionPriceConfigEntity findRule(Long ruleId) {
+        return configRepository.findById(ruleId)
+                .orElseThrow(() -> new CommissionRuleNotFoundException(
+                        "Commission pricing rule with ID " + ruleId + " not found."));
+    }
+
+    private void removeOptions(CommissionPriceConfigEntity rule, Map<Long, CommissionPriceOptionEntity> optionsById, List<Long> ids) {
+        if ("FORMAT_TYPE".equals(rule.getRuleKey()) || rule.getSelectionType() == SelectionType.QUANTITY) {
+            throw new InvalidRuleConfigurationException("Không thể xóa phương án của tiêu chí này.");
+        }
+        Set<Long> uniqueIds = new HashSet<>(ids);
+        if (uniqueIds.size() != ids.size() || !optionsById.keySet().containsAll(uniqueIds)) {
+            throw new InvalidRuleConfigurationException("Phương án xóa bị trùng, không thuộc tiêu chí hoặc đang được cập nhật.");
+        }
+        ensureOptionsUnused(uniqueIds);
+        for (Long id : uniqueIds) {
+            optionsById.get(id).setActive(false);
+        }
+        if (rule.getOptions().stream().noneMatch(CommissionPriceOptionEntity::isActive)) {
+            throw new InvalidRuleConfigurationException("Tiêu chí phải còn ít nhất một phương án.");
+        }
+    }
+
+    private void ensureOptionsUnused(Set<Long> optionIds) {
+        if (optionIds.isEmpty()) return;
+        if (configRepository.existsByIsActiveTrueAndDependsOnOptionIdIn(optionIds)) {
+            throw new InvalidRuleConfigurationException("Phương án đang được tiêu chí khác sử dụng.");
+        }
+        for (var tier : tierRepository.findActiveWithIncludedOptions()) {
+            if (tier.getIncludedOptions().stream().anyMatch(option -> optionIds.contains(option.getOptionId()))
+                    || tier.getTriggerOptions().stream().anyMatch(option -> optionIds.contains(option.getOptionId()))) {
+                throw new InvalidRuleConfigurationException("Phương án đang được gói thiết kế sử dụng.");
+            }
+        }
     }
 
     private void appendOptions(CommissionPriceConfigEntity rule, List<UpdatePricingRuleRequest.NewOption> additions) {

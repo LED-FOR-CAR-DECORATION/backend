@@ -28,6 +28,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,6 +50,14 @@ public class CommissionManagementPricingController {
     private final GetManagementPricingRuleDetailUseCase getManagementPricingRuleDetailUseCase;
     private final CreateCustomPricingRuleUseCase createCustomPricingRuleUseCase;
     private final UpdatePricingRuleUseCase updatePricingRuleUseCase;
+
+    @DeleteMapping("/rules/{ruleId}")
+    @Operation(summary = "Remove a custom commission pricing rule",
+            description = "Deactivates an unused custom rule while preserving historical commission pricing.")
+    public ResponseEntity<Void> deletePricingRule(@PathVariable @Positive Long ruleId) {
+        updatePricingRuleUseCase.delete(ruleId);
+        return ResponseEntity.noContent().build();
+    }
 
     @PatchMapping("/rules/{ruleId}")
     @Operation(summary = "Update a commission pricing rule",

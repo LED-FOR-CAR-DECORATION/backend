@@ -49,6 +49,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -98,7 +99,7 @@ class CommissionManagementPricingControllerTest {
     @Test
     void managerCanUpdateCustomCriterion() throws Exception {
         var update = new UpdatePricingRuleRequest("Background", "Choose a background", true,
-                List.of(new UpdatePricingRuleRequest.OptionUpdate(20L, "Solid", new BigDecimal("50000"))), null);
+                List.of(new UpdatePricingRuleRequest.OptionUpdate(20L, "Solid", new BigDecimal("50000"))), null, null);
         when(updatePricingRuleUseCase.execute(eq(10L), any(UpdatePricingRuleRequest.class)))
                 .thenReturn(ManagementPricingRuleResponse.builder().configId(10L).configName("Background").build());
 
@@ -109,6 +110,14 @@ class CommissionManagementPricingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.configName").value("Background"));
         verify(updatePricingRuleUseCase).execute(10L, update);
+    }
+
+    @Test
+    void managerCanDeleteCustomCriterion() throws Exception {
+        mockMvc.perform(delete(RULES_PATH + "/10")
+                        .with(SecurityMockMvcRequestPostProcessors.user("manager").roles("MANAGER")))
+                .andExpect(status().isNoContent());
+        verify(updatePricingRuleUseCase).delete(10L);
     }
 
     private ManagementCommissionPricingResponse buildSampleManagementSummaryResponse() {

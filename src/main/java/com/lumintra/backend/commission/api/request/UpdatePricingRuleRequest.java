@@ -16,7 +16,8 @@ public record UpdatePricingRuleRequest(
         String description,
         @NotNull Boolean isRequired,
         @NotNull List<@NotNull @Valid OptionUpdate> options,
-        @Size(max = 50) List<@NotNull @Valid NewOption> newOptions
+        @Size(max = 50) List<@NotNull @Valid NewOption> newOptions,
+        List<@NotNull @Positive Long> removedOptionIds
 ) {
     public record OptionUpdate(
             @NotNull @Positive Long optionId,
