@@ -3,18 +3,25 @@ package com.lumintra.backend.commission;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse.CustomerCommissionSummaryItem;
+import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
+import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionAttachmentEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionRequestMapper;
+import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
+import com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -125,5 +132,52 @@ class CommissionRequestMapperTest {
         CustomerCommissionDetailResponse detail = mapper.toCustomerDetailResponse(entity, null, null);
         assertThat(detail.attachments()).isEmpty();
         assertThat(detail.deliveredPreviews()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("CMS-06 Mapper UTCID05 [N]: Maps staff commission queue items with enriched customer and employee names")
+    void toStaffQueueResponse_mapsEnrichedProfilesAndItemsCorrectly() {
+        CommissionRequestEntity entity = CommissionRequestEntity.createPendingReview(
+                10L, "Cyber Neon Car", "Detailed description", "ADVANCED", "32x64", "{}", new BigDecimal("250000.00"), 2, 2L
+        );
+        entity.setCommissionId(101L);
+        entity.setAssignedDesignerId(5L);
+        entity.setSlaDueAt(Instant.parse("2026-11-20T10:00:00Z"));
+
+        Map<Long, CustomerProfileSnapshot> customers = Map.of(
+                10L, new CustomerProfileSnapshot(10L, "Nguyen Van A", "0901234567", "nguyenvana@gmail.com")
+        );
+        Map<Long, EmployeeProfileSnapshot> employees = Map.of(
+                2L, new EmployeeProfileSnapshot(2L, "Staff Hoang", "staff@lumintra.com"),
+                5L, new EmployeeProfileSnapshot(5L, "Designer Nam", "designer@lumintra.com")
+        );
+
+        StaffCommissionQueueResponse response = mapper.toStaffQueueResponse(
+                new PageImpl<>(List.of(entity), PageRequest.of(0, 10), 1),
+                customers,
+                employees
+        );
+
+        assertThat(response).isNotNull();
+        assertThat(response.items()).hasSize(1);
+        StaffCommissionQueueItem item = response.items().get(0);
+        assertThat(item.commissionId()).isEqualTo(101L);
+        assertThat(item.customerName()).isEqualTo("Nguyen Van A");
+        assertThat(item.customerEmail()).isEqualTo("nguyenvana@gmail.com");
+        assertThat(item.assignedStaffName()).isEqualTo("Staff Hoang");
+        assertThat(item.assignedDesignerName()).isEqualTo("Designer Nam");
+        assertThat(item.status()).isEqualTo(CommissionStatus.PENDING_REVIEW);
+        assertThat(item.targetMatrixDimensions()).isEqualTo("32x64");
+    }
+
+    @Test
+    @DisplayName("CMS-06 Mapper UTCID06 [B]: Handles null page and null inputs safely for staff queue")
+    void toStaffQueueResponse_handlesNullInputsSafely() {
+        StaffCommissionQueueResponse response = mapper.toStaffQueueResponse(null, null, null);
+        assertThat(response).isNotNull();
+        assertThat(response.items()).isEmpty();
+        assertThat(response.meta()).isNull();
+
+        assertThat(mapper.toStaffQueueItem(null, null, null)).isNull();
     }
 }

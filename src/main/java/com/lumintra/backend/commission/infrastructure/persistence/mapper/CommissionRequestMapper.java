@@ -5,14 +5,19 @@ import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResp
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse.CustomerDeliveredPreviewItem;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse.CustomerCommissionSummaryItem;
+import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
+import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionAttachmentEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
+import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
+import com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -57,6 +62,73 @@ public class CommissionRequestMapper {
                 .maxRevisions(entity.getMaxRevisions())
                 .activePaymentCode(entity.resolveActivePaymentCode())
                 .quoteExpiresAt(entity.getQuoteExpiresAt())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
+    }
+
+    public StaffCommissionQueueResponse toStaffQueueResponse(
+            Page<CommissionRequestEntity> page,
+            Map<Long, CustomerProfileSnapshot> customerProfiles,
+            Map<Long, EmployeeProfileSnapshot> employeeProfiles) {
+        if (page == null) {
+            return StaffCommissionQueueResponse.builder()
+                    .items(List.of())
+                    .meta(null)
+                    .build();
+        }
+
+        List<StaffCommissionQueueItem> items = page.getContent().stream()
+                .map(entity -> toStaffQueueItem(entity, customerProfiles, employeeProfiles))
+                .toList();
+
+        return StaffCommissionQueueResponse.builder()
+                .items(items)
+                .meta(PaginationMeta.from(page))
+                .build();
+    }
+
+    public StaffCommissionQueueItem toStaffQueueItem(
+            CommissionRequestEntity entity,
+            Map<Long, CustomerProfileSnapshot> customerProfiles,
+            Map<Long, EmployeeProfileSnapshot> employeeProfiles) {
+        if (entity == null) {
+            return null;
+        }
+
+        CustomerProfileSnapshot customer = entity.getCustomerId() != null && customerProfiles != null
+                ? customerProfiles.get(entity.getCustomerId())
+                : null;
+
+        EmployeeProfileSnapshot staff = entity.getAssignedStaffId() != null && employeeProfiles != null
+                ? employeeProfiles.get(entity.getAssignedStaffId())
+                : null;
+
+        EmployeeProfileSnapshot designer = entity.getAssignedDesignerId() != null && employeeProfiles != null
+                ? employeeProfiles.get(entity.getAssignedDesignerId())
+                : null;
+
+        return StaffCommissionQueueItem.builder()
+                .commissionId(entity.getCommissionId())
+                .customerId(entity.getCustomerId())
+                .customerName(customer != null ? customer.fullName() : null)
+                .customerEmail(customer != null ? customer.email() : null)
+                .title(entity.getTitle())
+                .tierCode(entity.getTierCode())
+                .targetMatrixDimensions(entity.getTargetMatrixDimensions())
+                .status(entity.getStatus())
+                .initialPrice(entity.getInitialPrice())
+                .extraRevisionFee(entity.getExtraRevisionFee())
+                .totalPrice(entity.getTotalPrice())
+                .revisionsUsed(entity.getRevisionsUsed())
+                .maxRevisions(entity.getMaxRevisions())
+                .assignedStaffId(entity.getAssignedStaffId())
+                .assignedStaffName(staff != null ? staff.fullName() : null)
+                .assignedDesignerId(entity.getAssignedDesignerId())
+                .assignedDesignerName(designer != null ? designer.fullName() : null)
+                .isSlaOverdue(entity.isSlaOverdue())
+                .quoteExpiresAt(entity.getQuoteExpiresAt())
+                .slaDueAt(entity.getSlaDueAt())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
