@@ -446,6 +446,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("COMMISSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(CommissionSubmissionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCommissionSubmissionNotFound(CommissionSubmissionNotFoundException ex) {
+        return buildErrorResponse("COMMISSION_SUBMISSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
     @ExceptionHandler(CommissionOwnershipMismatchException.class)
     public ResponseEntity<ErrorResponse> handleCommissionOwnershipMismatch(CommissionOwnershipMismatchException ex) {
         return buildErrorResponse("COMMISSION_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);

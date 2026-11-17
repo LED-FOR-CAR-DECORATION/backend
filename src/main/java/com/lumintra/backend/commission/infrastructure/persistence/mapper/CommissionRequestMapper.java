@@ -8,6 +8,7 @@ import com.lumintra.backend.commission.api.response.CustomerCommissionListRespon
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
+import com.lumintra.backend.commission.api.response.RejectCommissionDraftResponse;
 import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
@@ -427,6 +428,26 @@ public class CommissionRequestMapper {
                 .submissionStatus(submission.getStatus())
                 .commissionStatus(commission.getStatus())
                 .createdAt(submission.getCreatedAt())
+                .build();
+    }
+
+    public RejectCommissionDraftResponse toRejectDraftResponse(
+            CommissionSubmissionEntity submission,
+            CommissionRequestEntity commission) {
+        if (submission == null || commission == null) {
+            return null;
+        }
+        return RejectCommissionDraftResponse.builder()
+                .commissionId(commission.getCommissionId())
+                .submissionId(submission.getSubmissionId())
+                .versionNumber(submission.getVersionNumber())
+                .submissionStatus(submission.getStatus())
+                .commissionStatus(commission.getStatus())
+                .reviewerStaffId(submission.getReviewerStaffId())
+                .staffReviewNote(submission.getStaffReviewNote())
+                .revisionsUsed(commission.getRevisionsUsed())
+                .maxRevisions(commission.getMaxRevisions())
+                .reviewedAt(submission.getReviewedAt())
                 .build();
     }
 }

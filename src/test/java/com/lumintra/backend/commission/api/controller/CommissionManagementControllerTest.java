@@ -7,6 +7,7 @@ import java.util.Set;
 
 import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.request.RejectCommissionDraftRequest;
 import com.lumintra.backend.commission.api.request.RejectCommissionRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.request.UploadCommissionDraftRequest;
@@ -17,6 +18,7 @@ import com.lumintra.backend.commission.api.response.DesignerCommissionQueueRespo
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
+import com.lumintra.backend.commission.api.response.RejectCommissionDraftResponse;
 import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
@@ -26,6 +28,7 @@ import com.lumintra.backend.commission.application.AssignCommissionToDesignerUse
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
+import com.lumintra.backend.commission.application.RejectCommissionDraftUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.UploadCommissionDraftUseCase;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
@@ -39,6 +42,7 @@ import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.commission.CommissionStaffLockException;
+import com.lumintra.backend.shared.exception.commission.CommissionSubmissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
 import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
 import com.lumintra.backend.shared.response.PaginationMeta;
@@ -100,6 +104,7 @@ class CommissionManagementControllerTest {
     private static final String ASSIGN_PATH = "/api/management/commissions/{id}/assign";
     private static final String REJECT_PATH = "/api/management/commissions/{id}/reject";
     private static final String DRAFTS_PATH = "/api/management/commissions/{id}/drafts";
+    private static final String REVIEWS_PATH = "/api/management/commissions/{id}/reviews";
 
     @Autowired
     private MockMvc mockMvc;
@@ -124,6 +129,9 @@ class CommissionManagementControllerTest {
 
     @MockitoBean
     private UploadCommissionDraftUseCase uploadCommissionDraftUseCase;
+
+    @MockitoBean
+    private RejectCommissionDraftUseCase rejectCommissionDraftUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -1287,5 +1295,197 @@ class CommissionManagementControllerTest {
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    @DisplayName("CMS-16 Controller UTCID01 [N]: Authenticated STAFF rejects draft internally -> returns 200 OK with RejectCommissionDraftResponse")
+    void rejectCommissionDraft_validStaff_returns200Ok() throws Exception {
+        RejectCommissionDraftResponse response = RejectCommissionDraftResponse.builder()
+                .commissionId(105L)
+                .submissionId(42L)
+                .versionNumber(1)
+                .submissionStatus(CommissionSubmissionStatus.STAFF_REJECTED)
+                .commissionStatus(CommissionStatus.INTERNAL_REVISION_REQUIRED)
+                .reviewerStaffId(3L)
+                .staffReviewNote("Increase neon edge contrast")
+                .revisionsUsed(0)
+                .maxRevisions(2)
+                .reviewedAt(Instant.parse("2026-11-17T12:15:00Z"))
+                .build();
+
+        when(rejectCommissionDraftUseCase.execute(eq(105L), any(RejectCommissionDraftRequest.class), eq(3L), eq(false)))
+                .thenReturn(response);
+
+        String requestBody = """
+                {
+                    "submissionId": 42,
+                    "reviewNote": "Increase neon edge contrast"
+                }
+                """;
+
+        mockMvc.perform(post(REVIEWS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105))
+                .andExpect(jsonPath("$.data.submissionId").value(42))
+                .andExpect(jsonPath("$.data.versionNumber").value(1))
+                .andExpect(jsonPath("$.data.submissionStatus").value("STAFF_REJECTED"))
+                .andExpect(jsonPath("$.data.commissionStatus").value("INTERNAL_REVISION_REQUIRED"))
+                .andExpect(jsonPath("$.data.reviewerStaffId").value(3))
+                .andExpect(jsonPath("$.data.staffReviewNote").value("Increase neon edge contrast"))
+                .andExpect(jsonPath("$.data.revisionsUsed").value(0))
+                .andExpect(jsonPath("$.data.maxRevisions").value(2));
+
+        ArgumentCaptor<RejectCommissionDraftRequest> captor = ArgumentCaptor.forClass(RejectCommissionDraftRequest.class);
+        verify(rejectCommissionDraftUseCase).execute(eq(105L), captor.capture(), eq(3L), eq(false));
+        assertThat(captor.getValue().submissionId()).isEqualTo(42L);
+        assertThat(captor.getValue().reviewNote()).isEqualTo("Increase neon edge contrast");
+    }
+
+    @Test
+    @DisplayName("CMS-16 Controller UTCID02 [B]: Blank reviewNote returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void rejectCommissionDraft_blankReviewNote_returns400BadRequest() throws Exception {
+        String invalidBody = """
+                {
+                    "submissionId": 42,
+                    "reviewNote": "   "
+                }
+                """;
+
+        mockMvc.perform(post(REVIEWS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(rejectCommissionDraftUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-16 Controller UTCID03 [B]: Non-positive commission id or submissionId returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void rejectCommissionDraft_nonPositiveIds_returns400BadRequest() throws Exception {
+        String invalidBody = """
+                {
+                    "submissionId": 0,
+                    "reviewNote": "Fix edges"
+                }
+                """;
+
+        mockMvc.perform(post(REVIEWS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(rejectCommissionDraftUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-16 Controller UTCID04 [A]: Unauthenticated request returns 401 UNAUTHORIZED")
+    void rejectCommissionDraft_unauthenticated_returns401Unauthorized() throws Exception {
+        String requestBody = """
+                {
+                    "reviewNote": "Fix edges"
+                }
+                """;
+
+        mockMvc.perform(post(REVIEWS_PATH, 105L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(rejectCommissionDraftUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-16 Controller UTCID05 [A]: Caller with DESIGNER or CUSTOMER role returns 403 FORBIDDEN")
+    void rejectCommissionDraft_nonStaffRole_returns403Forbidden() throws Exception {
+        String requestBody = """
+                {
+                    "reviewNote": "Fix edges"
+                }
+                """;
+
+        mockMvc.perform(post(REVIEWS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(rejectCommissionDraftUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-16 Controller UTCID06 [A]: UseCase throws CommissionStaffLockException -> returns 403 FORBIDDEN")
+    void rejectCommissionDraft_staffLocked_returns403Forbidden() throws Exception {
+        when(rejectCommissionDraftUseCase.execute(eq(105L), any(RejectCommissionDraftRequest.class), eq(8L), eq(false)))
+                .thenThrow(new CommissionStaffLockException("Commission request 105 is locked by assigned staff 3"));
+
+        String requestBody = """
+                {
+                    "reviewNote": "Fix edges"
+                }
+                """;
+
+        mockMvc.perform(post(REVIEWS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("8").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMISSION_STAFF_LOCKED"));
+    }
+
+    @Test
+    @DisplayName("CMS-16 Controller UTCID07 [A]: UseCase throws CommissionSubmissionNotFoundException -> returns 404 NOT_FOUND")
+    void rejectCommissionDraft_submissionNotFound_returns404NotFound() throws Exception {
+        when(rejectCommissionDraftUseCase.execute(eq(105L), any(RejectCommissionDraftRequest.class), eq(3L), eq(false)))
+                .thenThrow(new CommissionSubmissionNotFoundException("No pending draft submission found for commission 105"));
+
+        String requestBody = """
+                {
+                    "reviewNote": "Fix edges"
+                }
+                """;
+
+        mockMvc.perform(post(REVIEWS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COMMISSION_SUBMISSION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CMS-16 Controller UTCID08 [A]: UseCase throws InvalidCommissionStatusTransitionException -> returns 409 CONFLICT")
+    void rejectCommissionDraft_invalidStatus_returns409Conflict() throws Exception {
+        when(rejectCommissionDraftUseCase.execute(eq(105L), any(RejectCommissionDraftRequest.class), eq(3L), eq(false)))
+                .thenThrow(new InvalidCommissionStatusTransitionException("Cannot reject draft internally for commission in status IN_PROGRESS (must be INTERNAL_REVIEW)"));
+
+        String requestBody = """
+                {
+                    "reviewNote": "Fix edges"
+                }
+                """;
+
+        mockMvc.perform(post(REVIEWS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_COMMISSION_STATUS_TRANSITION"));
     }
 }
