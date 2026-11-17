@@ -15,11 +15,18 @@ public record UpdatePricingRuleRequest(
         @NotBlank @Size(max = 255) String configName,
         String description,
         @NotNull Boolean isRequired,
-        @NotNull List<@NotNull @Valid OptionUpdate> options
+        @NotNull List<@NotNull @Valid OptionUpdate> options,
+        @Size(max = 50) List<@NotNull @Valid NewOption> newOptions
 ) {
     public record OptionUpdate(
             @NotNull @Positive Long optionId,
             @NotBlank @Size(max = 255) String optionLabel,
             @NotNull @DecimalMin("0") @Digits(integer = 10, fraction = 2) BigDecimal basePrice
+    ) {}
+
+    public record NewOption(
+            @NotBlank @Size(max = 255) String optionLabel,
+            @NotNull @DecimalMin("0") @Digits(integer = 10, fraction = 2) BigDecimal basePrice,
+            @Size(max = 100) String matrixDimensions
     ) {}
 }

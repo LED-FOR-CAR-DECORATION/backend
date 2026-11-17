@@ -9,7 +9,7 @@ import com.lumintra.backend.commission.application.CreateCustomPricingRuleUseCas
 import com.lumintra.backend.commission.application.GetManagementCommissionPricingUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingRuleDetailUseCase;
 import com.lumintra.backend.commission.application.GetManagementPricingTierDetailUseCase;
-import com.lumintra.backend.commission.application.UpdateCustomPricingRuleUseCase;
+import com.lumintra.backend.commission.application.UpdatePricingRuleUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,15 +48,15 @@ public class CommissionManagementPricingController {
     private final GetManagementPricingTierDetailUseCase getManagementPricingTierDetailUseCase;
     private final GetManagementPricingRuleDetailUseCase getManagementPricingRuleDetailUseCase;
     private final CreateCustomPricingRuleUseCase createCustomPricingRuleUseCase;
-    private final UpdateCustomPricingRuleUseCase updateCustomPricingRuleUseCase;
+    private final UpdatePricingRuleUseCase updatePricingRuleUseCase;
 
     @PatchMapping("/rules/{ruleId}")
-    @Operation(summary = "Update a custom commission pricing rule",
-            description = "Updates the name, description, required flag and existing options of a custom rule while preserving identifiers and dependencies.")
-    public ResponseEntity<ApiResponse<ManagementPricingRuleResponse>> updateCustomPricingRule(
+    @Operation(summary = "Update a commission pricing rule",
+            description = "Updates labels, instructions and prices and adds options to eligible choice rules. Only custom rules can change the required flag.")
+    public ResponseEntity<ApiResponse<ManagementPricingRuleResponse>> updatePricingRule(
             @PathVariable @Positive Long ruleId,
             @Valid @RequestBody UpdatePricingRuleRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(updateCustomPricingRuleUseCase.execute(ruleId, request)));
+        return ResponseEntity.ok(ApiResponse.success(updatePricingRuleUseCase.execute(ruleId, request)));
     }
 
     @GetMapping
