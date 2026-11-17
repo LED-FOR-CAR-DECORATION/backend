@@ -1,11 +1,13 @@
 package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.CustomerCommissionFilterRequest;
+import com.lumintra.backend.commission.api.request.SubmitCommissionRequest;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse.CustomerCommissionSummaryItem;
 import com.lumintra.backend.commission.application.GetCustomerCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.ListCustomerCommissionsUseCase;
+import com.lumintra.backend.commission.application.SubmitCommissionUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -20,6 +22,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
@@ -27,6 +30,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,6 +48,7 @@ public class CommissionController {
 
     private final ListCustomerCommissionsUseCase listCustomerCommissionsUseCase;
     private final GetCustomerCommissionDetailUseCase getCustomerCommissionDetailUseCase;
+    private final SubmitCommissionUseCase submitCommissionUseCase;
 
     @Operation(
             summary = "List personal commission requests",
@@ -152,6 +158,71 @@ public class CommissionController {
         Long customerId = extractCustomerId(authentication);
         CustomerCommissionListResponse result = listCustomerCommissionsUseCase.execute(customerId, filter);
         return ResponseEntity.ok(ApiResponse.success(result.items(), result.meta()));
+    }
+
+    @Operation(
+            summary = "Submit custom commission request",
+            description = "Submits a new custom artwork commission request using a preset (BASIC, ADVANCED) or CUSTOM configurator, validating rule constraints, snapshotting pricing breakdown, auto-assigning staff, and saving reference attachments.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "Commission request submitted successfully and queued as PENDING_REVIEW",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CustomerCommissionDetailResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Validation failed, invalid rule selection, or preset mismatch",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Missing, expired, or invalid JWT access token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Access denied: caller does not possess the CUSTOMER role",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Specified pricing tier or rule config/option not found or inactive",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Unexpected internal server failure",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @PostMapping
+    public ResponseEntity<ApiResponse<CustomerCommissionDetailResponse>> submitCommission(
+            Authentication authentication,
+            @Valid @RequestBody SubmitCommissionRequest request) {
+        Long customerId = extractCustomerId(authentication);
+        CustomerCommissionDetailResponse result = submitCommissionUseCase.execute(customerId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(result));
     }
 
     @Operation(

@@ -1,6 +1,7 @@
 package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.CustomerCommissionFilterRequest;
+import com.lumintra.backend.commission.api.request.SubmitCommissionRequest;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse.CustomerCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse.CustomerDeliveredPreviewItem;
@@ -8,6 +9,7 @@ import com.lumintra.backend.commission.api.response.CustomerCommissionListRespon
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse.CustomerCommissionSummaryItem;
 import com.lumintra.backend.commission.application.GetCustomerCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.ListCustomerCommissionsUseCase;
+import com.lumintra.backend.commission.application.SubmitCommissionUseCase;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
@@ -15,6 +17,9 @@ import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
+import com.lumintra.backend.shared.exception.commission.CommissionTierNotFoundException;
+import com.lumintra.backend.shared.exception.commission.InvalidCommissionRuleSelectionException;
+import com.lumintra.backend.shared.exception.commission.PresetSelectionMismatchException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
@@ -42,6 +47,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -56,6 +62,7 @@ class CommissionControllerTest {
 
     private static final String MY_COMMISSIONS_PATH = "/api/commissions/my";
     private static final String COMMISSION_DETAIL_PATH = "/api/commissions/{id}";
+    private static final String SUBMIT_COMMISSION_PATH = "/api/commissions";
 
     @Autowired
     private MockMvc mockMvc;
@@ -65,6 +72,9 @@ class CommissionControllerTest {
 
     @MockitoBean
     private GetCustomerCommissionDetailUseCase getCustomerCommissionDetailUseCase;
+
+    @MockitoBean
+    private SubmitCommissionUseCase submitCommissionUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -381,5 +391,190 @@ class CommissionControllerTest {
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("COMMISSION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CMS-03 Controller UTCID17 [N]: Authenticated CUSTOMER submits commission request returns 201 Created")
+    void submitCommission_customerRole_returns201Created() throws Exception {
+        CustomerCommissionDetailResponse response = CustomerCommissionDetailResponse.builder()
+                .commissionId(501L)
+                .customerId(10L)
+                .title("Cyberpunk Shiba")
+                .description("Shiba in neon rain")
+                .tierCode("ADVANCED")
+                .targetMatrixDimensions("32x32")
+                .priceBreakdownJson("{}")
+                .initialPrice(new BigDecimal("149000.00"))
+                .extraRevisionFee(BigDecimal.ZERO)
+                .totalPrice(new BigDecimal("149000.00"))
+                .revisionsUsed(0)
+                .maxRevisions(3)
+                .status(CommissionStatus.PENDING_REVIEW)
+                .createdAt(Instant.parse("2026-11-16T12:00:00Z"))
+                .attachments(List.of())
+                .deliveredPreviews(List.of())
+                .build();
+
+        when(submitCommissionUseCase.execute(eq(10L), any(SubmitCommissionRequest.class)))
+                .thenReturn(response);
+
+        String jsonPayload = """
+                {
+                  "title": "Cyberpunk Shiba",
+                  "description": "Shiba in neon rain",
+                  "tierCode": "ADVANCED",
+                  "step1Selections": [
+                    { "configId": 1, "optionId": 11 },
+                    { "configId": 2, "optionId": 21 },
+                    { "configId": 3, "optionId": 30 }
+                  ],
+                  "selectedOptions": [],
+                  "targetMatrixDimensions": "32x32",
+                  "attachments": []
+                }
+                """;
+
+        mockMvc.perform(post(SUBMIT_COMMISSION_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("10").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.commissionId").value(501))
+                .andExpect(jsonPath("$.data.tierCode").value("ADVANCED"))
+                .andExpect(jsonPath("$.data.status").value("PENDING_REVIEW"))
+                .andExpect(jsonPath("$.data.initialPrice").value(149000.00));
+    }
+
+    @Test
+    @DisplayName("CMS-03 Controller UTCID18 [A]: Unauthenticated request to submit commission returns 401 Unauthorized")
+    void submitCommission_unauthenticated_returns401() throws Exception {
+        String jsonPayload = """
+                {
+                  "title": "Cyberpunk Shiba",
+                  "tierCode": "ADVANCED",
+                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                }
+                """;
+
+        mockMvc.perform(post(SUBMIT_COMMISSION_PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(submitCommissionUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-03 Controller UTCID19 [A]: Non-customer role returns 403 Forbidden")
+    void submitCommission_staffRole_returns403() throws Exception {
+        String jsonPayload = """
+                {
+                  "title": "Cyberpunk Shiba",
+                  "tierCode": "ADVANCED",
+                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                }
+                """;
+
+        mockMvc.perform(post(SUBMIT_COMMISSION_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("10").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(submitCommissionUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-03 Controller UTCID20 [A]: Blank title returns 400 VALIDATION_FAILED")
+    void submitCommission_blankTitle_returns400() throws Exception {
+        String jsonPayload = """
+                {
+                  "title": "",
+                  "tierCode": "ADVANCED",
+                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                }
+                """;
+
+        mockMvc.perform(post(SUBMIT_COMMISSION_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("10").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(submitCommissionUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-03 Controller UTCID21 [A]: Invalid commission rule selection returns 400 INVALID_COMMISSION_RULE_SELECTION")
+    void submitCommission_ruleViolation_returns400() throws Exception {
+        when(submitCommissionUseCase.execute(eq(10L), any(SubmitCommissionRequest.class)))
+                .thenThrow(new InvalidCommissionRuleSelectionException("FRAME_RANGE selection is required when FORMAT_TYPE is ANIMATED_GIF"));
+
+        String jsonPayload = """
+                {
+                  "title": "GIF without frame range",
+                  "tierCode": "CUSTOM",
+                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                }
+                """;
+
+        mockMvc.perform(post(SUBMIT_COMMISSION_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("10").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_COMMISSION_RULE_SELECTION"));
+    }
+
+    @Test
+    @DisplayName("CMS-03 Controller UTCID22 [A]: Preset selection mismatch returns 400 PRESET_SELECTION_MISMATCH")
+    void submitCommission_presetMismatch_returns400() throws Exception {
+        when(submitCommissionUseCase.execute(eq(10L), any(SubmitCommissionRequest.class)))
+                .thenThrow(new PresetSelectionMismatchException("Submitted Step-1 selections do not match preset tier requirements"));
+
+        String jsonPayload = """
+                {
+                  "title": "Preset Mismatch",
+                  "tierCode": "BASIC",
+                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                }
+                """;
+
+        mockMvc.perform(post(SUBMIT_COMMISSION_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("10").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRESET_SELECTION_MISMATCH"));
+    }
+
+    @Test
+    @DisplayName("CMS-03 Controller UTCID23 [A]: Tier not found returns 404 COMMISSION_TIER_NOT_FOUND")
+    void submitCommission_tierNotFound_returns404() throws Exception {
+        when(submitCommissionUseCase.execute(eq(10L), any(SubmitCommissionRequest.class)))
+                .thenThrow(new CommissionTierNotFoundException("Pricing tier not found: UNKNOWN"));
+
+        String jsonPayload = """
+                {
+                  "title": "Unknown Tier",
+                  "tierCode": "UNKNOWN",
+                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                }
+                """;
+
+        mockMvc.perform(post(SUBMIT_COMMISSION_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("10").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COMMISSION_TIER_NOT_FOUND"));
     }
 }

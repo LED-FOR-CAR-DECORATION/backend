@@ -55,4 +55,10 @@ public class EmployeeLookupServiceImpl implements EmployeeLookupService {
                         (existing, replacement) -> existing
                 ));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<Long> findActiveStaffEmployeeIds() {
+        return employeeRepository.findActiveStaffEmployeeIds();
+    }
 }

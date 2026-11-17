@@ -17,4 +17,6 @@ public interface CommissionRequestRepository extends JpaRepository<CommissionReq
             CommissionStatus status,
             Pageable pageable
     );
+
+    Page<CommissionRequestEntity> findAllByStatus(CommissionStatus status, Pageable pageable);
 }

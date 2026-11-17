@@ -36,4 +36,13 @@ public interface EmployeeRepository
             where e.employeeId in :employeeIds
             """)
     List<EmployeeProfileSnapshot> findProfileSnapshotsByEmployeeIds(@Param("employeeIds") Collection<Long> employeeIds);
+
+    @Query("""
+            select e.employeeId
+            from EmployeeEntity e
+            where e.role.roleName = 'STAFF'
+              and e.account.status = com.lumintra.backend.iam.domain.model.AccountStatus.ACTIVE
+            order by e.employeeId asc
+            """)
+    List<Long> findActiveStaffEmployeeIds();
 }
