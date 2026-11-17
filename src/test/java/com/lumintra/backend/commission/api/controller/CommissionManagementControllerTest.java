@@ -1,13 +1,19 @@
 package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
+import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
+import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
+import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
+import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
+import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
@@ -19,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -30,6 +37,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -47,12 +55,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CommissionManagementControllerTest {
 
     private static final String QUEUE_PATH = "/api/management/commissions";
+    private static final String DETAIL_PATH = "/api/management/commissions/{id}";
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
     private GetStaffCommissionQueueUseCase getStaffCommissionQueueUseCase;
+
+    @MockitoBean
+    private GetManagementCommissionDetailUseCase getManagementCommissionDetailUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -269,5 +281,198 @@ class CommissionManagementControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 
         verifyNoInteractions(getStaffCommissionQueueUseCase);
+    }
+
+    private ManagementCommissionDetailResponse createSampleDetailResponse() {
+        return ManagementCommissionDetailResponse.builder()
+                .commissionId(105L)
+                .customerId(12L)
+                .customerName("Nguyen Van A")
+                .customerEmail("nguyenvana@gmail.com")
+                .customerPhone("0901234567")
+                .title("Cyberpunk Neon Cat Animation")
+                .description("Animated neon cat blinking")
+                .tierCode("ADVANCED")
+                .targetMatrixDimensions("32x64")
+                .priceBreakdownJson("{\"tierCode\":\"ADVANCED\"}")
+                .initialPrice(new BigDecimal("250000.00"))
+                .extraRevisionFee(BigDecimal.ZERO)
+                .totalPrice(new BigDecimal("250000.00"))
+                .revisionsUsed(1)
+                .maxRevisions(2)
+                .status(CommissionStatus.INTERNAL_REVIEW)
+                .assignedStaffId(3L)
+                .assignedStaffName("Tran Thi Staff")
+                .assignedDesignerId(5L)
+                .assignedDesignerName("Le Van Designer")
+                .isSlaOverdue(false)
+                .activePaymentCode(null)
+                .approvedSubmissionId(null)
+                .rejectionReason(null)
+                .chatActive(true)
+                .quoteExpiresAt(null)
+                .slaDueAt(Instant.parse("2026-11-18T10:00:00Z"))
+                .autoCompleteAt(null)
+                .createdAt(Instant.parse("2026-11-17T08:00:00Z"))
+                .updatedAt(Instant.parse("2026-11-17T08:20:00Z"))
+                .attachments(List.of(
+                        ManagementCommissionAttachmentItem.builder()
+                                .attachmentId(201L)
+                                .imageUrl("https://cdn.lumintra.shop/commissions/ref-cat.png")
+                                .caption("Cat ears")
+                                .displayOrder(0)
+                                .createdAt(Instant.parse("2026-11-17T08:00:00Z"))
+                                .build()
+                ))
+                .submissions(List.of(
+                        ManagementCommissionSubmissionItem.builder()
+                                .submissionId(901L)
+                                .designerId(5L)
+                                .designerName("Le Van Designer")
+                                .versionNumber(1)
+                                .imageUrl("https://cdn.lumintra.shop/commissions/draft-v1.gif")
+                                .designerNote("Initial draft")
+                                .status(CommissionSubmissionStatus.STAFF_REJECTED)
+                                .reviewerStaffId(3L)
+                                .reviewerStaffName("Tran Thi Staff")
+                                .staffReviewNote("Blinking too fast")
+                                .reviewedAt(Instant.parse("2026-11-17T08:15:00Z"))
+                                .deliveredAt(null)
+                                .createdAt(Instant.parse("2026-11-17T08:10:00Z"))
+                                .build()
+                ))
+                .build();
+    }
+
+    @Test
+    @DisplayName("CMS-07 Controller UTCID01 [N]: Authenticated STAFF retrieves management commission details (200 OK)")
+    void getManagementCommissionDetail_asStaff_returns200Ok() throws Exception {
+        when(getManagementCommissionDetailUseCase.execute(eq(105L), eq(3L), eq(true)))
+                .thenReturn(createSampleDetailResponse());
+
+        mockMvc.perform(get(DETAIL_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105))
+                .andExpect(jsonPath("$.data.customerName").value("Nguyen Van A"))
+                .andExpect(jsonPath("$.data.customerEmail").value("nguyenvana@gmail.com"))
+                .andExpect(jsonPath("$.data.customerPhone").value("0901234567"))
+                .andExpect(jsonPath("$.data.title").value("Cyberpunk Neon Cat Animation"))
+                .andExpect(jsonPath("$.data.tierCode").value("ADVANCED"))
+                .andExpect(jsonPath("$.data.status").value("INTERNAL_REVIEW"))
+                .andExpect(jsonPath("$.data.assignedStaffName").value("Tran Thi Staff"))
+                .andExpect(jsonPath("$.data.assignedDesignerName").value("Le Van Designer"))
+                .andExpect(jsonPath("$.data.attachments[0].attachmentId").value(201))
+                .andExpect(jsonPath("$.data.submissions[0].submissionId").value(901))
+                .andExpect(jsonPath("$.data.submissions[0].staffReviewNote").value("Blinking too fast"));
+
+        verify(getManagementCommissionDetailUseCase).execute(eq(105L), eq(3L), eq(true));
+    }
+
+    @Test
+    @DisplayName("CMS-07 Controller UTCID02 [N]: Authenticated MANAGER retrieves management commission details (200 OK)")
+    void getManagementCommissionDetail_asManager_returns200Ok() throws Exception {
+        when(getManagementCommissionDetailUseCase.execute(eq(105L), eq(1L), eq(true)))
+                .thenReturn(createSampleDetailResponse());
+
+        mockMvc.perform(get(DETAIL_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("MANAGER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105));
+
+        verify(getManagementCommissionDetailUseCase).execute(eq(105L), eq(1L), eq(true));
+    }
+
+    @Test
+    @DisplayName("CMS-07 Controller UTCID03 [N]: Authenticated ADMIN retrieves management commission details (200 OK)")
+    void getManagementCommissionDetail_asAdmin_returns200Ok() throws Exception {
+        when(getManagementCommissionDetailUseCase.execute(eq(105L), eq(99L), eq(true)))
+                .thenReturn(createSampleDetailResponse());
+
+        mockMvc.perform(get(DETAIL_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("99").roles("ADMIN"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105));
+
+        verify(getManagementCommissionDetailUseCase).execute(eq(105L), eq(99L), eq(true));
+    }
+
+    @Test
+    @DisplayName("CMS-07 Controller UTCID04 [N]: Assigned DESIGNER retrieves details of assigned ticket (200 OK)")
+    void getManagementCommissionDetail_asAssignedDesigner_returns200Ok() throws Exception {
+        when(getManagementCommissionDetailUseCase.execute(eq(105L), eq(5L), eq(false)))
+                .thenReturn(createSampleDetailResponse());
+
+        mockMvc.perform(get(DETAIL_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105));
+
+        verify(getManagementCommissionDetailUseCase).execute(eq(105L), eq(5L), eq(false));
+    }
+
+    @Test
+    @DisplayName("CMS-07 Controller UTCID05 [A]: Unauthenticated access is rejected (401 UNAUTHORIZED)")
+    void getManagementCommissionDetail_unauthenticated_returns401Unauthorized() throws Exception {
+        mockMvc.perform(get(DETAIL_PATH, 105L)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(getManagementCommissionDetailUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-07 Controller UTCID06 [A]: Authenticated CUSTOMER is forbidden from management detail (403 FORBIDDEN)")
+    void getManagementCommissionDetail_asCustomer_returns403Forbidden() throws Exception {
+        mockMvc.perform(get(DETAIL_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("12").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(getManagementCommissionDetailUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-07 Controller UTCID07 [A]: Unassigned DESIGNER is forbidden (403 FORBIDDEN)")
+    void getManagementCommissionDetail_asUnassignedDesigner_returns403Forbidden() throws Exception {
+        when(getManagementCommissionDetailUseCase.execute(eq(105L), eq(99L), eq(false)))
+                .thenThrow(new AccessDeniedException("You are not the designer assigned to this commission ticket."));
+
+        mockMvc.perform(get(DETAIL_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("99").roles("DESIGNER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("CMS-07 Controller UTCID08 [A]: Non-existent commission ID returns 404 NOT_FOUND")
+    void getManagementCommissionDetail_notFound_returns404NotFound() throws Exception {
+        when(getManagementCommissionDetailUseCase.execute(eq(999L), eq(3L), eq(true)))
+                .thenThrow(new CommissionNotFoundException("Commission request not found with id: 999"));
+
+        mockMvc.perform(get(DETAIL_PATH, 999L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COMMISSION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CMS-07 Controller UTCID09 [B]: Non-positive id parameter triggers validation failure (400 BAD_REQUEST)")
+    void getManagementCommissionDetail_nonPositiveId_returns400BadRequest() throws Exception {
+        mockMvc.perform(get(DETAIL_PATH, 0L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(getManagementCommissionDetailUseCase);
     }
 }

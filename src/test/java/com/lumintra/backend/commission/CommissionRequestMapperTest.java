@@ -3,6 +3,7 @@ package com.lumintra.backend.commission;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse.CustomerCommissionSummaryItem;
+import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
@@ -179,5 +180,62 @@ class CommissionRequestMapperTest {
         assertThat(response.meta()).isNull();
 
         assertThat(mapper.toStaffQueueItem(null, null, null)).isNull();
+    }
+
+    @Test
+    @DisplayName("CMS-07 Mapper UTCID07 [N]: Maps full management detail including unapproved draft submissions and employee profiles")
+    void toManagementDetailResponse_mapsFullDetailsAndUnapprovedSubmissions() {
+        CommissionRequestEntity entity = CommissionRequestEntity.createPendingReview(
+                10L, "Cyber Neon Car", "Detailed description", "ADVANCED", "32x64", "{}", new BigDecimal("250000.00"), 2, 2L
+        );
+        entity.setCommissionId(101L);
+        entity.setAssignedDesignerId(5L);
+        entity.setStatus(CommissionStatus.INTERNAL_REVIEW);
+
+        CommissionAttachmentEntity attachment = CommissionAttachmentEntity.create(
+                101L, "https://cdn.lumintra.shop/ref.png", "Ref", 0
+        );
+        CommissionSubmissionEntity draft = CommissionSubmissionEntity.createDraft(
+                101L, 5L, 1, "https://cdn.lumintra.shop/draft.gif", "Draft"
+        );
+        draft.setStatus(CommissionSubmissionStatus.PENDING_STAFF_REVIEW);
+
+        CustomerProfileSnapshot customer = new CustomerProfileSnapshot(10L, "Nguyen Van A", "0901234567", "nguyenvana@gmail.com");
+        Map<Long, EmployeeProfileSnapshot> employees = Map.of(
+                2L, new EmployeeProfileSnapshot(2L, "Staff Hoang", "staff@lumintra.com"),
+                5L, new EmployeeProfileSnapshot(5L, "Designer Nam", "designer@lumintra.com")
+        );
+
+        ManagementCommissionDetailResponse detail = mapper.toManagementDetailResponse(
+                entity, List.of(attachment), List.of(draft), customer, employees
+        );
+
+        assertThat(detail).isNotNull();
+        assertThat(detail.commissionId()).isEqualTo(101L);
+        assertThat(detail.customerName()).isEqualTo("Nguyen Van A");
+        assertThat(detail.customerPhone()).isEqualTo("0901234567");
+        assertThat(detail.assignedStaffName()).isEqualTo("Staff Hoang");
+        assertThat(detail.assignedDesignerName()).isEqualTo("Designer Nam");
+        assertThat(detail.chatActive()).isTrue();
+        assertThat(detail.attachments()).hasSize(1);
+        assertThat(detail.submissions()).hasSize(1);
+        assertThat(detail.submissions().get(0).designerName()).isEqualTo("Designer Nam");
+        assertThat(detail.submissions().get(0).status()).isEqualTo(CommissionSubmissionStatus.PENDING_STAFF_REVIEW);
+    }
+
+    @Test
+    @DisplayName("CMS-07 Mapper UTCID08 [B]: Handles null entity, null lists and null inputs safely in management detail mapping")
+    void toManagementDetailResponse_handlesNullInputsSafely() {
+        assertThat(mapper.toManagementDetailResponse(null, null, null, null, null)).isNull();
+        assertThat(mapper.toManagementAttachmentItem(null)).isNull();
+        assertThat(mapper.toManagementSubmissionItem(null, null)).isNull();
+
+        CommissionRequestEntity entity = CommissionRequestEntity.createPendingReview(
+                10L, "Simple Star", null, "BASIC", "32x32", null, new BigDecimal("150000.00"), 1, 20L
+        );
+        ManagementCommissionDetailResponse detail = mapper.toManagementDetailResponse(entity, null, null, null, null);
+        assertThat(detail.attachments()).isEmpty();
+        assertThat(detail.submissions()).isEmpty();
+        assertThat(detail.customerName()).isNull();
     }
 }
