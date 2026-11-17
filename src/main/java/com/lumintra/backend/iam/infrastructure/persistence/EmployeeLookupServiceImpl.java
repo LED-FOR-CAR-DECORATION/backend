@@ -61,4 +61,13 @@ public class EmployeeLookupServiceImpl implements EmployeeLookupService {
     public java.util.List<Long> findActiveStaffEmployeeIds() {
         return employeeRepository.findActiveStaffEmployeeIds();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isActiveDesigner(Long employeeId) {
+        if (employeeId == null || employeeId <= 0) {
+            return false;
+        }
+        return employeeRepository.isActiveDesigner(employeeId);
+    }
 }

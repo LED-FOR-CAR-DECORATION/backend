@@ -1,11 +1,14 @@
 package com.lumintra.backend.commission.api.controller;
 
+import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
+import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
+import com.lumintra.backend.commission.application.AssignCommissionToDesignerUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
@@ -30,6 +33,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -47,6 +51,7 @@ public class CommissionManagementController {
     private final GetStaffCommissionQueueUseCase getStaffCommissionQueueUseCase;
     private final GetManagementCommissionDetailUseCase getManagementCommissionDetailUseCase;
     private final ApproveCommissionRequestUseCase approveCommissionRequestUseCase;
+    private final AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
 
     @Operation(
             summary = "View staff commission queue",
@@ -262,6 +267,75 @@ public class CommissionManagementController {
         Long callerStaffId = extractCallerId(authentication);
         boolean isPrivileged = isManagerOrAdmin(authentication);
         ApproveCommissionResponse response = approveCommissionRequestUseCase.execute(id, callerStaffId, isPrivileged);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Assign a paid commission ticket to an internal Designer (CMS-13)",
+            description = "Allows assigned staff or manager/admin to assign a PAID commission to an active DESIGNER. Sets sla_due_at (+72h) and transitions status to IN_PROGRESS.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Commission successfully assigned to designer",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request - Validation failure or target employee is not an active designer",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized - Missing or expired bearer token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden - Caller role is not STAFF/MANAGER/ADMIN, or ticket is locked by another staff member",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Commission request not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict - Commission request is not in PAID status",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PostMapping("/{id}/assign")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<AssignCommissionResponse>> assignCommission(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "105")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody AssignCommissionRequest request
+    ) {
+        Long callerStaffId = extractCallerId(authentication);
+        boolean isPrivileged = isManagerOrAdmin(authentication);
+        AssignCommissionResponse response = assignCommissionToDesignerUseCase.execute(id, request, callerStaffId, isPrivileged);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

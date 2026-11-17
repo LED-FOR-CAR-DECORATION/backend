@@ -45,4 +45,13 @@ public interface EmployeeRepository
             order by e.employeeId asc
             """)
     List<Long> findActiveStaffEmployeeIds();
+
+    @Query("""
+            select case when count(e) > 0 then true else false end
+            from EmployeeEntity e
+            where e.employeeId = :employeeId
+              and e.role.roleName = 'DESIGNER'
+              and e.account.status = com.lumintra.backend.iam.domain.model.AccountStatus.ACTIVE
+            """)
+    boolean isActiveDesigner(@Param("employeeId") Long employeeId);
 }

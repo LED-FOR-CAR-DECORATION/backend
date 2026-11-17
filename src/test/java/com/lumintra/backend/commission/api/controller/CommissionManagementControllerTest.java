@@ -1,13 +1,16 @@
 package com.lumintra.backend.commission.api.controller;
 
+import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
+import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.application.ApproveCommissionRequestUseCase;
+import com.lumintra.backend.commission.application.AssignCommissionToDesignerUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
@@ -65,6 +68,7 @@ class CommissionManagementControllerTest {
     private static final String QUEUE_PATH = "/api/management/commissions";
     private static final String DETAIL_PATH = "/api/management/commissions/{id}";
     private static final String APPROVE_PATH = "/api/management/commissions/{id}/approve";
+    private static final String ASSIGN_PATH = "/api/management/commissions/{id}/assign";
 
     @Autowired
     private MockMvc mockMvc;
@@ -77,6 +81,9 @@ class CommissionManagementControllerTest {
 
     @MockitoBean
     private ApproveCommissionRequestUseCase approveCommissionRequestUseCase;
+
+    @MockitoBean
+    private AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -641,5 +648,100 @@ class CommissionManagementControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 
         verifyNoInteractions(approveCommissionRequestUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-13 Controller UTCID07 [N]: Valid assign request returns 200 OK with AssignCommissionResponse")
+    void assignCommission_validRequest_returns200Ok() throws Exception {
+        AssignCommissionResponse response = AssignCommissionResponse.builder()
+                .commissionId(101L)
+                .status(CommissionStatus.IN_PROGRESS)
+                .assignedStaffId(3L)
+                .assignedDesignerId(5L)
+                .slaDueAt(Instant.parse("2026-11-20T12:00:00Z"))
+                .updatedAt(Instant.parse("2026-11-17T12:00:00Z"))
+                .build();
+
+        when(assignCommissionToDesignerUseCase.execute(eq(101L), any(AssignCommissionRequest.class), eq(3L), eq(false)))
+                .thenReturn(response);
+
+        String requestBody = """
+                {
+                    "designerId": 5
+                }
+                """;
+
+        mockMvc.perform(post(ASSIGN_PATH, 101L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(101))
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data.assignedStaffId").value(3))
+                .andExpect(jsonPath("$.data.assignedDesignerId").value(5))
+                .andExpect(jsonPath("$.data.slaDueAt").value("2026-11-20T12:00:00Z"));
+
+        ArgumentCaptor<AssignCommissionRequest> captor = ArgumentCaptor.forClass(AssignCommissionRequest.class);
+        verify(assignCommissionToDesignerUseCase).execute(eq(101L), captor.capture(), eq(3L), eq(false));
+        assertThat(captor.getValue().designerId()).isEqualTo(5L);
+    }
+
+    @Test
+    @DisplayName("CMS-13 Controller UTCID08 [B]: Null or non-positive designerId returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void assignCommission_invalidDesignerId_returns400BadRequest() throws Exception {
+        String invalidBody = """
+                {
+                    "designerId": 0
+                }
+                """;
+
+        mockMvc.perform(post(ASSIGN_PATH, 101L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(assignCommissionToDesignerUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-13 Controller UTCID09 [A]: Unauthenticated request returns 401 UNAUTHORIZED")
+    void assignCommission_unauthenticated_returns401Unauthorized() throws Exception {
+        String requestBody = """
+                {
+                    "designerId": 5
+                }
+                """;
+
+        mockMvc.perform(post(ASSIGN_PATH, 101L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(assignCommissionToDesignerUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-13 Controller UTCID10 [A]: Caller with CUSTOMER role returns 403 FORBIDDEN")
+    void assignCommission_customerRole_returns403Forbidden() throws Exception {
+        String requestBody = """
+                {
+                    "designerId": 5
+                }
+                """;
+
+        mockMvc.perform(post(ASSIGN_PATH, 101L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("501").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(assignCommissionToDesignerUseCase);
     }
 }
