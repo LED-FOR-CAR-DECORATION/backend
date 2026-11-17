@@ -2,8 +2,8 @@ package com.lumintra.backend.commission.api.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -20,19 +20,15 @@ public record SubmitCommissionRequest(
         @Size(max = 2000, message = "Description must not exceed 2000 characters")
         String description,
 
-        @Schema(description = "Pricing tier code (e.g. BASIC, ADVANCED, CUSTOM)", example = "ADVANCED", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Pricing tier code (e.g. BASIC, ADVANCED, CUSTOM)", example = "CUSTOM", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank(message = "Tier code is required")
         @Size(max = 50, message = "Tier code must not exceed 50 characters")
         String tierCode,
 
-        @Schema(description = "Foundational Step-1 configuration selections (FORMAT_TYPE, MATRIX_SIZE, FRAME_RANGE)", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotEmpty(message = "Step-1 foundational selections are required")
-        List<@Valid Step1SelectionItem> step1Selections,
-
-        @Schema(description = "Step-2 advanced configurator options or add-ons")
+        @Schema(description = "Unified rule selections across active SINGLE_SELECT, MULTI_SELECT, QUANTITY, and TEXT_INPUT pricing rules")
         List<@Valid SelectedOptionItem> selectedOptions,
 
-        @Schema(description = "Optional target matrix dimensions (e.g. 16x16, 32x32, 64x64). If null, derived from Step-1 MATRIX_SIZE selection", example = "32x32")
+        @Schema(description = "Optional target matrix dimensions (e.g. 16x16, 32x32, 64x64). When omitted and MATRIX_SIZE is selected, derived from MATRIX_SIZE option code", example = "32x32")
         @Size(max = 50, message = "Target matrix dimensions must not exceed 50 characters")
         String targetMatrixDimensions,
 
@@ -55,9 +51,6 @@ public record SubmitCommissionRequest(
         } else {
             targetMatrixDimensions = null;
         }
-        if (step1Selections == null) {
-            step1Selections = List.of();
-        }
         if (selectedOptions == null) {
             selectedOptions = List.of();
         }
@@ -66,25 +59,20 @@ public record SubmitCommissionRequest(
         }
     }
 
-    public record Step1SelectionItem(
+    @Schema(description = "Customer selection for a single active commission pricing rule")
+    public record SelectedOptionItem(
             @Schema(description = "Pricing config rule identifier", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
             @NotNull(message = "configId is required")
             Long configId,
 
-            @Schema(description = "Selected option identifier", example = "2", requiredMode = Schema.RequiredMode.REQUIRED)
-            @NotNull(message = "optionId is required")
-            Long optionId
-    ) {}
-
-    public record SelectedOptionItem(
-            @Schema(description = "Pricing config rule identifier", example = "4", requiredMode = Schema.RequiredMode.REQUIRED)
-            @NotNull(message = "configId is required")
-            Long configId,
-
-            @Schema(description = "Selected option identifiers for single-select or multi-select rules", example = "[10]")
+            @Schema(description = "Selected option identifiers for SINGLE_SELECT or MULTI_SELECT rules; optional for QUANTITY/TEXT_INPUT", example = "[2]")
             List<Long> optionIds,
 
-            @Schema(description = "Custom textual value for text input rules", example = "Glowing neon background")
+            @Schema(description = "Numeric quantity value for QUANTITY rules within [minQuantity, maxQuantity]", example = "2", nullable = true)
+            @Min(value = 0, message = "quantity must be greater than or equal to 0")
+            Integer quantity,
+
+            @Schema(description = "Custom textual value for TEXT_INPUT rules", example = "Glowing neon cyan outline", nullable = true)
             @Size(max = 500, message = "textValue must not exceed 500 characters")
             String textValue
     ) {
@@ -100,6 +88,7 @@ public record SubmitCommissionRequest(
         }
     }
 
+    @Schema(description = "Reference image attachment item")
     public record CommissionAttachmentItemRequest(
             @Schema(description = "URL of the uploaded reference image", example = "https://cdn.lumintra.com/commissions/references/42/ref-01.png", requiredMode = Schema.RequiredMode.REQUIRED)
             @NotBlank(message = "imageUrl is required")

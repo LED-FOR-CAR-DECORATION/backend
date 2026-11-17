@@ -423,12 +423,11 @@ class CommissionControllerTest {
                   "title": "Cyberpunk Shiba",
                   "description": "Shiba in neon rain",
                   "tierCode": "ADVANCED",
-                  "step1Selections": [
-                    { "configId": 1, "optionId": 11 },
-                    { "configId": 2, "optionId": 21 },
-                    { "configId": 3, "optionId": 30 }
+                  "selectedOptions": [
+                    { "configId": 1, "optionIds": [11] },
+                    { "configId": 2, "optionIds": [21] },
+                    { "configId": 3, "optionIds": [30] }
                   ],
-                  "selectedOptions": [],
                   "targetMatrixDimensions": "32x32",
                   "attachments": []
                 }
@@ -453,7 +452,7 @@ class CommissionControllerTest {
                 {
                   "title": "Cyberpunk Shiba",
                   "tierCode": "ADVANCED",
-                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                  "selectedOptions": [{ "configId": 1, "optionIds": [11] }]
                 }
                 """;
 
@@ -473,7 +472,7 @@ class CommissionControllerTest {
                 {
                   "title": "Cyberpunk Shiba",
                   "tierCode": "ADVANCED",
-                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                  "selectedOptions": [{ "configId": 1, "optionIds": [11] }]
                 }
                 """;
 
@@ -488,13 +487,13 @@ class CommissionControllerTest {
     }
 
     @Test
-    @DisplayName("CMS-03 Controller UTCID20 [A]: Blank title returns 400 VALIDATION_FAILED")
+    @DisplayName("CMS-03 Controller UTCID20 [A]: Blank title or negative quantity returns 400 VALIDATION_FAILED")
     void submitCommission_blankTitle_returns400() throws Exception {
         String jsonPayload = """
                 {
                   "title": "",
                   "tierCode": "ADVANCED",
-                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                  "selectedOptions": [{ "configId": 1, "optionIds": [11] }]
                 }
                 """;
 
@@ -513,13 +512,13 @@ class CommissionControllerTest {
     @DisplayName("CMS-03 Controller UTCID21 [A]: Invalid commission rule selection returns 400 INVALID_COMMISSION_RULE_SELECTION")
     void submitCommission_ruleViolation_returns400() throws Exception {
         when(submitCommissionUseCase.execute(eq(10L), any(SubmitCommissionRequest.class)))
-                .thenThrow(new InvalidCommissionRuleSelectionException("FRAME_RANGE selection is required when FORMAT_TYPE is ANIMATED_GIF"));
+                .thenThrow(new InvalidCommissionRuleSelectionException("Required rule 'FRAME_RANGE' must have a selection"));
 
         String jsonPayload = """
                 {
                   "title": "GIF without frame range",
                   "tierCode": "CUSTOM",
-                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                  "selectedOptions": [{ "configId": 1, "optionIds": [11] }]
                 }
                 """;
 
@@ -536,13 +535,13 @@ class CommissionControllerTest {
     @DisplayName("CMS-03 Controller UTCID22 [A]: Preset selection mismatch returns 400 PRESET_SELECTION_MISMATCH")
     void submitCommission_presetMismatch_returns400() throws Exception {
         when(submitCommissionUseCase.execute(eq(10L), any(SubmitCommissionRequest.class)))
-                .thenThrow(new PresetSelectionMismatchException("Submitted Step-1 selections do not match preset tier requirements"));
+                .thenThrow(new PresetSelectionMismatchException("Submitted selections do not match preset tier requirements"));
 
         String jsonPayload = """
                 {
                   "title": "Preset Mismatch",
                   "tierCode": "BASIC",
-                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                  "selectedOptions": [{ "configId": 1, "optionIds": [11] }]
                 }
                 """;
 
@@ -565,7 +564,7 @@ class CommissionControllerTest {
                 {
                   "title": "Unknown Tier",
                   "tierCode": "UNKNOWN",
-                  "step1Selections": [{ "configId": 1, "optionId": 11 }]
+                  "selectedOptions": [{ "configId": 1, "optionIds": [11] }]
                 }
                 """;
 
@@ -576,5 +575,58 @@ class CommissionControllerTest {
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("COMMISSION_TIER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CMS-03 Controller UTCID24 [N]: Submitting unified CUSTOM request with quantity and textValue binds cleanly")
+    void submitCommission_customWithQuantityAndText_bindsCleanly() throws Exception {
+        CustomerCommissionDetailResponse response = CustomerCommissionDetailResponse.builder()
+                .commissionId(502L)
+                .customerId(10L)
+                .title("Animated Neon City")
+                .tierCode("CUSTOM")
+                .targetMatrixDimensions("32x32")
+                .priceBreakdownJson("{}")
+                .initialPrice(new BigDecimal("265000.00"))
+                .extraRevisionFee(BigDecimal.ZERO)
+                .totalPrice(new BigDecimal("265000.00"))
+                .revisionsUsed(0)
+                .maxRevisions(5)
+                .status(CommissionStatus.PENDING_REVIEW)
+                .createdAt(Instant.parse("2026-11-17T08:00:00Z"))
+                .attachments(List.of())
+                .deliveredPreviews(List.of())
+                .build();
+
+        when(submitCommissionUseCase.execute(eq(10L), any(SubmitCommissionRequest.class)))
+                .thenReturn(response);
+
+        String jsonPayload = """
+                {
+                  "title": "Animated Neon City",
+                  "tierCode": "CUSTOM",
+                  "selectedOptions": [
+                    { "configId": 1, "optionIds": [11] },
+                    { "configId": 2, "optionIds": [21] },
+                    { "configId": 5, "quantity": 2 },
+                    { "configId": 6, "textValue": "Purple and cyan neon palette" }
+                  ]
+                }
+                """;
+
+        mockMvc.perform(post(SUBMIT_COMMISSION_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("10").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.commissionId").value(502))
+                .andExpect(jsonPath("$.data.initialPrice").value(265000.00));
+
+        ArgumentCaptor<SubmitCommissionRequest> captor = ArgumentCaptor.forClass(SubmitCommissionRequest.class);
+        verify(submitCommissionUseCase).execute(eq(10L), captor.capture());
+        assertThat(captor.getValue().selectedOptions()).hasSize(4);
+        assertThat(captor.getValue().selectedOptions().get(2).quantity()).isEqualTo(2);
+        assertThat(captor.getValue().selectedOptions().get(3).textValue()).isEqualTo("Purple and cyan neon palette");
     }
 }

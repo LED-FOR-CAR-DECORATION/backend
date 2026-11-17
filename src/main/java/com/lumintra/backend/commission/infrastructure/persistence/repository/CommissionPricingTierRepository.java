@@ -13,7 +13,7 @@ public interface CommissionPricingTierRepository extends JpaRepository<Commissio
 
     Optional<CommissionPricingTierEntity> findByTierCode(String tierCode);
 
-    @Query("SELECT t FROM CommissionPricingTierEntity t LEFT JOIN FETCH t.includedOptions WHERE t.tierCode = :tierCode AND t.isActive = true")
+    @Query("SELECT DISTINCT t FROM CommissionPricingTierEntity t LEFT JOIN FETCH t.includedOptions LEFT JOIN FETCH t.triggerOptions WHERE t.tierCode = :tierCode AND t.isActive = true")
     Optional<CommissionPricingTierEntity> findActiveWithIncludedOptionsByTierCode(@org.springframework.data.repository.query.Param("tierCode") String tierCode);
 
     boolean existsByTierCode(String tierCode);

@@ -103,6 +103,7 @@ class CommissionPricingDataSeederTest {
 
         CommissionPriceConfigEntity frameRange = savedConfigs.get(2);
         assertThat(frameRange.getDependsOnOptionId()).isEqualTo(2L);
+        assertThat(frameRange.isRequired()).isTrue();
 
         ArgumentCaptor<CommissionPricingTierEntity> tierCaptor =
                 ArgumentCaptor.forClass(CommissionPricingTierEntity.class);

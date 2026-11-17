@@ -160,7 +160,7 @@ public class CommissionPricingDataSeeder implements ApplicationRunner {
                 .selectionType(SelectionType.SINGLE_SELECT)
                 .uiType(UiType.RADIO)
                 .isBasePrice(false)
-                .isRequired(false)
+                .isRequired(true)
                 .isSystem(true)
                 .isActive(true)
                 .displayOrder(3)
