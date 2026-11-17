@@ -23,13 +23,10 @@ import com.lumintra.backend.commission.application.AssignCommissionToDesignerUse
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
-<<<<<<< HEAD
 import com.lumintra.backend.commission.application.ReviewCommissionSubmissionUseCase;
 import com.lumintra.backend.commission.application.SubmitCommissionDraftUseCase;
-=======
 import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
 import com.lumintra.backend.commission.application.UploadCommissionDraftUseCase;
->>>>>>> e770202e371dba56ebc5a1fb2a1cbdbc30be396c
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.iam.domain.service.EmployeeLookupService;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
@@ -77,13 +74,10 @@ public class CommissionManagementController {
     private final ApproveCommissionRequestUseCase approveCommissionRequestUseCase;
     private final AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
     private final GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
-<<<<<<< HEAD
     private final SubmitCommissionDraftUseCase submitCommissionDraftUseCase;
     private final ReviewCommissionSubmissionUseCase reviewCommissionSubmissionUseCase;
-=======
     private final RejectCommissionRequestUseCase rejectCommissionRequestUseCase;
     private final UploadCommissionDraftUseCase uploadCommissionDraftUseCase;
->>>>>>> e770202e371dba56ebc5a1fb2a1cbdbc30be396c
     private final EmployeeLookupService employeeLookupService;
     private final InternalEmployeeAccessService internalEmployeeAccessService;
 
@@ -436,46 +430,6 @@ public class CommissionManagementController {
     }
 
     @Operation(
-<<<<<<< HEAD
-            summary = "Submit a commission artwork draft version (Designer)",
-            description = "Allows the assigned designer to submit a newly drafted version of the Commission Character for Staff review. Transitions status to INTERNAL_REVIEW.",
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @PostMapping("/{id}/submissions")
-    @PreAuthorize("hasRole('DESIGNER')")
-    public ResponseEntity<ApiResponse<CommissionSubmissionResponse>> submitDraft(
-            Authentication authentication,
-            @Parameter(description = "Unique commission request identifier", example = "105")
-            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
-            @Valid @RequestBody SubmitCommissionDraftRequest request
-    ) {
-        Long callerDesignerId = requireEmployeeId(authentication, DESIGNER_ROLES);
-        CommissionSubmissionResponse response = submitCommissionDraftUseCase.execute(id, request, callerDesignerId);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    @Operation(
-            summary = "Review a commission draft submission (Staff/Manager/Admin)",
-            description = "Staff reviews a submitted draft: APPROVE transitions commission to PREVIEW_DELIVERED (delivering to customer), REQUEST_REVISION transitions commission to INTERNAL_REVISION_REQUIRED (requesting designer to draw next version).",
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @PostMapping("/{id}/submissions/{submissionId}/review")
-    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
-    public ResponseEntity<ApiResponse<CommissionSubmissionResponse>> reviewSubmission(
-            Authentication authentication,
-            @Parameter(description = "Unique commission request identifier", example = "105")
-            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
-            @Parameter(description = "Unique submission draft identifier", example = "901")
-            @PathVariable("submissionId") @Positive(message = "submissionId must be greater than 0") Long submissionId,
-            @Valid @RequestBody ReviewCommissionSubmissionRequest request
-    ) {
-        Long callerStaffId = requireEmployeeId(authentication, MANAGEMENT_ROLES);
-        boolean isPrivileged = isManagerOrAdmin(authentication);
-        CommissionSubmissionResponse response = reviewCommissionSubmissionUseCase.execute(id, submissionId, request, callerStaffId, isPrivileged);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-=======
             summary = "Reject an initial commission request (CMS-08)",
             description = "Allows assigned staff or manager/admin to reject an unfeasible or inappropriate commission request in PENDING_REVIEW status, providing a mandatory rejection reason and transitioning status to CANCELLED.",
             security = @SecurityRequirement(name = "bearerAuth")
@@ -612,7 +566,6 @@ public class CommissionManagementController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
->>>>>>> e770202e371dba56ebc5a1fb2a1cbdbc30be396c
     private Long requireEmployeeId(Authentication authentication, Set<String> allowedRoles) {
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new AuthenticationCredentialsNotFoundException("Authentication is required.");
