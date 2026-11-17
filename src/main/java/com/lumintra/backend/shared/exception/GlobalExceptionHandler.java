@@ -74,9 +74,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidSubscriptionDurationException.class)
     public ResponseEntity<ErrorResponse> handleInvalidSubscriptionDuration(InvalidSubscriptionDurationException ex) {
         return buildErrorResponse("INVALID_SUBSCRIPTION_DURATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(PlanCodeAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handlePlanCodeAlreadyExists(PlanCodeAlreadyExistsException ex) {
         return buildErrorResponse("PLAN_CODE_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(BundleNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleBundleNotFound(BundleNotFoundException ex) {
         return buildErrorResponse("BUNDLE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
@@ -445,6 +449,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CommissionOwnershipMismatchException.class)
     public ResponseEntity<ErrorResponse> handleCommissionOwnershipMismatch(CommissionOwnershipMismatchException ex) {
         return buildErrorResponse("COMMISSION_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(InvalidCommissionRuleSelectionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCommissionRuleSelection(InvalidCommissionRuleSelectionException ex) {
+        return buildErrorResponse("INVALID_COMMISSION_RULE_SELECTION", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(PresetSelectionMismatchException.class)
+    public ResponseEntity<ErrorResponse> handlePresetSelectionMismatch(PresetSelectionMismatchException ex) {
+        return buildErrorResponse("PRESET_SELECTION_MISMATCH", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     // Helpers
