@@ -471,6 +471,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("INVALID_COMMISSION_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(InvalidDesignerAssignmentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidDesignerAssignment(InvalidDesignerAssignmentException ex) {
+        return buildErrorResponse("INVALID_DESIGNER_ASSIGNMENT", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
     // Helpers
     private ResponseEntity<ErrorResponse> buildErrorResponse(String code, String message, HttpStatus status) {
         return buildErrorResponse(code, message, status, List.of());
