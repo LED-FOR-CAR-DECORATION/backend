@@ -20,7 +20,18 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Lumintra Backend API")
                         .version("1.0.0")
-                        .description("REST API documentation for Lumintra LED Car Decoration Platform")
+                        .description("""
+                                REST API documentation for Lumintra LED Car Decoration Platform.
+
+                                ---
+                                ### Real-Time Commission Chat (WebSocket + STOMP)
+                                Swagger UI only executes HTTP requests, so real-time chat events are documented here:
+                                - **Handshake Endpoint:** `ws://<host>/ws` (or `wss://<host>/ws` in staging/prod)
+                                - **STOMP `CONNECT` Header:** `Authorization: Bearer <accessToken>`
+                                - **Subscribe Topic:** `/topic/commissions/{commissionId}` (allowed for owning `CUSTOMER` or `STAFF`/`MANAGER`/`ADMIN`)
+                                - **Inbound Frame Payload:** Raw `CommissionMessageResponse` JSON (not wrapped in `ApiResponse`)
+                                - **Sending Messages:** Use `POST /api/commissions/{id}/messages` (direct client `SEND` to `/topic/**` is blocked)
+                                """)
                         .contact(new Contact()
                                 .name("Lumintra Engineering Team")
                                 .email("noreply@lumintra.shop")))
@@ -34,4 +45,3 @@ public class OpenApiConfig {
                                 .description("JWT Authorization header using the Bearer scheme. Enter your token in the text input below.")));
     }
 }
-
