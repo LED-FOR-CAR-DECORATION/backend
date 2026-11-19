@@ -169,6 +169,19 @@ public class CommissionRequestEntity {
     }
 
     /**
+     * CMS-26 AC01: the initial quote's payment session expired unpaid; PENDING_PAYMENT to EXPIRED.
+     * {@code quoteExpiresAt} is kept so the customer can still see when the quote ran out.
+     */
+    public void expireQuote() {
+        if (this.status != CommissionStatus.PENDING_PAYMENT) {
+            throw new IllegalStateException(
+                    "Commission " + this.commissionId + " must be PENDING_PAYMENT to expire its quote (was " + this.status + ")");
+        }
+        this.activePaymentCode = null;
+        this.status = CommissionStatus.EXPIRED;
+    }
+
+    /**
      * CMS-18 AC02: Finalizes the commission with the customer-accepted submission,
      * stops the auto-complete countdown and transitions PREVIEW_DELIVERED to COMPLETED.
      */
