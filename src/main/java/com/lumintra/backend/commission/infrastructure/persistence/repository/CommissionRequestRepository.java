@@ -7,10 +7,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -49,4 +53,20 @@ public interface CommissionRequestRepository extends JpaRepository<CommissionReq
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select commission from CommissionRequestEntity commission where commission.commissionId = :id")
     Optional<CommissionRequestEntity> findForRevisionCard(@Param("id") Long id);
+
+    /** CMS-28: ids of commissions in {@code status} whose SLA deadline is at or before {@code now}, oldest first. */
+    @Query("""
+            select c.commissionId from CommissionRequestEntity c
+            where c.status = :status and c.slaDueAt is not null and c.slaDueAt <= :now
+            order by c.slaDueAt asc, c.commissionId asc""")
+    List<Long> findIdsWithSlaDueAtOrBefore(@Param("status") CommissionStatus status, @Param("now") Instant now);
+
+    /** CMS-28: flags every not-yet-flagged commission in {@code statuses} whose SLA deadline has passed. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update CommissionRequestEntity c
+            set c.isSlaOverdue = true, c.updatedAt = :now
+            where c.isSlaOverdue = false and c.slaDueAt is not null and c.slaDueAt < :now
+              and c.status in :statuses""")
+    int flagSlaOverdue(@Param("statuses") Collection<CommissionStatus> statuses, @Param("now") Instant now);
 }
