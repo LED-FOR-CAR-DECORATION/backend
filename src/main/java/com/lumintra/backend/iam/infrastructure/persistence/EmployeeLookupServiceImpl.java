@@ -74,6 +74,15 @@ public class EmployeeLookupServiceImpl implements EmployeeLookupService {
 
     @Override
     @Transactional(readOnly = true)
+    public boolean isActiveStaff(Long employeeId) {
+        if (employeeId == null || employeeId <= 0) {
+            return false;
+        }
+        return employeeRepository.isActiveStaff(employeeId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<EmployeeProfileSnapshot> findActiveDesigners() {
         return employeeRepository.findActiveDesigners();
     }

@@ -488,6 +488,16 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("INVALID_COMMISSION_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(InvalidStaffAssignmentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidStaffAssignment(InvalidStaffAssignmentException ex) {
+        return buildErrorResponse("INVALID_STAFF_ASSIGNMENT", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(InvalidCommissionReassignmentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCommissionReassignment(InvalidCommissionReassignmentException ex) {
+        return buildErrorResponse("INVALID_COMMISSION_REASSIGNMENT", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(InvalidDesignerAssignmentException.class)
     public ResponseEntity<ErrorResponse> handleInvalidDesignerAssignment(InvalidDesignerAssignmentException ex) {
         return buildErrorResponse("INVALID_DESIGNER_ASSIGNMENT", ex.getMessage(), HttpStatus.BAD_REQUEST);
