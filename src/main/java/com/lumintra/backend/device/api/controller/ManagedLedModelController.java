@@ -5,6 +5,7 @@ import com.lumintra.backend.device.api.request.LedModelFilterRequest;
 import com.lumintra.backend.device.api.request.UpdateLedModelRequest;
 import com.lumintra.backend.device.api.response.LedModelListResponse;
 import com.lumintra.backend.device.application.CreateLedModelUseCase;
+import com.lumintra.backend.device.application.DeprecateLedModelUseCase;
 import com.lumintra.backend.device.application.ListLedModelsUseCase;
 import com.lumintra.backend.device.application.UpdateLedModelUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
@@ -25,6 +26,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -48,6 +51,7 @@ public class ManagedLedModelController {
     private final ListLedModelsUseCase listLedModelsUseCase;
     private final CreateLedModelUseCase createLedModelUseCase;
     private final UpdateLedModelUseCase updateLedModelUseCase;
+    private final DeprecateLedModelUseCase deprecateLedModelUseCase;
 
     @Operation(
             summary = "List LED hardware models",
@@ -308,5 +312,72 @@ public class ManagedLedModelController {
         }
         LedModelListResponse.LedModelItem item = updateLedModelUseCase.execute(id, request);
         return ResponseEntity.ok(ApiResponse.success(item));
+    }
+
+    @Operation(
+            summary = "Deprecate an LED hardware model",
+            description = "Soft-deprecates an obsolete LED hardware model (status = DEPRECATED) without hard-deleting records or breaking provisioned devices (BR-FL5-12). If the model is linked to a PUBLISHED store product, automatically transitions the product to ARCHIVED and evicts store caches."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "204",
+                    description = "LED model deprecated successfully (No Content)",
+                    content = @Content
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid model ID",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing, expired, or invalid JWT authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: requires ADMIN or MANAGER role",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Not Found: LED model does not exist",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public ResponseEntity<Void> deprecateLedModel(
+            Authentication authentication,
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id) {
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            throw new AuthenticationCredentialsNotFoundException("Authentication is required.");
+        }
+        deprecateLedModelUseCase.execute(id);
+        return ResponseEntity.noContent().build();
     }
 }

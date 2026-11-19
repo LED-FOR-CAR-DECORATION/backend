@@ -144,6 +144,10 @@ public class LedModelEntity {
         }
     }
 
+    public void deprecate() {
+        this.status = LedModelStatus.DEPRECATED;
+    }
+
     /**
      * Extracts positive pixel dimensions from canonical ({@code widthPx}/{@code heightPx})
      * or legacy ({@code resolution}/{@code dimensions}) spec entries.

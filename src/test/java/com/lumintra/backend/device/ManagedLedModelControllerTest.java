@@ -5,6 +5,7 @@ import com.lumintra.backend.device.api.request.LedModelFilterRequest;
 import com.lumintra.backend.device.api.request.UpdateLedModelRequest;
 import com.lumintra.backend.device.api.response.LedModelListResponse;
 import com.lumintra.backend.device.application.CreateLedModelUseCase;
+import com.lumintra.backend.device.application.DeprecateLedModelUseCase;
 import com.lumintra.backend.device.application.ListLedModelsUseCase;
 import com.lumintra.backend.device.application.UpdateLedModelUseCase;
 import com.lumintra.backend.device.domain.model.LedModelStatus;
@@ -37,6 +38,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -60,6 +62,9 @@ class ManagedLedModelControllerTest {
 
     @MockitoBean
     private UpdateLedModelUseCase updateLedModelUseCase;
+
+    @MockitoBean
+    private DeprecateLedModelUseCase deprecateLedModelUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -831,5 +836,78 @@ class ManagedLedModelControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 
         verifyNoInteractions(updateLedModelUseCase);
+    }
+
+    // =========================================================================
+    // DEV-04: DELETE /api/management/admin/led-models/{id} Tests
+    // =========================================================================
+
+    @Test
+    @DisplayName("DEV-04 UTCID01 [N]: ADMIN role deprecates LED model returns 204 NO_CONTENT")
+    void deprecateLedModel_asAdmin_returns204() throws Exception {
+        mockMvc.perform(delete(PATH + "/{id}", 10L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN")))
+                .andExpect(status().isNoContent());
+
+        verify(deprecateLedModelUseCase, times(1)).execute(10L);
+    }
+
+    @Test
+    @DisplayName("DEV-04 UTCID02 [N]: MANAGER role deprecates LED model returns 204 NO_CONTENT")
+    void deprecateLedModel_asManager_returns204() throws Exception {
+        mockMvc.perform(delete(PATH + "/{id}", 5L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("2").roles("MANAGER")))
+                .andExpect(status().isNoContent());
+
+        verify(deprecateLedModelUseCase, times(1)).execute(5L);
+    }
+
+    @Test
+    @DisplayName("DEV-04 UTCID03 [A]: Unauthenticated request returns 401 UNAUTHORIZED")
+    void deprecateLedModel_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(delete(PATH + "/{id}", 10L))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(deprecateLedModelUseCase);
+    }
+
+    @Test
+    @DisplayName("DEV-04 UTCID04 [A]: Non-management roles (STAFF, CUSTOMER, DESIGNER) return 403 FORBIDDEN")
+    void deprecateLedModel_unauthorizedRoles_returns403() throws Exception {
+        for (String role : new String[]{"STAFF", "CUSTOMER", "DESIGNER"}) {
+            mockMvc.perform(delete(PATH + "/{id}", 10L)
+                            .with(SecurityMockMvcRequestPostProcessors.user("12").roles(role)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+
+        verifyNoInteractions(deprecateLedModelUseCase);
+    }
+
+    @Test
+    @DisplayName("DEV-04 UTCID05 [A]: Non-existent modelId returns 404 NOT_FOUND with LED_MODEL_NOT_FOUND")
+    void deprecateLedModel_notFound_returns404() throws Exception {
+        org.mockito.Mockito.doThrow(new LedModelNotFoundException(999L))
+                .when(deprecateLedModelUseCase).execute(999L);
+
+        mockMvc.perform(delete(PATH + "/{id}", 999L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("LED_MODEL_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("LED model with id 999 not found."));
+
+        verify(deprecateLedModelUseCase, times(1)).execute(999L);
+    }
+
+    @Test
+    @DisplayName("DEV-04 UTCID06 [B]: Path variable id <= 0 returns 400 VALIDATION_FAILED")
+    void deprecateLedModel_invalidPathId_returns400() throws Exception {
+        mockMvc.perform(delete(PATH + "/{id}", 0L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(deprecateLedModelUseCase);
     }
 }
