@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lumintra.backend.commission.application.CancelRevisionCheckoutUseCase;
 import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
+import com.lumintra.backend.commission.application.service.RevisionCheckoutReverter;
 import com.lumintra.backend.commission.domain.model.CommissionMessageType;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.service.CommissionChatBroadcastPort;
@@ -103,12 +104,14 @@ class CancelRevisionCheckoutUseCaseTest {
     RevisionRequestFakes revisions = new RevisionRequestFakes();
     @Spy CommissionRevisionRequestRecorder revisionRequests = revisions.recorder;
     @Spy CommissionMessageMapper mapper = new CommissionMessageMapper();
-    @InjectMocks CancelRevisionCheckoutUseCase useCase;
+    CancelRevisionCheckoutUseCase useCase;
     CommissionRequestEntity commission;
     CommissionMessageEntity card;
 
     @BeforeEach
     void setup() {
+        useCase = new CancelRevisionCheckoutUseCase(commissions, payments,
+                new RevisionCheckoutReverter(commissions, messages, mapper, broadcast, json, revisionRequests));
         commission =
                 CommissionRequestEntity.builder()
                         .commissionId(105L)
@@ -153,6 +156,10 @@ class CancelRevisionCheckoutUseCaseTest {
         assertThat(metadata.path("status").asText()).isEqualTo("PENDING");
         assertThat(metadata.has("paymentCode")).isFalse();
         assertThat(metadata.path("brief").asText()).isEqualTo("Brighter");
+        assertThat(metadata.path("cancelledPaymentCode").asText()).isEqualTo(CODE);
+        // CMS-26 AC03: the customer gets at least 24h to respond after the checkout is undone
+        assertThat(commission.getAutoCompleteAt())
+                .isAfter(java.time.Instant.now().plus(java.time.Duration.ofHours(23)));
         var order = inOrder(payments, commissions);
         order.verify(commissions).findById(105L);
         order.verify(payments)
