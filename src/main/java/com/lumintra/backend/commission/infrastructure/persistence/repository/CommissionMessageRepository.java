@@ -12,6 +12,9 @@ import java.util.Optional;
 @Repository
 public interface CommissionMessageRepository extends JpaRepository<CommissionMessageEntity, Long> {
 
+    Optional<CommissionMessageEntity>
+            findFirstByCommissionIdAndMessageTypeOrderByCreatedAtDescMessageIdDesc(
+                    Long commissionId, CommissionMessageType messageType);
     Optional<CommissionMessageEntity> findFirstByCommissionIdAndMessageTypeOrderByMessageIdDesc(
             Long commissionId, CommissionMessageType messageType);
 
