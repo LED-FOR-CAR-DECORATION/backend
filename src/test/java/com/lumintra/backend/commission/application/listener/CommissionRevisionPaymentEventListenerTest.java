@@ -1,10 +1,13 @@
 package com.lumintra.backend.commission.application.listener;
 
+import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lumintra.backend.commission.RevisionRequestFakes;
+import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
 import com.lumintra.backend.commission.domain.model.CommissionMessageSenderRole;
 import com.lumintra.backend.commission.domain.model.CommissionMessageType;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
@@ -43,6 +46,8 @@ class CommissionRevisionPaymentEventListenerTest {
     @Mock CommissionChatBroadcastPort broadcast;
     @Spy CommissionMessageMapper mapper = new CommissionMessageMapper();
     @Spy ObjectMapper json = new ObjectMapper();
+    RevisionRequestFakes revisions = new RevisionRequestFakes();
+    @Spy CommissionRevisionRequestRecorder revisionRequests = revisions.recorder;
     @InjectMocks CommissionRevisionPaymentEventListener listener;
     CommissionRequestEntity commission;
     CommissionMessageEntity card;
@@ -108,7 +113,7 @@ class CommissionRevisionPaymentEventListenerTest {
         confirmedCard();
         when(messages.save(card)).thenReturn(card);
         listener.onPaymentSucceeded(validEvent());
-        assertThat(commission.getStatus()).isEqualTo(CommissionStatus.CUSTOMER_REVISION_REQUESTED);
+        assertThat(commission.getStatus()).isEqualTo(CommissionStatus.AWAITING_ESTIMATE);
         assertThat(commission.getActivePaymentCode()).isNull();
         assertThat(commission.getAutoCompleteAt()).isNull();
         assertThat(commission.getRevisionsUsed()).isEqualTo(4);
@@ -132,7 +137,7 @@ class CommissionRevisionPaymentEventListenerTest {
         confirmedCard();
         when(messages.save(card)).thenReturn(card);
         listener.onPaymentSucceeded(event(CODE.toLowerCase(), null, new BigDecimal("35000")));
-        assertThat(commission.getStatus()).isEqualTo(CommissionStatus.CUSTOMER_REVISION_REQUESTED);
+        assertThat(commission.getStatus()).isEqualTo(CommissionStatus.AWAITING_ESTIMATE);
     }
 
     @Test
@@ -304,5 +309,23 @@ class CommissionRevisionPaymentEventListenerTest {
                                 .getAnnotation(Lock.class)
                                 .value())
                 .isEqualTo(LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    @Test
+    void paymentConfirmsTheRecordedBrief() {
+        awaitingCommission();
+        when(messages.findFirstByCommissionIdAndMessageTypeOrderByCreatedAtDescMessageIdDesc(
+                        105L, CommissionMessageType.EXTRA_FEE_CARD))
+                .thenReturn(Optional.of(card));
+        when(messages.save(card)).thenReturn(card);
+        var revision =
+                revisions.recorder.open(card, 4, "Brighter outline", false, new BigDecimal("35000.00"));
+        revision.awaitPayment(4, new BigDecimal("35000.00"), CODE, PAID_AT);
+
+        listener.onPaymentSucceeded(validEvent());
+
+        assertThat(revisions.only().getStatus()).isEqualTo(CommissionRevisionRequestStatus.CONFIRMED);
+        assertThat(revisions.only().getPaidAt()).isEqualTo(PAID_AT);
+        assertThat(revisions.only().getDescription()).isEqualTo("Brighter outline");
     }
 }

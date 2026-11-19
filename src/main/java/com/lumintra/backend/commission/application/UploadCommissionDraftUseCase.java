@@ -2,11 +2,13 @@ package com.lumintra.backend.commission.application;
 
 import com.lumintra.backend.commission.api.request.UploadCommissionDraftRequest;
 import com.lumintra.backend.commission.api.response.UploadCommissionDraftResponse;
+import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionRequestMapper;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRevisionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionSubmissionRepository;
 import com.lumintra.backend.media.domain.service.MediaUrlValidator;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
@@ -28,6 +30,7 @@ public class UploadCommissionDraftUseCase {
 
     private final CommissionRequestRepository commissionRequestRepository;
     private final CommissionSubmissionRepository commissionSubmissionRepository;
+    private final CommissionRevisionRequestRepository commissionRevisionRequestRepository;
     private final MediaUrlValidator mediaUrlValidator;
     private final CommissionRequestMapper commissionRequestMapper;
 
@@ -79,6 +82,10 @@ public class UploadCommissionDraftUseCase {
                 request.imageUrl(),
                 request.designerNote()
         );
+        commissionRevisionRequestRepository
+                .findFirstByCommissionIdAndStatusInOrderByRevisionRequestIdDesc(
+                        commissionId, CommissionRevisionRequestStatus.designerActiveStatuses())
+                .ifPresent(revision -> draft.setRevisionRequestId(revision.getRevisionRequestId()));
         CommissionSubmissionEntity savedDraft = commissionSubmissionRepository.save(draft);
 
         // AC03: Transition status to INTERNAL_REVIEW

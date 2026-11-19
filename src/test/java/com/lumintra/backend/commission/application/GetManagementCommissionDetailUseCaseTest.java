@@ -57,6 +57,8 @@ class GetManagementCommissionDetailUseCaseTest {
 
     private CommissionRequestMapper commissionRequestMapper;
     private GetManagementCommissionDetailUseCase useCase;
+    private final com.lumintra.backend.commission.RevisionRequestFakes revisions =
+            new com.lumintra.backend.commission.RevisionRequestFakes();
 
     @BeforeEach
     void setUp() {
@@ -65,6 +67,7 @@ class GetManagementCommissionDetailUseCaseTest {
                 commissionRequestRepository,
                 commissionAttachmentRepository,
                 commissionSubmissionRepository,
+                revisions.repository,
                 commissionRequestMapper,
                 customerLookupService,
                 employeeLookupService
@@ -172,6 +175,33 @@ class GetManagementCommissionDetailUseCaseTest {
         assertThat(response).isNotNull();
         assertThat(response.commissionId()).isEqualTo(105L);
         assertThat(response.assignedDesignerId()).isEqualTo(5L);
+        assertThat(response.revisionRequests()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Assigned DESIGNER sees the confirmed revision brief; superseded briefs are hidden")
+    void execute_asAssignedDesigner_returnsRevisionBriefs() {
+        CommissionRequestEntity entity = createSampleEntity(105L, 12L, 3L, 5L);
+        when(commissionRequestRepository.findById(105L)).thenReturn(Optional.of(entity));
+        when(commissionAttachmentRepository.findAllByCommissionIdOrderByDisplayOrderAscAttachmentIdAsc(105L)).thenReturn(List.of());
+        when(commissionSubmissionRepository.findAllByCommissionIdOrderByVersionNumberAscSubmissionIdAsc(105L)).thenReturn(List.of());
+        var stale = revisions.repository.save(
+                com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRevisionRequestEntity
+                        .open(105L, 401L, 1, "Old idea", true, java.math.BigDecimal.ZERO));
+        stale.supersede();
+        revisions.repository.save(
+                        com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRevisionRequestEntity
+                                .open(105L, 402L, 1, "Brighter outline", true, java.math.BigDecimal.ZERO))
+                .confirmFree(1, java.time.Instant.now());
+
+        ManagementCommissionDetailResponse response = useCase.execute(105L, 5L, false);
+
+        assertThat(response.revisionRequests()).singleElement().satisfies(item -> {
+            assertThat(item.description()).isEqualTo("Brighter outline");
+            assertThat(item.messageId()).isEqualTo(402L);
+            assertThat(item.status()).isEqualTo(
+                    com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus.CONFIRMED);
+        });
     }
 
     @Test

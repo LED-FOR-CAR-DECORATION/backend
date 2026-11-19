@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lumintra.backend.commission.api.response.ConfirmRevisionCardResponse;
+import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
 import com.lumintra.backend.commission.domain.model.CommissionMessageType;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.service.CommissionChatBroadcastPort;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Objects;
 
 @Service
@@ -37,6 +39,7 @@ public class ConfirmRevisionCardUseCase {
     private final CommissionMessageMapper mapper;
     private final CommissionChatBroadcastPort broadcast;
     private final ObjectMapper json;
+    private final CommissionRevisionRequestRecorder revisionRequests;
 
     @Transactional
     public ConfirmRevisionCardResponse execute(Long id, Long customerId, Long messageId) {
@@ -80,6 +83,11 @@ public class ConfirmRevisionCardUseCase {
         if (metadata.hasNonNull("status") && !"PENDING".equals(metadata.path("status").asText())) {
             throw conflict("Revision card has already been processed.");
         }
+        int revisionNumber = commission.getRevisionsUsed() + 1;
+        var revision = revisionRequests.forCard(card, metadata, revisionNumber);
+        if (!revision.isPending()) {
+            throw conflict("Revision card has already been processed.");
+        }
         boolean free = commission.getRevisionsUsed() < commission.getMaxRevisions();
         var fee =
                 free
@@ -98,10 +106,13 @@ public class ConfirmRevisionCardUseCase {
             throw new IllegalStateException("Unable to serialize confirmed revision card.", ex);
         }
         PaymentSessionResponse session = null;
+        var now = Instant.now();
         if (free) {
             commission.setRevisionsUsed(commission.getRevisionsUsed() + 1);
-            commission.setStatus(CommissionStatus.CUSTOMER_REVISION_REQUESTED);
+            // The brief was written by staff and confirmed by the customer: it goes straight to the designer.
+            commission.setStatus(CommissionStatus.AWAITING_ESTIMATE);
             commission.setActivePaymentCode(null);
+            revision.confirmFree(revisionNumber, now);
         } else {
             if (fee.signum() <= 0) {
                 throw conflict("Paid revision fee must be greater than zero.");
@@ -119,10 +130,12 @@ public class ConfirmRevisionCardUseCase {
                     commission.getInitialPrice().add(commission.getExtraRevisionFee()));
             commission.setActivePaymentCode(session.paymentCode());
             commission.setStatus(CommissionStatus.AWAITING_EXTRA_PAYMENT);
+            revision.awaitPayment(revisionNumber, fee, session.paymentCode(), now);
         }
         commission.setAutoCompleteAt(null);
         card.setMetadataJson(confirmedMetadata);
         commissions.save(commission);
+        revisionRequests.save(revision);
         var savedCard = messages.save(card);
         broadcast.broadcastMessage(id, mapper.toResponse(savedCard));
         return new ConfirmRevisionCardResponse(

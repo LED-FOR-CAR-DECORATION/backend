@@ -8,6 +8,7 @@ import com.lumintra.backend.commission.infrastructure.persistence.entity.Commiss
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionRequestMapper;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRevisionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionSubmissionRepository;
 import com.lumintra.backend.media.domain.service.MediaUrlValidator;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
@@ -56,6 +57,11 @@ class UploadCommissionDraftUseCaseTest {
     @Spy
     private CommissionRequestMapper commissionRequestMapper = new CommissionRequestMapper();
 
+    @Mock(strictness = Mock.Strictness.LENIENT)
+    private CommissionRevisionRequestRepository commissionRevisionRequestRepository;
+
+    private com.lumintra.backend.commission.RevisionRequestFakes revisions;
+
     @InjectMocks
     private UploadCommissionDraftUseCase useCase;
 
@@ -63,6 +69,7 @@ class UploadCommissionDraftUseCaseTest {
 
     @BeforeEach
     void setUp() {
+        revisions = new com.lumintra.backend.commission.RevisionRequestFakes(commissionRevisionRequestRepository);
         sampleCommission = CommissionRequestEntity.builder()
                 .commissionId(105L)
                 .customerId(501L)
@@ -251,5 +258,27 @@ class UploadCommissionDraftUseCaseTest {
 
         verifyNoInteractions(commissionSubmissionRepository);
         verify(commissionRequestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Draft uploaded during a customer revision is linked to that revision brief")
+    void execute_WhenRevisionConfirmed_LinksDraftToRevisionRequest() {
+        var revision = revisions.repository.save(
+                com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRevisionRequestEntity
+                        .open(105L, 402L, 1, "Brighter outline", true, BigDecimal.ZERO));
+        revision.confirmFree(1, Instant.now());
+        when(commissionRequestRepository.findById(105L)).thenReturn(Optional.of(sampleCommission));
+        when(commissionSubmissionRepository.findTopByCommissionIdOrderByVersionNumberDesc(105L))
+                .thenReturn(Optional.empty());
+        when(commissionSubmissionRepository.save(any(CommissionSubmissionEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(commissionRequestRepository.save(any(CommissionRequestEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        useCase.execute(105L, new UploadCommissionDraftRequest(VALID_DRAFT_URL, "v2"), 5L);
+
+        ArgumentCaptor<CommissionSubmissionEntity> draftCaptor = ArgumentCaptor.forClass(CommissionSubmissionEntity.class);
+        verify(commissionSubmissionRepository).save(draftCaptor.capture());
+        assertThat(draftCaptor.getValue().getRevisionRequestId()).isEqualTo(revision.getRevisionRequestId());
     }
 }

@@ -1,10 +1,12 @@
 package com.lumintra.backend.commission;
 
+import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lumintra.backend.commission.application.ConfirmRevisionCardUseCase;
+import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
 import com.lumintra.backend.commission.domain.model.*;
 import com.lumintra.backend.commission.domain.service.CommissionChatBroadcastPort;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.*;
@@ -33,6 +35,8 @@ class ConfirmRevisionCardUseCaseTest {
     @Mock CommissionChatBroadcastPort broadcast;
     @Spy CommissionMessageMapper mapper = new CommissionMessageMapper();
     @Spy ObjectMapper json = new ObjectMapper();
+    RevisionRequestFakes revisions = new RevisionRequestFakes();
+    @Spy CommissionRevisionRequestRecorder revisionRequests = revisions.recorder;
     @InjectMocks ConfirmRevisionCardUseCase useCase;
     CommissionRequestEntity commission;
     CommissionMessageEntity card;
@@ -73,7 +77,7 @@ class ConfirmRevisionCardUseCaseTest {
         availableCard();
         when(messages.save(card)).thenReturn(card);
         var response = useCase.execute(105L, 501L, 402L);
-        assertThat(response.status()).isEqualTo(CommissionStatus.CUSTOMER_REVISION_REQUESTED);
+        assertThat(response.status()).isEqualTo(CommissionStatus.AWAITING_ESTIMATE);
         assertThat(response.revisionsUsed()).isEqualTo(1);
         assertThat(response.paymentSession()).isNull();
         assertThat(commission.getAutoCompleteAt()).isNull();
@@ -236,5 +240,54 @@ class ConfirmRevisionCardUseCaseTest {
         assertThatThrownBy(() -> useCase.execute(105L, 501L, 402L))
                 .isInstanceOf(InvalidCommissionStatusTransitionException.class);
         verifyNoInteractions(payments, broadcast);
+    }
+
+    @Test
+    void freeConfirmationRecordsConfirmedBriefForDesigner() {
+        availableCard();
+        when(messages.save(card)).thenReturn(card);
+        revisions.recorder.open(card, 1, "Brighter outline", true, BigDecimal.ZERO.setScale(2));
+
+        useCase.execute(105L, 501L, 402L);
+
+        var revision = revisions.only();
+        assertThat(revision.getStatus()).isEqualTo(CommissionRevisionRequestStatus.CONFIRMED);
+        assertThat(revision.getDescription()).isEqualTo("Brighter outline");
+        assertThat(revision.getRevisionNumber()).isEqualTo(1);
+        assertThat(revision.isUsesFreeQuota()).isTrue();
+        assertThat(revision.getConfirmedAt()).isNotNull();
+    }
+
+    @Test
+    void paidConfirmationRecordsBriefAwaitingPayment() {
+        availableCard();
+        when(messages.save(card)).thenReturn(card);
+        commission.setRevisionsUsed(2);
+        when(payments.createSession(any()))
+                .thenReturn(PaymentSessionResponse.builder().paymentCode("LUMREV105ABC").build());
+
+        useCase.execute(105L, 501L, 402L);
+
+        // Card posted before the table existed: the record is rebuilt from card metadata.
+        var revision = revisions.only();
+        assertThat(revision.getMessageId()).isEqualTo(402L);
+        assertThat(revision.getDescription()).isEqualTo("Brighter outline");
+        assertThat(revision.getStatus()).isEqualTo(CommissionRevisionRequestStatus.AWAITING_PAYMENT);
+        assertThat(revision.getRevisionNumber()).isEqualTo(3);
+        assertThat(revision.isUsesFreeQuota()).isFalse();
+        assertThat(revision.getRevisionFee()).isEqualByComparingTo("35000");
+        assertThat(revision.getPaymentCode()).isEqualTo("LUMREV105ABC");
+    }
+
+    @Test
+    void rejectsBriefWhoseRecordWasAlreadyConfirmed() {
+        availableCard();
+        revisions.recorder.open(card, 1, "Brighter outline", true, BigDecimal.ZERO.setScale(2))
+                .confirmFree(1, Instant.now());
+
+        assertThatThrownBy(() -> useCase.execute(105L, 501L, 402L))
+                .isInstanceOf(InvalidCommissionStatusTransitionException.class);
+        verify(commissions, never()).save(any());
+        verifyNoInteractions(payments);
     }
 }

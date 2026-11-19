@@ -12,6 +12,7 @@ import com.lumintra.backend.commission.infrastructure.persistence.entity.Commiss
 import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionMessageMapper;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionMessageRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRevisionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionSubmissionRepository;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionStaffLockException;
@@ -41,6 +42,7 @@ public class PostDeliverableCardUseCase {
     private final CommissionRequestRepository commissionRequestRepository;
     private final CommissionSubmissionRepository commissionSubmissionRepository;
     private final CommissionMessageRepository commissionMessageRepository;
+    private final CommissionRevisionRequestRepository commissionRevisionRequestRepository;
     private final CommissionMessageMapper commissionMessageMapper;
     private final CommissionChatBroadcastPort chatBroadcastPort;
     private final ObjectMapper objectMapper;
@@ -94,6 +96,15 @@ public class PostDeliverableCardUseCase {
         // AC02: Mark draft STAFF_APPROVED
         draft.approveByStaff(callerStaffId, now);
         CommissionSubmissionEntity savedDraft = commissionSubmissionRepository.save(draft);
+
+        // The delivered preview answers the revision brief the draft was made for.
+        if (savedDraft.getRevisionRequestId() != null) {
+            commissionRevisionRequestRepository.findById(savedDraft.getRevisionRequestId())
+                    .ifPresent(revision -> {
+                        revision.complete(now);
+                        commissionRevisionRequestRepository.save(revision);
+                    });
+        }
 
         // AC02: Insert DELIVERABLE_CARD message
         CommissionMessageEntity card = CommissionMessageEntity.createDeliverableCard(

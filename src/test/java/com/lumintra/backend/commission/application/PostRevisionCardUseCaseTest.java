@@ -1,5 +1,6 @@
 package com.lumintra.backend.commission.application;
 
+import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -14,6 +15,8 @@ import com.lumintra.backend.commission.infrastructure.persistence.repository.Com
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
 import com.lumintra.backend.shared.exception.commission.*;
 
+import com.lumintra.backend.commission.RevisionRequestFakes;
+
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -24,9 +27,15 @@ class PostRevisionCardUseCaseTest {
     private final CommissionMessageRepository messages = mock(CommissionMessageRepository.class);
     private final CommissionChatBroadcastPort broadcast = mock(CommissionChatBroadcastPort.class);
     private final ObjectMapper json = new ObjectMapper();
+    private final RevisionRequestFakes revisions = new RevisionRequestFakes();
     private final PostRevisionCardUseCase useCase =
             new PostRevisionCardUseCase(
-                    commissions, messages, new CommissionMessageMapper(), broadcast, json);
+                    commissions,
+                    messages,
+                    new CommissionMessageMapper(),
+                    broadcast,
+                    json,
+                    revisions.recorder);
 
     @Test
     void createsFreeCardWithoutConsumingQuotaOrChangingStatus() throws Exception {
@@ -93,5 +102,35 @@ class PostRevisionCardUseCaseTest {
                         .build();
         when(commissions.findForRevisionCard(105L)).thenReturn(Optional.of(commission));
         return commission;
+    }
+
+    @Test
+    void recordsPendingBriefAndSupersedesUnconfirmedOne() {
+        commission(1);
+        var ids = new java.util.concurrent.atomic.AtomicLong(400);
+        when(messages.save(any()))
+                .thenAnswer(
+                        invocation -> {
+                            var message =
+                                    (com.lumintra.backend.commission.infrastructure.persistence.entity
+                                                    .CommissionMessageEntity)
+                                            invocation.getArgument(0);
+                            message.setMessageId(ids.incrementAndGet());
+                            return message;
+                        });
+        useCase.execute(105L, 3L, new PostRevisionCardRequest("Brighter outline"));
+        useCase.execute(105L, 3L, new PostRevisionCardRequest(" Slower blink "));
+
+        assertThat(revisions.store).hasSize(2);
+        var first = revisions.store.get(0);
+        var second = revisions.store.get(1);
+        assertThat(first.getStatus()).isEqualTo(CommissionRevisionRequestStatus.SUPERSEDED);
+        assertThat(second.getStatus()).isEqualTo(CommissionRevisionRequestStatus.PENDING);
+        assertThat(second.getCommissionId()).isEqualTo(105L);
+        assertThat(second.getMessageId()).isEqualTo(402L);
+        assertThat(second.getDescription()).isEqualTo("Slower blink");
+        assertThat(second.getRevisionNumber()).isEqualTo(2);
+        assertThat(second.isUsesFreeQuota()).isTrue();
+        assertThat(second.getRevisionFee()).isEqualByComparingTo("0");
     }
 }
