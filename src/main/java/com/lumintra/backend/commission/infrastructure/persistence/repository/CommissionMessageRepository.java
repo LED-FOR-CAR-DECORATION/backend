@@ -15,6 +15,8 @@ public interface CommissionMessageRepository extends JpaRepository<CommissionMes
     Optional<CommissionMessageEntity>
             findFirstByCommissionIdAndMessageTypeOrderByCreatedAtDescMessageIdDesc(
                     Long commissionId, CommissionMessageType messageType);
+    Optional<CommissionMessageEntity> findFirstByCommissionIdAndMessageTypeOrderByMessageIdDesc(
+            Long commissionId, CommissionMessageType messageType);
 
     List<CommissionMessageEntity> findAllByCommissionIdOrderByCreatedAtAsc(Long commissionId);
 }
