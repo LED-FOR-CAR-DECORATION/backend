@@ -438,6 +438,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("COMMISSION_TIER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(PricingRuleInUseException.class)
+    public ResponseEntity<ErrorResponse> handlePricingRuleInUse(PricingRuleInUseException ex) {
+        return buildErrorResponse("PRICING_RULE_IN_USE", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(SystemRuleLockedException.class)
     public ResponseEntity<ErrorResponse> handleSystemRuleLocked(SystemRuleLockedException ex) {
         return buildErrorResponse("SYSTEM_RULE_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
