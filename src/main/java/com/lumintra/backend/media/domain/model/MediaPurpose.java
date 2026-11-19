@@ -33,5 +33,17 @@ public enum MediaPurpose {
     /**
      * Allowed only for MANAGER, ADMIN (product thumbnails and store catalog galleries).
      */
-    STORE_PRODUCT
+    STORE_PRODUCT;
+
+    /**
+     * Private purposes are stored in the private bucket and are only ever served through short-lived
+     * signed GET URLs issued by an endpoint that has already authorized the caller.
+     * Public purposes stay in the public bucket and are served through the CDN.
+     */
+    public boolean isPrivate() {
+        return switch (this) {
+            case COMMISSION_REFERENCE, COMMISSION_CHAT, COMMISSION_DRAFT, WARRANTY_EVIDENCE -> true;
+            case CHARACTER_ASSET, STORE_PRODUCT -> false;
+        };
+    }
 }

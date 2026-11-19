@@ -253,7 +253,7 @@ public class CommissionController {
                                           ],
                                           "attachments": [
                                             {
-                                              "imageUrl": "https://cdn.lumintra.com/commissions/references/42/ref-01.png",
+                                              "imageUrl": "commissions/references/42/123e4567-e89b-12d3-a456-426614174000-ref-01.png",
                                               "caption": "Neon color palette reference"
                                             }
                                           ]

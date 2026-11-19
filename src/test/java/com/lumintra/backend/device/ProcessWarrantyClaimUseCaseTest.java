@@ -13,7 +13,9 @@ import com.lumintra.backend.shared.exception.device.WarrantyClaimNotFoundExcepti
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import com.lumintra.backend.media.domain.service.MediaViewUrlResolver;
 import org.mockito.InjectMocks;
+import org.mockito.Spy;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -38,6 +40,9 @@ class ProcessWarrantyClaimUseCaseTest {
 
     @Mock
     private LedInstanceRepository ledInstanceRepository;
+
+    @Spy
+    private MediaViewUrlResolver mediaViewUrlResolver = MediaViewUrlResolver.passThrough();
 
     @InjectMocks
     private ProcessWarrantyClaimUseCase useCase;

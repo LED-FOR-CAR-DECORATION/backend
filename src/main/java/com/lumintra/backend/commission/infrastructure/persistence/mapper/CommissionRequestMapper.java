@@ -23,7 +23,9 @@ import com.lumintra.backend.commission.infrastructure.persistence.entity.Commiss
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
 import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
 import com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot;
+import com.lumintra.backend.media.domain.service.MediaViewUrlResolver;
 import com.lumintra.backend.shared.response.PaginationMeta;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
@@ -34,9 +36,22 @@ import java.util.Objects;
 
 /**
  * Maps persisted {@link CommissionRequestEntity} records and child collections into customer and management response DTOs.
+ * Stored media references (attachments, drafts, previews) are resolved to viewable (signed) URLs here.
  */
 @Component
 public class CommissionRequestMapper {
+
+    private final MediaViewUrlResolver mediaViewUrlResolver;
+
+    /** Pass-through media resolution; for use outside the Spring context (unit tests). */
+    public CommissionRequestMapper() {
+        this(MediaViewUrlResolver.passThrough());
+    }
+
+    @Autowired
+    public CommissionRequestMapper(MediaViewUrlResolver mediaViewUrlResolver) {
+        this.mediaViewUrlResolver = mediaViewUrlResolver;
+    }
 
     public CustomerCommissionListResponse toCustomerListResponse(Page<CommissionRequestEntity> page) {
         if (page == null) {
@@ -283,7 +298,7 @@ public class CommissionRequestMapper {
 
         return CustomerCommissionAttachmentItem.builder()
                 .attachmentId(entity.getAttachmentId())
-                .imageUrl(entity.getImageUrl())
+                .imageUrl(mediaViewUrlResolver.toViewUrl(entity.getImageUrl()))
                 .caption(entity.getCaption())
                 .displayOrder(entity.getDisplayOrder())
                 .createdAt(entity.getCreatedAt())
@@ -298,7 +313,7 @@ public class CommissionRequestMapper {
         return CustomerDeliveredPreviewItem.builder()
                 .submissionId(entity.getSubmissionId())
                 .versionNumber(entity.getVersionNumber())
-                .imageUrl(entity.getImageUrl())
+                .imageUrl(mediaViewUrlResolver.toViewUrl(entity.getImageUrl()))
                 .designerNote(entity.getDesignerNote())
                 .status(entity.getStatus())
                 .deliveredAt(entity.getDeliveredAt())
@@ -418,7 +433,7 @@ public class CommissionRequestMapper {
         }
         return ManagementCommissionAttachmentItem.builder()
                 .attachmentId(attachment.getAttachmentId())
-                .imageUrl(attachment.getImageUrl())
+                .imageUrl(mediaViewUrlResolver.toViewUrl(attachment.getImageUrl()))
                 .caption(attachment.getCaption())
                 .displayOrder(attachment.getDisplayOrder())
                 .createdAt(attachment.getCreatedAt())
@@ -445,7 +460,7 @@ public class CommissionRequestMapper {
                 .designerId(submission.getDesignerId())
                 .designerName(designer != null ? designer.fullName() : null)
                 .versionNumber(submission.getVersionNumber())
-                .imageUrl(submission.getImageUrl())
+                .imageUrl(mediaViewUrlResolver.toViewUrl(submission.getImageUrl()))
                 .designerNote(submission.getDesignerNote())
                 .revisionRequestId(submission.getRevisionRequestId())
                 .status(submission.getStatus())
@@ -482,7 +497,7 @@ public class CommissionRequestMapper {
                 .commissionId(submission.getCommissionId())
                 .designerId(submission.getDesignerId())
                 .versionNumber(submission.getVersionNumber())
-                .imageUrl(submission.getImageUrl())
+                .imageUrl(mediaViewUrlResolver.toViewUrl(submission.getImageUrl()))
                 .designerNote(submission.getDesignerNote())
                 .submissionStatus(submission.getStatus())
                 .commissionStatus(commission.getStatus())

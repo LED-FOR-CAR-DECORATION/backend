@@ -71,9 +71,10 @@ class MediaUploadControllerTest {
         );
 
         SignedUploadUrlResponse response = new SignedUploadUrlResponse(
-                "https://storage.googleapis.com/lumintra/commissions/references/4/test.png?X-Goog-Algorithm=...",
-                "https://cdn.lumintra.com/commissions/references/4/test.png",
+                "https://storage.googleapis.com/lumintra-private/commissions/references/4/test.png?X-Goog-Algorithm=...",
+                null,
                 "commissions/references/4/test.png",
+                java.util.Map.of("Content-Type", "image/png", "Cache-Control", "private, max-age=600"),
                 Instant.parse("2026-11-15T23:30:00Z")
         );
 
@@ -86,7 +87,8 @@ class MediaUploadControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.signedUploadUrl").value(response.signedUploadUrl()))
-                .andExpect(jsonPath("$.data.publicUrl").value(response.publicUrl()))
+                .andExpect(jsonPath("$.data.publicUrl").doesNotExist())
+                .andExpect(jsonPath("$.data.uploadHeaders.Cache-Control").value("private, max-age=600"))
                 .andExpect(jsonPath("$.data.objectKey").value(response.objectKey()))
                 .andExpect(jsonPath("$.data.expiresAt").value("2026-11-15T23:30:00Z"));
 

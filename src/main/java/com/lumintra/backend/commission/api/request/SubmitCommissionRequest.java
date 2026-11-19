@@ -91,7 +91,7 @@ public record SubmitCommissionRequest(
 
     @Schema(description = "Reference image attachment item")
     public record CommissionAttachmentItemRequest(
-            @Schema(description = "URL of the uploaded reference image", example = "https://cdn.lumintra.com/commissions/references/42/ref-01.png", requiredMode = Schema.RequiredMode.REQUIRED)
+            @Schema(description = "objectKey returned by POST /api/media/upload-url with purpose COMMISSION_REFERENCE by this customer", example = "commissions/references/42/123e4567-e89b-12d3-a456-426614174000-ref-01.png", requiredMode = Schema.RequiredMode.REQUIRED)
             @NotBlank(message = "imageUrl is required")
             @Size(max = 1024, message = "imageUrl must not exceed 1024 characters")
             String imageUrl,

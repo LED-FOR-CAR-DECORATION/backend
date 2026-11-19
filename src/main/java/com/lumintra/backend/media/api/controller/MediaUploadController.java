@@ -33,7 +33,11 @@ public class MediaUploadController {
 
     @Operation(
             summary = "Request a short-lived V4 signed upload URL for direct cloud storage upload",
-            description = "Issues a signed PUT upload URL locking MIME type, size limit (10MB), and public CDN cache headers. Returns the signed URL, permanent CDN public URL, and expiration timestamp.",
+            description = "Issues a signed PUT upload URL locking MIME type, size limit (10MB) and cache headers. "
+                    + "Public purposes (CHARACTER_ASSET, STORE_PRODUCT) go to the public bucket and return a permanent publicUrl. "
+                    + "Private purposes (COMMISSION_REFERENCE, COMMISSION_CHAT, COMMISSION_DRAFT, WARRANTY_EVIDENCE) go to the private bucket, "
+                    + "return publicUrl = null, and must be referenced downstream by objectKey. "
+                    + "Send every entry of uploadHeaders with the PUT request.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @PreAuthorize("isAuthenticated()")

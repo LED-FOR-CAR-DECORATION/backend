@@ -8,6 +8,7 @@ import com.lumintra.backend.device.infrastructure.persistence.entity.WarrantyTic
 import com.lumintra.backend.device.infrastructure.persistence.repository.LedInstanceRepository;
 import com.lumintra.backend.device.infrastructure.persistence.repository.WarrantyTicketRepository;
 import com.lumintra.backend.shared.exception.device.WarrantyClaimNotFoundException;
+import com.lumintra.backend.media.domain.service.MediaViewUrlResolver;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,7 @@ public class ProcessWarrantyClaimUseCase {
 
     private final WarrantyTicketRepository warrantyTicketRepository;
     private final LedInstanceRepository ledInstanceRepository;
+    private final MediaViewUrlResolver mediaViewUrlResolver;
 
     @Transactional
     public WarrantyClaimResponse execute(Long ticketId, ProcessWarrantyClaimRequest request) {
@@ -49,7 +51,7 @@ public class ProcessWarrantyClaimUseCase {
                 device != null ? device.getDeviceName() : null,
                 savedTicket.getStatus(),
                 savedTicket.getIssueDescription(),
-                savedTicket.getEvidenceMediaUrls(),
+                mediaViewUrlResolver.toViewUrls(savedTicket.getEvidenceMediaUrls()),
                 savedTicket.getResolutionNotes(),
                 savedTicket.getCreatedAt(),
                 savedTicket.getUpdatedAt()

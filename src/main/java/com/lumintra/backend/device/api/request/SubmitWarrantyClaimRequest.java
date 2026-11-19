@@ -10,6 +10,7 @@ public record SubmitWarrantyClaimRequest(
         @Size(min = 10, max = 1000, message = "Issue description must be between 10 and 1000 characters.")
         String issueDescription,
 
+        // objectKeys returned by POST /api/media/upload-url with purpose WARRANTY_EVIDENCE for this device
         @Size(max = 5, message = "Evidence media URLs must not exceed 5 items.")
         List<@Size(max = 500, message = "Evidence media URL must not exceed 500 characters.") String> evidenceMediaUrls
 ) {}

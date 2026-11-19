@@ -10,7 +10,8 @@ import com.lumintra.backend.commission.infrastructure.persistence.mapper.Commiss
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRevisionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionSubmissionRepository;
-import com.lumintra.backend.media.domain.service.MediaUrlValidator;
+import com.lumintra.backend.media.domain.model.MediaPurpose;
+import com.lumintra.backend.media.domain.service.PrivateMediaReferenceValidator;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
@@ -31,7 +32,7 @@ public class UploadCommissionDraftUseCase {
     private final CommissionRequestRepository commissionRequestRepository;
     private final CommissionSubmissionRepository commissionSubmissionRepository;
     private final CommissionRevisionRequestRepository commissionRevisionRequestRepository;
-    private final MediaUrlValidator mediaUrlValidator;
+    private final PrivateMediaReferenceValidator privateMediaReferenceValidator;
     private final CommissionRequestMapper commissionRequestMapper;
 
     @Transactional
@@ -67,8 +68,9 @@ public class UploadCommissionDraftUseCase {
             );
         }
 
-        // AC02: Validate MED-01 media URL domain rules (no server-side pixel/150KB inspection required)
-        mediaUrlValidator.validateMediaUrl(request.imageUrl());
+        // AC02: Must be a COMMISSION_DRAFT upload for this commission; the object key is persisted
+        String draftObjectKey = privateMediaReferenceValidator.requireOwnedObjectKey(
+                request.imageUrl(), MediaPurpose.COMMISSION_DRAFT, commissionId);
 
         int nextVersionNumber = commissionSubmissionRepository
                 .findTopByCommissionIdOrderByVersionNumberDesc(commissionId)
@@ -79,7 +81,7 @@ public class UploadCommissionDraftUseCase {
                 commissionId,
                 callerDesignerId,
                 nextVersionNumber,
-                request.imageUrl(),
+                draftObjectKey,
                 request.designerNote()
         );
         commissionRevisionRequestRepository

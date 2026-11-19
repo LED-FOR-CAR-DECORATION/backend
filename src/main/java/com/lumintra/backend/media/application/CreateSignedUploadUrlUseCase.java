@@ -39,7 +39,7 @@ public class CreateSignedUploadUrlUseCase {
     private final MediaKeyGenerator mediaKeyGenerator;
     private final StorageSignedUrlService storageSignedUrlService;
 
-    @Value("${lumintra.storage.signed-url.expiration-minutes:15}")
+    @Value("${app.firebase.signed-url.upload-expiration-minutes:15}")
     private int expirationMinutes = 15;
 
     public SignedUploadUrlResponse execute(String callerSubject, Set<String> callerRoles, CreateSignedUploadUrlRequest request) {
@@ -88,6 +88,7 @@ public class CreateSignedUploadUrlUseCase {
                 signResult.signedUploadUrl(),
                 signResult.publicUrl(),
                 signResult.objectKey(),
+                signResult.uploadHeaders(),
                 expiresAt
         );
     }

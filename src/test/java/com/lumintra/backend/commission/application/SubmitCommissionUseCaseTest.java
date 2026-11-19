@@ -22,7 +22,8 @@ import com.lumintra.backend.commission.infrastructure.persistence.repository.Com
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionPriceConfigRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionPricingTierRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
-import com.lumintra.backend.media.domain.service.MediaUrlValidator;
+import com.lumintra.backend.media.domain.model.MediaPurpose;
+import com.lumintra.backend.media.domain.service.PrivateMediaReferenceValidator;
 import com.lumintra.backend.shared.exception.commission.CommissionTierNotFoundException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionRuleSelectionException;
 import com.lumintra.backend.shared.exception.commission.PresetSelectionMismatchException;
@@ -53,6 +54,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SubmitCommissionUseCaseTest {
 
+    private static final String REF_KEY_1 = "commissions/references/42/123e4567-e89b-12d3-a456-426614174000-ref1.png";
+    private static final String REF_KEY_2 = "commissions/references/42/223e4567-e89b-12d3-a456-426614174000-ref2.png";
+
     @Mock
     private CommissionPricingTierRepository tierRepository;
 
@@ -69,7 +73,7 @@ class SubmitCommissionUseCaseTest {
     private StaffAutoAssignmentService staffAutoAssignmentService;
 
     @Mock
-    private MediaUrlValidator mediaUrlValidator;
+    private PrivateMediaReferenceValidator mediaReferenceValidator;
 
     private PricingInvariantValidator pricingInvariantValidator;
     private CommissionRequestMapper commissionRequestMapper;
@@ -105,7 +109,7 @@ class SubmitCommissionUseCaseTest {
                 commissionRequestRepository,
                 attachmentRepository,
                 staffAutoAssignmentService,
-                mediaUrlValidator,
+                mediaReferenceValidator,
                 pricingInvariantValidator,
                 commissionRequestMapper,
                 objectMapper,
@@ -555,18 +559,23 @@ class SubmitCommissionUseCaseTest {
                         new SelectedOptionItem(2L, List.of(20L), null, null)
                 ),
                 List.of(
-                        new CommissionAttachmentItemRequest("https://cdn.lumintra.com/commissions/ref1.png", "Palette 1"),
-                        new CommissionAttachmentItemRequest("https://cdn.lumintra.com/commissions/ref2.png", "Palette 2")
+                        new CommissionAttachmentItemRequest(REF_KEY_1, "Palette 1"),
+                        new CommissionAttachmentItemRequest("https://cdn.lumintra.com/" + REF_KEY_2, "Palette 2")
                 )
         );
+        when(mediaReferenceValidator.requireOwnedObjectKey(REF_KEY_1, MediaPurpose.COMMISSION_REFERENCE, 42L))
+                .thenReturn(REF_KEY_1);
+        when(mediaReferenceValidator.requireOwnedObjectKey("https://cdn.lumintra.com/" + REF_KEY_2, MediaPurpose.COMMISSION_REFERENCE, 42L))
+                .thenReturn(REF_KEY_2);
 
         CustomerCommissionDetailResponse response = useCase.execute(42L, request);
 
         assertThat(response.attachments()).hasSize(2);
         assertThat(response.attachments().get(0).displayOrder()).isEqualTo(0);
         assertThat(response.attachments().get(1).displayOrder()).isEqualTo(1);
-        verify(mediaUrlValidator).validateMediaUrl("https://cdn.lumintra.com/commissions/ref1.png");
-        verify(mediaUrlValidator).validateMediaUrl("https://cdn.lumintra.com/commissions/ref2.png");
+        // Attachments persist the normalized object key, not the submitted reference
+        assertThat(response.attachments().get(0).imageUrl()).isEqualTo(REF_KEY_1);
+        assertThat(response.attachments().get(1).imageUrl()).isEqualTo(REF_KEY_2);
 
         ArgumentCaptor<CommissionRequestEntity> captor = ArgumentCaptor.forClass(CommissionRequestEntity.class);
         verify(commissionRequestRepository).save(captor.capture());
@@ -730,7 +739,7 @@ class SubmitCommissionUseCaseTest {
                 .hasMessageContaining("MATRIX_SIZE");
 
         doThrow(new InvalidMediaUrlException("Invalid domain"))
-                .when(mediaUrlValidator).validateMediaUrl("https://evil.com/x.png");
+                .when(mediaReferenceValidator).requireOwnedObjectKey("https://evil.com/x.png", MediaPurpose.COMMISSION_REFERENCE, 42L);
         SubmitCommissionRequest badUrl = new SubmitCommissionRequest(
                 "Bad Url", "Desc", "CUSTOM",
                 List.of(),
