@@ -205,6 +205,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("DEVICE_ALREADY_BOUND", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(DuplicateLedModelNameException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateLedModelName(DuplicateLedModelNameException ex) {
+        return buildErrorResponse("DUPLICATE_LED_MODEL_NAME", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(DeviceOwnershipMismatchException.class)
     public ResponseEntity<ErrorResponse> handleDeviceOwnershipMismatch(DeviceOwnershipMismatchException ex) {
         return buildErrorResponse("DEVICE_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);

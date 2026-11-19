@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface LedModelRepository extends JpaRepository<LedModelEntity, Long>, JpaSpecificationExecutor<LedModelEntity> {
 
+    boolean existsByModelNameIgnoreCase(String modelName);
+
     @Modifying
     @Query("""
             UPDATE LedModelEntity m

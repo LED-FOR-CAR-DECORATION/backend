@@ -1,7 +1,9 @@
 package com.lumintra.backend.device.api.controller;
 
+import com.lumintra.backend.device.api.request.CreateLedModelRequest;
 import com.lumintra.backend.device.api.request.LedModelFilterRequest;
 import com.lumintra.backend.device.api.response.LedModelListResponse;
+import com.lumintra.backend.device.application.CreateLedModelUseCase;
 import com.lumintra.backend.device.application.ListLedModelsUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -14,6 +16,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -21,6 +24,8 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,6 +41,7 @@ import java.util.List;
 public class ManagedLedModelController {
 
     private final ListLedModelsUseCase listLedModelsUseCase;
+    private final CreateLedModelUseCase createLedModelUseCase;
 
     @Operation(
             summary = "List LED hardware models",
@@ -149,5 +155,74 @@ public class ManagedLedModelController {
         }
         LedModelListResponse result = listLedModelsUseCase.execute(filter);
         return ResponseEntity.ok(ApiResponse.success(result.items(), result.meta()));
+    }
+
+    @Operation(
+            summary = "Create an LED hardware model (DEV-02)",
+            description = "Creates a standalone LED hardware model in warehouse inventory before or independently of creating a Store listing. Restricted to internal MANAGER and ADMIN roles.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "LED hardware model created successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = LedModelListResponse.LedModelItem.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid request body or validation failed",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing or expired authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: caller lacks MANAGER or ADMIN role",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict: modelName already exists",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PostMapping
+    public ResponseEntity<ApiResponse<LedModelListResponse.LedModelItem>> createLedModel(
+            Authentication authentication,
+            @Valid @RequestBody CreateLedModelRequest request) {
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            throw new AuthenticationCredentialsNotFoundException("Authentication is required.");
+        }
+        LedModelListResponse.LedModelItem item = createLedModelUseCase.execute(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(item));
     }
 }

@@ -28,6 +28,7 @@ public class LedModelEntity {
     private static final Pattern DIMENSION_PATTERN = Pattern.compile("^\\s*(\\d+)\\s*[xX×]\\s*(\\d+)\\s*$");
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "model_id")
     private Long modelId;
 
@@ -64,6 +65,15 @@ public class LedModelEntity {
 
     public static LedModelEntity create(Long modelId, String modelName, Map<String, Object> spec, Long stockQuantity) {
         return createInternal(modelId, null, modelName, null, null, spec, stockQuantity, null);
+    }
+
+    public static LedModelEntity createStandalone(
+            String modelName,
+            Integer widthPx,
+            Integer heightPx,
+            Map<String, Object> spec,
+            Long stockQuantity) {
+        return createInternal(null, null, modelName, widthPx, heightPx, spec, stockQuantity, null);
     }
 
     public static LedModelEntity createForProduct(
