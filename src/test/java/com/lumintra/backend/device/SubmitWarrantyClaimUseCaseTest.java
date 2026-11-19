@@ -11,7 +11,8 @@ import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstance
 import com.lumintra.backend.device.infrastructure.persistence.entity.WarrantyTicketEntity;
 import com.lumintra.backend.device.infrastructure.persistence.repository.LedInstanceRepository;
 import com.lumintra.backend.device.infrastructure.persistence.repository.WarrantyTicketRepository;
-import com.lumintra.backend.media.domain.service.MediaUrlValidator;
+import com.lumintra.backend.media.domain.model.MediaPurpose;
+import com.lumintra.backend.media.domain.service.PrivateMediaReferenceValidator;
 import com.lumintra.backend.shared.exception.device.DeviceOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException;
 import com.lumintra.backend.shared.exception.device.WarrantyClaimConflictException;
@@ -21,7 +22,9 @@ import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import com.lumintra.backend.media.domain.service.MediaViewUrlResolver;
 import org.mockito.InjectMocks;
+import org.mockito.Spy;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
@@ -51,7 +54,10 @@ class SubmitWarrantyClaimUseCaseTest {
     private OrderFulfillmentLookupService orderFulfillmentLookupService;
 
     @Mock
-    private MediaUrlValidator mediaUrlValidator;
+    private PrivateMediaReferenceValidator mediaReferenceValidator;
+
+    @Spy
+    private MediaViewUrlResolver mediaViewUrlResolver = MediaViewUrlResolver.passThrough();
 
     @InjectMocks
     private SubmitWarrantyClaimUseCase useCase;
@@ -98,8 +104,8 @@ class SubmitWarrantyClaimUseCaseTest {
                 .thenReturn(Optional.of(new InstanceFulfillmentSnapshot(DEVICE_ID, 20L, 55L, CUSTOMER_ID, "DELIVERED")));
 
         List<String> evidenceUrls = List.of(
-                "https://cdn.lumintra.shop/warranty/10/evidence-01.jpg",
-                "https://cdn.lumintra.shop/warranty/10/evidence-02.jpg"
+                "warranty/10/123e4567-e89b-12d3-a456-426614174000-evidence-01.jpg",
+                "warranty/10/223e4567-e89b-12d3-a456-426614174000-evidence-02.jpg"
         );
 
         WarrantyTicketEntity savedTicket = WarrantyTicketEntity.createPending(
@@ -127,6 +133,9 @@ class SubmitWarrantyClaimUseCaseTest {
                 evidenceUrls
         );
 
+        when(mediaReferenceValidator.requireOwnedObjectKey(any(), eq(MediaPurpose.WARRANTY_EVIDENCE), eq(DEVICE_ID)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
         WarrantyClaimResponse response = useCase.execute(CUSTOMER_ID, DEVICE_ID, request);
 
         assertThat(response).isNotNull();
@@ -139,8 +148,8 @@ class SubmitWarrantyClaimUseCaseTest {
         assertThat(response.evidenceMediaUrls()).containsExactlyElementsOf(evidenceUrls);
         assertThat(response.resolutionNotes()).isNull();
 
-        verify(mediaUrlValidator).validateMediaUrl("https://cdn.lumintra.shop/warranty/10/evidence-01.jpg");
-        verify(mediaUrlValidator).validateMediaUrl("https://cdn.lumintra.shop/warranty/10/evidence-02.jpg");
+        verify(mediaReferenceValidator).requireOwnedObjectKey(evidenceUrls.get(0), MediaPurpose.WARRANTY_EVIDENCE, DEVICE_ID);
+        verify(mediaReferenceValidator).requireOwnedObjectKey(evidenceUrls.get(1), MediaPurpose.WARRANTY_EVIDENCE, DEVICE_ID);
         verify(warrantyTicketRepository).save(any(WarrantyTicketEntity.class));
     }
 
@@ -188,7 +197,7 @@ class SubmitWarrantyClaimUseCaseTest {
         assertThat(response.status()).isEqualTo(WarrantyTicketStatus.PENDING);
         assertThat(response.evidenceMediaUrls()).isEmpty();
 
-        verify(mediaUrlValidator, never()).validateMediaUrl(any());
+        verify(mediaReferenceValidator, never()).requireOwnedObjectKey(any(), any(), any());
         verify(warrantyTicketRepository).save(any(WarrantyTicketEntity.class));
     }
 
@@ -313,7 +322,7 @@ class SubmitWarrantyClaimUseCaseTest {
     @DisplayName("execute: when evidence media URL is invalid, throws InvalidMediaUrlException")
     void execute_whenEvidenceUrlInvalid_throwsInvalidMediaUrlException() {
         doThrow(new InvalidMediaUrlException("Invalid URL"))
-                .when(mediaUrlValidator).validateMediaUrl("https://malicious.site/hack.jpg");
+                .when(mediaReferenceValidator).requireOwnedObjectKey(eq("https://malicious.site/hack.jpg"), eq(MediaPurpose.WARRANTY_EVIDENCE), any());
 
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
                 "Màn hình LED bị chớp nháy sau 15 phút.",

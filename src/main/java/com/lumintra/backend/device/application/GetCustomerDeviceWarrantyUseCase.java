@@ -8,6 +8,7 @@ import com.lumintra.backend.device.infrastructure.persistence.repository.LedInst
 import com.lumintra.backend.device.infrastructure.persistence.repository.WarrantyTicketRepository;
 import com.lumintra.backend.shared.exception.device.DeviceOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException;
+import com.lumintra.backend.media.domain.service.MediaViewUrlResolver;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,7 @@ public class GetCustomerDeviceWarrantyUseCase {
 
     private final LedInstanceRepository ledInstanceRepository;
     private final WarrantyTicketRepository warrantyTicketRepository;
+    private final MediaViewUrlResolver mediaViewUrlResolver;
 
     @Transactional(readOnly = true)
     public CustomerDeviceWarrantyResponse execute(Long customerId, Long deviceId) {
@@ -97,7 +99,7 @@ public class GetCustomerDeviceWarrantyUseCase {
                 ticket.getTicketId(),
                 ticket.getStatus(),
                 ticket.getIssueDescription(),
-                ticket.getEvidenceMediaUrls() != null ? ticket.getEvidenceMediaUrls() : List.of(),
+                mediaViewUrlResolver.toViewUrls(ticket.getEvidenceMediaUrls()),
                 ticket.getResolutionNotes(),
                 ticket.getCreatedAt(),
                 ticket.getUpdatedAt()

@@ -25,7 +25,8 @@ import com.lumintra.backend.commission.infrastructure.persistence.repository.Com
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionPriceConfigRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionPricingTierRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
-import com.lumintra.backend.media.domain.service.MediaUrlValidator;
+import com.lumintra.backend.media.domain.model.MediaPurpose;
+import com.lumintra.backend.media.domain.service.PrivateMediaReferenceValidator;
 import com.lumintra.backend.shared.exception.commission.CommissionRuleNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionTierNotFoundException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionRuleSelectionException;
@@ -66,7 +67,7 @@ public class SubmitCommissionUseCase {
     private final CommissionRequestRepository commissionRequestRepository;
     private final CommissionAttachmentRepository attachmentRepository;
     private final StaffAutoAssignmentService staffAutoAssignmentService;
-    private final MediaUrlValidator mediaUrlValidator;
+    private final PrivateMediaReferenceValidator privateMediaReferenceValidator;
     private final PricingInvariantValidator pricingInvariantValidator;
     private final CommissionRequestMapper commissionRequestMapper;
     private final ObjectMapper objectMapper;
@@ -77,7 +78,7 @@ public class SubmitCommissionUseCase {
         log.info("Processing commission submission [customerId={}] [tierCode={}] [title={}]",
                 customerId, request.tierCode(), request.title());
 
-        validateAttachments(request.attachments());
+        List<String> attachmentObjectKeys = validateAttachments(customerId, request.attachments());
 
         CommissionPricingTierEntity tier = tierRepository.findActiveWithIncludedOptionsByTierCode(request.tierCode())
                 .orElseThrow(() -> new CommissionTierNotFoundException("Pricing tier not found or inactive: " + request.tierCode()));
@@ -146,7 +147,7 @@ public class SubmitCommissionUseCase {
         commission = commissionRequestRepository.save(commission);
 
         List<CommissionAttachmentEntity> savedAttachments = persistAttachments(
-                commission.getCommissionId(), request.attachments()
+                commission.getCommissionId(), request.attachments(), attachmentObjectKeys
         );
         if (Boolean.TRUE.equals(request.openPaymentImmediately())) {
             if (initialPrice.signum() == 0) {
@@ -162,13 +163,19 @@ public class SubmitCommissionUseCase {
         return commissionRequestMapper.toCustomerDetailResponse(commission, savedAttachments, List.of());
     }
 
-    private void validateAttachments(List<CommissionAttachmentItemRequest> attachments) {
+    /**
+     * Each attachment must be a COMMISSION_REFERENCE upload made by this customer; returns the object keys to persist.
+     */
+    private List<String> validateAttachments(Long customerId, List<CommissionAttachmentItemRequest> attachments) {
         if (attachments == null) {
-            return;
+            return List.of();
         }
+        List<String> objectKeys = new ArrayList<>(attachments.size());
         for (CommissionAttachmentItemRequest attachment : attachments) {
-            mediaUrlValidator.validateMediaUrl(attachment.imageUrl());
+            objectKeys.add(privateMediaReferenceValidator.requireOwnedObjectKey(
+                    attachment.imageUrl(), MediaPurpose.COMMISSION_REFERENCE, customerId));
         }
+        return objectKeys;
     }
 
     private Map<Long, NormalizedSelection> normalizeSelections(
@@ -573,14 +580,15 @@ public class SubmitCommissionUseCase {
 
     private List<CommissionAttachmentEntity> persistAttachments(
             Long commissionId,
-            List<CommissionAttachmentItemRequest> attachments) {
+            List<CommissionAttachmentItemRequest> attachments,
+            List<String> attachmentObjectKeys) {
         List<CommissionAttachmentEntity> savedAttachments = new ArrayList<>();
         if (attachments != null && !attachments.isEmpty()) {
             for (int i = 0; i < attachments.size(); i++) {
                 CommissionAttachmentItemRequest attReq = attachments.get(i);
                 CommissionAttachmentEntity attachment = CommissionAttachmentEntity.create(
                         commissionId,
-                        attReq.imageUrl(),
+                        attachmentObjectKeys.get(i),
                         attReq.caption(),
                         i
                 );

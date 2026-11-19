@@ -10,7 +10,8 @@ import com.lumintra.backend.commission.infrastructure.persistence.mapper.Commiss
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRevisionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionSubmissionRepository;
-import com.lumintra.backend.media.domain.service.MediaUrlValidator;
+import com.lumintra.backend.media.domain.model.MediaPurpose;
+import com.lumintra.backend.media.domain.service.PrivateMediaReferenceValidator;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
@@ -32,6 +33,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -52,7 +55,7 @@ class UploadCommissionDraftUseCaseTest {
     private CommissionSubmissionRepository commissionSubmissionRepository;
 
     @Mock
-    private MediaUrlValidator mediaUrlValidator;
+    private PrivateMediaReferenceValidator mediaReferenceValidator;
 
     @Spy
     private CommissionRequestMapper commissionRequestMapper = new CommissionRequestMapper();
@@ -93,7 +96,7 @@ class UploadCommissionDraftUseCaseTest {
                 "Initial animated neon cat draft"
         );
         when(commissionRequestRepository.findById(105L)).thenReturn(Optional.of(sampleCommission));
-        doNothing().when(mediaUrlValidator).validateMediaUrl(VALID_DRAFT_URL);
+        when(mediaReferenceValidator.requireOwnedObjectKey(eq(VALID_DRAFT_URL), eq(MediaPurpose.COMMISSION_DRAFT), anyLong())).thenReturn(VALID_DRAFT_URL);
         when(commissionSubmissionRepository.findTopByCommissionIdOrderByVersionNumberDesc(105L))
                 .thenReturn(Optional.empty());
         when(commissionSubmissionRepository.save(any(CommissionSubmissionEntity.class))).thenAnswer(inv -> {
@@ -146,7 +149,7 @@ class UploadCommissionDraftUseCaseTest {
         UploadCommissionDraftRequest request = new UploadCommissionDraftRequest(v2Url, "Adjusted contrast per QA feedback");
 
         when(commissionRequestRepository.findById(105L)).thenReturn(Optional.of(sampleCommission));
-        doNothing().when(mediaUrlValidator).validateMediaUrl(v2Url);
+        when(mediaReferenceValidator.requireOwnedObjectKey(eq(v2Url), eq(MediaPurpose.COMMISSION_DRAFT), anyLong())).thenReturn(v2Url);
         when(commissionSubmissionRepository.findTopByCommissionIdOrderByVersionNumberDesc(105L))
                 .thenReturn(Optional.of(latestDraft));
         when(commissionSubmissionRepository.save(any(CommissionSubmissionEntity.class))).thenAnswer(inv -> {
@@ -173,7 +176,7 @@ class UploadCommissionDraftUseCaseTest {
         // Given
         UploadCommissionDraftRequest request = new UploadCommissionDraftRequest(VALID_DRAFT_URL, "   ");
         when(commissionRequestRepository.findById(105L)).thenReturn(Optional.of(sampleCommission));
-        doNothing().when(mediaUrlValidator).validateMediaUrl(VALID_DRAFT_URL);
+        when(mediaReferenceValidator.requireOwnedObjectKey(eq(VALID_DRAFT_URL), eq(MediaPurpose.COMMISSION_DRAFT), anyLong())).thenReturn(VALID_DRAFT_URL);
         when(commissionSubmissionRepository.findTopByCommissionIdOrderByVersionNumberDesc(105L))
                 .thenReturn(Optional.empty());
         when(commissionSubmissionRepository.save(any(CommissionSubmissionEntity.class))).thenAnswer(inv -> {
@@ -204,7 +207,7 @@ class UploadCommissionDraftUseCaseTest {
                 .isInstanceOf(CommissionNotFoundException.class)
                 .hasMessageContaining("not found with id: 999");
 
-        verifyNoInteractions(mediaUrlValidator, commissionSubmissionRepository);
+        verifyNoInteractions(mediaReferenceValidator, commissionSubmissionRepository);
         verify(commissionRequestRepository, never()).save(any());
     }
 
@@ -220,7 +223,7 @@ class UploadCommissionDraftUseCaseTest {
                 .isInstanceOf(CommissionOwnershipMismatchException.class)
                 .hasMessageContaining("not assigned to designer 8");
 
-        verifyNoInteractions(mediaUrlValidator, commissionSubmissionRepository);
+        verifyNoInteractions(mediaReferenceValidator, commissionSubmissionRepository);
         verify(commissionRequestRepository, never()).save(any());
     }
 
@@ -237,7 +240,7 @@ class UploadCommissionDraftUseCaseTest {
                 .isInstanceOf(InvalidCommissionStatusTransitionException.class)
                 .hasMessageContaining("IN_PROGRESS or INTERNAL_REVISION_REQUIRED");
 
-        verifyNoInteractions(mediaUrlValidator, commissionSubmissionRepository);
+        verifyNoInteractions(mediaReferenceValidator, commissionSubmissionRepository);
         verify(commissionRequestRepository, never()).save(any());
     }
 
@@ -249,7 +252,7 @@ class UploadCommissionDraftUseCaseTest {
         UploadCommissionDraftRequest request = new UploadCommissionDraftRequest(untrustedUrl, "Note");
         when(commissionRequestRepository.findById(105L)).thenReturn(Optional.of(sampleCommission));
         doThrow(new InvalidMediaUrlException("Submitted media URL is invalid or does not belong to authorized CDN / storage domains."))
-                .when(mediaUrlValidator).validateMediaUrl(untrustedUrl);
+                .when(mediaReferenceValidator).requireOwnedObjectKey(eq(untrustedUrl), eq(MediaPurpose.COMMISSION_DRAFT), anyLong());
 
         // When & Then
         assertThatThrownBy(() -> useCase.execute(105L, request, 5L))

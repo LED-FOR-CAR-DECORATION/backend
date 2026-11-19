@@ -14,7 +14,9 @@ import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import com.lumintra.backend.media.domain.service.MediaViewUrlResolver;
 import org.mockito.InjectMocks;
+import org.mockito.Spy;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
@@ -37,6 +39,9 @@ class GetCustomerDeviceWarrantyUseCaseTest {
 
     @Mock
     private WarrantyTicketRepository warrantyTicketRepository;
+
+    @Spy
+    private MediaViewUrlResolver mediaViewUrlResolver = MediaViewUrlResolver.passThrough();
 
     @InjectMocks
     private GetCustomerDeviceWarrantyUseCase useCase;

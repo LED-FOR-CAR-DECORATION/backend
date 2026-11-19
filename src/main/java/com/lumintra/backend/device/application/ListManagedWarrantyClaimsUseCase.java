@@ -9,6 +9,7 @@ import com.lumintra.backend.device.infrastructure.persistence.repository.Warrant
 import com.lumintra.backend.device.infrastructure.persistence.repository.WarrantyTicketSpecifications;
 import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
 import com.lumintra.backend.iam.domain.service.CustomerLookupService;
+import com.lumintra.backend.media.domain.service.MediaViewUrlResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -34,6 +35,7 @@ public class ListManagedWarrantyClaimsUseCase {
     private final WarrantyTicketRepository warrantyTicketRepository;
     private final LedInstanceRepository ledInstanceRepository;
     private final CustomerLookupService customerLookupService;
+    private final MediaViewUrlResolver mediaViewUrlResolver;
 
     @Transactional(readOnly = true)
     public Page<ManagedWarrantyClaimResponse> execute(WarrantyClaimFilterRequest filter) {
@@ -100,7 +102,7 @@ public class ListManagedWarrantyClaimsUseCase {
                 ticket.getOrderItemId(),
                 ticket.getStatus(),
                 ticket.getIssueDescription(),
-                ticket.getEvidenceMediaUrls(),
+                mediaViewUrlResolver.toViewUrls(ticket.getEvidenceMediaUrls()),
                 ticket.getResolutionNotes(),
                 ticket.getCreatedAt(),
                 ticket.getUpdatedAt()

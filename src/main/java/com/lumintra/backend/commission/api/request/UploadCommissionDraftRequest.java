@@ -7,8 +7,8 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "Request payload for a designer to submit an artwork draft version for a commission")
 public record UploadCommissionDraftRequest(
         @Schema(
-                description = "Public media URL of the artwork draft uploaded via MED-01 with purpose COMMISSION_DRAFT",
-                example = "https://cdn.lumintra.shop/commissions/105/drafts/a1b2c3d4-neon-cat-v1.gif",
+                description = "objectKey returned by POST /api/media/upload-url with purpose COMMISSION_DRAFT for this commission",
+                example = "commissions/105/drafts/123e4567-e89b-12d3-a456-426614174000-neon-cat-v1.gif",
                 requiredMode = Schema.RequiredMode.REQUIRED
         )
         @NotBlank(message = "imageUrl must not be blank")
