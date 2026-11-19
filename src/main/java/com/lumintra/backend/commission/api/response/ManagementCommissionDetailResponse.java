@@ -1,6 +1,7 @@
 package com.lumintra.backend.commission.api.response;
 
 import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
+import com.lumintra.backend.commission.domain.model.RevisionEstimateSource;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -141,6 +142,18 @@ public record ManagementCommissionDetailResponse(
 
             @Schema(description = "Timestamp when the extra revision fee was paid", example = "2026-11-19T08:05:00Z", nullable = true)
             Instant paidAt,
+
+            @Schema(description = "Estimated hours to deliver the revision; null until estimated", example = "36", nullable = true)
+            Integer estimatedHours,
+
+            @Schema(description = "Who set the estimate", example = "DESIGNER", nullable = true)
+            RevisionEstimateSource estimateSource,
+
+            @Schema(description = "Designer's internal delivery deadline for this revision", example = "2026-11-21T10:00:00Z", nullable = true)
+            Instant designerDueAt,
+
+            @Schema(description = "Delivery deadline shown to the customer (designer deadline + 24h)", example = "2026-11-22T10:00:00Z", nullable = true)
+            Instant customerDueAt,
 
             @Schema(description = "Timestamp when a preview answering this revision was delivered", example = "2026-11-20T08:00:00Z", nullable = true)
             Instant completedAt,

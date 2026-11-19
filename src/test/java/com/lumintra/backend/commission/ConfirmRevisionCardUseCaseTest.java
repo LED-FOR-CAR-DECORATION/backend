@@ -290,4 +290,19 @@ class ConfirmRevisionCardUseCaseTest {
         verify(commissions, never()).save(any());
         verifyNoInteractions(payments);
     }
+
+    @Test
+    void freeConfirmationStartsTheDesignerEstimateWindow() {
+        availableCard();
+        when(messages.save(card)).thenReturn(card);
+        commission.setSlaOverdue(true);
+        Instant before = Instant.now();
+
+        useCase.execute(105L, 501L, 402L);
+
+        assertThat(commission.getStatus()).isEqualTo(CommissionStatus.AWAITING_ESTIMATE);
+        assertThat(commission.getSlaDueAt())
+                .isCloseTo(before.plus(java.time.Duration.ofHours(24)), within(java.time.Duration.ofSeconds(5)));
+        assertThat(commission.isSlaOverdue()).isFalse();
+    }
 }

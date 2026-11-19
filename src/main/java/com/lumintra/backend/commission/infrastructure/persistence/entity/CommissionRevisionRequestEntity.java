@@ -1,6 +1,7 @@
 package com.lumintra.backend.commission.infrastructure.persistence.entity;
 
 import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
+import com.lumintra.backend.commission.domain.model.RevisionEstimateSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -81,6 +82,25 @@ public class CommissionRevisionRequestEntity {
     @Column(name = "paid_at")
     private Instant paidAt;
 
+    /** Hours the designer committed to (BR-FL3-14: 1..72); null until estimated. */
+    @Column(name = "estimated_hours")
+    private Integer estimatedHours;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estimate_source", length = 40)
+    private RevisionEstimateSource estimateSource;
+
+    @Column(name = "estimated_at")
+    private Instant estimatedAt;
+
+    /** Internal deadline for the designer to deliver the revised draft. */
+    @Column(name = "designer_due_at")
+    private Instant designerDueAt;
+
+    /** Deadline shown to the customer: designer deadline plus the 24h buffer (BR-FL3-14). */
+    @Column(name = "customer_due_at")
+    private Instant customerDueAt;
+
     @Column(name = "completed_at")
     private Instant completedAt;
 
@@ -145,6 +165,25 @@ public class CommissionRevisionRequestEntity {
         this.status = CommissionRevisionRequestStatus.PENDING;
         this.paymentCode = null;
         this.confirmedAt = null;
+    }
+
+    /** CMS-24 / CMS-28: the estimate is set and the designer starts the revision. */
+    public void startWork(
+            int estimatedHours,
+            RevisionEstimateSource source,
+            Instant estimatedAt,
+            Instant designerDueAt,
+            Instant customerDueAt) {
+        if (this.status != CommissionRevisionRequestStatus.CONFIRMED) {
+            throw new IllegalStateException(
+                    "Revision request " + this.revisionRequestId + " must be CONFIRMED to start work (was " + this.status + ")");
+        }
+        this.estimatedHours = estimatedHours;
+        this.estimateSource = source;
+        this.estimatedAt = estimatedAt;
+        this.designerDueAt = designerDueAt;
+        this.customerDueAt = customerDueAt;
+        this.status = CommissionRevisionRequestStatus.IN_PROGRESS;
     }
 
     public void supersede() {

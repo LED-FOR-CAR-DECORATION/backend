@@ -136,6 +136,28 @@ class CommissionRequestMapperTest {
     }
 
     @Test
+    @DisplayName("CMS-24 Mapper: customer sees designer deadline + 24h buffer only while work is in progress")
+    void toCustomerDetailResponse_exposesBufferedDeliveryDeadlineOnlyDuringWork() {
+        CommissionRequestEntity entity = CommissionRequestEntity.createPendingReview(
+                10L, "Simple Star", null, "BASIC", "32x32", null, new BigDecimal("150000.00"), 1, 20L
+        );
+        java.time.Instant slaDueAt = java.time.Instant.parse("2026-11-21T10:00:00Z");
+        entity.setSlaDueAt(slaDueAt);
+
+        for (CommissionStatus working : List.of(
+                CommissionStatus.IN_PROGRESS, CommissionStatus.INTERNAL_REVIEW, CommissionStatus.INTERNAL_REVISION_REQUIRED)) {
+            entity.setStatus(working);
+            assertThat(mapper.toCustomerDetailResponse(entity, null, null).estimatedDeliveryAt())
+                    .isEqualTo(java.time.Instant.parse("2026-11-22T10:00:00Z"));
+        }
+        for (CommissionStatus idle : List.of(
+                CommissionStatus.AWAITING_ESTIMATE, CommissionStatus.PREVIEW_DELIVERED, CommissionStatus.COMPLETED)) {
+            entity.setStatus(idle);
+            assertThat(mapper.toCustomerDetailResponse(entity, null, null).estimatedDeliveryAt()).isNull();
+        }
+    }
+
+    @Test
     @DisplayName("CMS-06 Mapper UTCID05 [N]: Maps staff commission queue items with enriched customer and employee names")
     void toStaffQueueResponse_mapsEnrichedProfilesAndItemsCorrectly() {
         CommissionRequestEntity entity = CommissionRequestEntity.createPendingReview(

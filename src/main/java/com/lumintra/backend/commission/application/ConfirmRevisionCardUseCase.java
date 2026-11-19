@@ -110,7 +110,7 @@ public class ConfirmRevisionCardUseCase {
         if (free) {
             commission.setRevisionsUsed(commission.getRevisionsUsed() + 1);
             // The brief was written by staff and confirmed by the customer: it goes straight to the designer.
-            commission.setStatus(CommissionStatus.AWAITING_ESTIMATE);
+            commission.awaitRevisionEstimate(now);
             commission.setActivePaymentCode(null);
             revision.confirmFree(revisionNumber, now);
         } else {

@@ -328,4 +328,22 @@ class CommissionRevisionPaymentEventListenerTest {
         assertThat(revisions.only().getPaidAt()).isEqualTo(PAID_AT);
         assertThat(revisions.only().getDescription()).isEqualTo("Brighter outline");
     }
+
+    @Test
+    void paymentStartsTheDesignerEstimateWindowFromProcessingTime() {
+        awaitingCommission();
+        when(messages.findFirstByCommissionIdAndMessageTypeOrderByCreatedAtDescMessageIdDesc(
+                        105L, CommissionMessageType.EXTRA_FEE_CARD))
+                .thenReturn(Optional.of(card));
+        when(messages.save(card)).thenReturn(card);
+        commission.setSlaOverdue(true);
+        Instant before = Instant.now();
+
+        listener.onPaymentSucceeded(validEvent());
+
+        assertThat(commission.getStatus()).isEqualTo(CommissionStatus.AWAITING_ESTIMATE);
+        assertThat(commission.getSlaDueAt())
+                .isCloseTo(before.plus(java.time.Duration.ofHours(24)), org.assertj.core.api.Assertions.within(java.time.Duration.ofSeconds(5)));
+        assertThat(commission.isSlaOverdue()).isFalse();
+    }
 }
