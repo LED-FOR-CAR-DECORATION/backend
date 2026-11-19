@@ -1,5 +1,6 @@
 package com.lumintra.backend.commission.infrastructure.persistence.entity;
 
+import com.lumintra.backend.commission.domain.model.CommissionRevisionEstimatePolicy;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -179,6 +180,31 @@ public class CommissionRequestEntity {
         this.approvedSubmissionId = acceptedSubmissionId;
         this.autoCompleteAt = null;
         this.status = CommissionStatus.COMPLETED;
+    }
+
+    /**
+     * CMS-20/21: an agreed revision goes straight to the designer, who must estimate it within
+     * the estimate window (BR-FL3-13). {@code sla_due_at} becomes the estimate deadline.
+     */
+    public void awaitRevisionEstimate(Instant now) {
+        this.status = CommissionStatus.AWAITING_ESTIMATE;
+        this.slaDueAt = now.plus(CommissionRevisionEstimatePolicy.ESTIMATE_WINDOW);
+        this.isSlaOverdue = false;
+        this.autoCompleteAt = null;
+    }
+
+    /**
+     * CMS-24 / CMS-28: the revision estimate is set; {@code sla_due_at} becomes the designer's
+     * delivery deadline and work starts (AWAITING_ESTIMATE to IN_PROGRESS).
+     */
+    public void startRevisionWork(Instant designerDueAt) {
+        if (this.status != CommissionStatus.AWAITING_ESTIMATE) {
+            throw new IllegalStateException(
+                    "Commission " + this.commissionId + " must be AWAITING_ESTIMATE to start revision work (was " + this.status + ")");
+        }
+        this.slaDueAt = designerDueAt;
+        this.isSlaOverdue = false;
+        this.status = CommissionStatus.IN_PROGRESS;
     }
 
     public String resolveActivePaymentCode() {

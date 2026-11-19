@@ -16,6 +16,7 @@ import com.lumintra.backend.commission.api.response.ManagementCommissionDetailRe
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.UploadCommissionDraftResponse;
+import com.lumintra.backend.commission.domain.model.CommissionRevisionEstimatePolicy;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionAttachmentEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRevisionRequestEntity;
@@ -26,6 +27,7 @@ import com.lumintra.backend.shared.response.PaginationMeta;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -249,13 +251,29 @@ public class CommissionRequestMapper {
                 .rejectionReason(entity.getRejectionReason())
                 .chatActive(entity.getStatus() != null && entity.getStatus().isChatActive())
                 .quoteExpiresAt(entity.getQuoteExpiresAt())
-                .slaDueAt(entity.getSlaDueAt())
+                .estimatedDeliveryAt(customerEstimatedDeliveryAt(entity))
                 .autoCompleteAt(entity.getAutoCompleteAt())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .attachments(attachmentItems)
                 .deliveredPreviews(previewItems)
                 .build();
+    }
+
+    /**
+     * The customer never sees the designer's internal sla_due_at: while a draft or revision is being
+     * worked on they see it plus the 24h buffer (BR-FL3-14). In AWAITING_ESTIMATE sla_due_at is only
+     * the estimate deadline, so nothing is promised yet.
+     */
+    private Instant customerEstimatedDeliveryAt(CommissionRequestEntity entity) {
+        if (entity.getStatus() == null) {
+            return null;
+        }
+        return switch (entity.getStatus()) {
+            case IN_PROGRESS, INTERNAL_REVIEW, INTERNAL_REVISION_REQUIRED ->
+                    CommissionRevisionEstimatePolicy.customerDueAt(entity.getSlaDueAt());
+            default -> null;
+        };
     }
 
     public CustomerCommissionAttachmentItem toCustomerAttachmentItem(CommissionAttachmentEntity entity) {
@@ -385,6 +403,10 @@ public class CommissionRequestMapper {
                 .status(revision.getStatus())
                 .confirmedAt(revision.getConfirmedAt())
                 .paidAt(revision.getPaidAt())
+                .estimatedHours(revision.getEstimatedHours())
+                .estimateSource(revision.getEstimateSource())
+                .designerDueAt(revision.getDesignerDueAt())
+                .customerDueAt(revision.getCustomerDueAt())
                 .completedAt(revision.getCompletedAt())
                 .createdAt(revision.getCreatedAt())
                 .build();
