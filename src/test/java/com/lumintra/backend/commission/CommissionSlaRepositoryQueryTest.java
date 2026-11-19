@@ -97,6 +97,27 @@ class CommissionSlaRepositoryQueryTest {
         assertThat(repository.flagSlaOverdue(CommissionSlaWorker.SLA_TRACKED_STATUSES, NOW)).isZero();
     }
 
+    @Test
+    @DisplayName("CMS-27 AC01: finds PREVIEW_DELIVERED commissions past auto_complete_at (inclusive), oldest first")
+    void findsCommissionsDueForAutoCompletion() {
+        CommissionRequestEntity older = delivered(CommissionStatus.PREVIEW_DELIVERED, NOW.minus(Duration.ofDays(1)));
+        CommissionRequestEntity exact = delivered(CommissionStatus.PREVIEW_DELIVERED, NOW);
+        delivered(CommissionStatus.PREVIEW_DELIVERED, NOW.plusSeconds(1));
+        delivered(CommissionStatus.PREVIEW_DELIVERED, null);
+        delivered(CommissionStatus.AWAITING_EXTRA_PAYMENT, NOW.minus(Duration.ofDays(2)));
+        delivered(CommissionStatus.COMPLETED, NOW.minus(Duration.ofDays(3)));
+        entityManager.flush();
+
+        assertThat(repository.findIdsDueForAutoCompletion(NOW))
+                .containsExactly(older.getCommissionId(), exact.getCommissionId());
+    }
+
+    private CommissionRequestEntity delivered(CommissionStatus status, Instant autoCompleteAt) {
+        CommissionRequestEntity entity = commission(status, null, false);
+        entity.setAutoCompleteAt(autoCompleteAt);
+        return repository.save(entity);
+    }
+
     private CommissionRequestEntity reload(CommissionRequestEntity entity) {
         return repository.findById(entity.getCommissionId()).orElseThrow();
     }

@@ -61,6 +61,14 @@ public interface CommissionRequestRepository extends JpaRepository<CommissionReq
             order by c.slaDueAt asc, c.commissionId asc""")
     List<Long> findIdsWithSlaDueAtOrBefore(@Param("status") CommissionStatus status, @Param("now") Instant now);
 
+    /** CMS-27: ids of PREVIEW_DELIVERED commissions whose auto-complete deadline is at or before {@code now}, oldest first. */
+    @Query("""
+            select c.commissionId from CommissionRequestEntity c
+            where c.status = com.lumintra.backend.commission.domain.model.CommissionStatus.PREVIEW_DELIVERED
+              and c.autoCompleteAt is not null and c.autoCompleteAt <= :now
+            order by c.autoCompleteAt asc, c.commissionId asc""")
+    List<Long> findIdsDueForAutoCompletion(@Param("now") Instant now);
+
     /** CMS-28: flags every not-yet-flagged commission in {@code statuses} whose SLA deadline has passed. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""

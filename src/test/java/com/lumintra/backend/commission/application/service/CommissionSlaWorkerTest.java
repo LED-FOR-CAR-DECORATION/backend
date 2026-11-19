@@ -1,5 +1,6 @@
 package com.lumintra.backend.commission.application.service;
 
+import com.lumintra.backend.commission.domain.model.CommissionCompletionSource;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.RevisionEstimateSource;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
@@ -30,13 +31,15 @@ class CommissionSlaWorkerTest {
 
     private CommissionRequestRepository commissions;
     private CommissionRevisionEstimateService estimates;
+    private CommissionCompletionService completions;
     private CommissionSlaWorker worker;
 
     @BeforeEach
     void setUp() {
         commissions = mock(CommissionRequestRepository.class);
         estimates = mock(CommissionRevisionEstimateService.class);
-        worker = new CommissionSlaWorker(commissions, estimates);
+        completions = mock(CommissionCompletionService.class);
+        worker = new CommissionSlaWorker(commissions, estimates, completions);
     }
 
     private CommissionRequestEntity commission(CommissionStatus status, Instant slaDueAt) {
@@ -125,5 +128,81 @@ class CommissionSlaWorkerTest {
         assertThat(CommissionSlaWorker.SLA_TRACKED_STATUSES).isEqualTo(EnumSet.of(
                 CommissionStatus.IN_PROGRESS, CommissionStatus.INTERNAL_REVIEW,
                 CommissionStatus.INTERNAL_REVISION_REQUIRED));
+    }
+
+    // ---------------------------------------------------------------- CMS-27 auto-complete
+
+    private CommissionRequestEntity delivered(CommissionStatus status, Instant autoCompleteAt) {
+        CommissionRequestEntity entity = CommissionRequestEntity.builder()
+                .commissionId(42L).status(status).autoCompleteAt(autoCompleteAt).build();
+        when(commissions.findByIdForUpdate(42L)).thenReturn(Optional.of(entity));
+        return entity;
+    }
+
+    @Test
+    @DisplayName("CMS-27 AC02 [N]: past auto_complete_at completes the commission as AUTO_COMPLETED under the row lock")
+    void autoCompletesWhenDeadlinePassed() {
+        CommissionRequestEntity entity = delivered(CommissionStatus.PREVIEW_DELIVERED, NOW.minus(Duration.ofHours(1)));
+
+        assertThat(worker.autoComplete(42L, NOW)).isTrue();
+
+        verify(commissions).findByIdForUpdate(42L);
+        verify(completions).complete(entity, CommissionCompletionSource.AUTO_COMPLETED, NOW);
+    }
+
+    @Test
+    @DisplayName("CMS-27 AC01 [B]: deadline exactly now counts as passed")
+    void autoCompletesAtExactDeadline() {
+        CommissionRequestEntity entity = delivered(CommissionStatus.PREVIEW_DELIVERED, NOW);
+
+        assertThat(worker.autoComplete(42L, NOW)).isTrue();
+
+        verify(completions).complete(entity, CommissionCompletionSource.AUTO_COMPLETED, NOW);
+    }
+
+    @Test
+    @DisplayName("CMS-27 AC03 [A]: skips when the customer acted first (status moved on)")
+    void skipsAutoCompleteWhenCustomerActedFirst() {
+        delivered(CommissionStatus.COMPLETED, null);
+        assertThat(worker.autoComplete(42L, NOW)).isFalse();
+
+        delivered(CommissionStatus.AWAITING_EXTRA_PAYMENT, NOW.minusSeconds(60));
+        assertThat(worker.autoComplete(42L, NOW)).isFalse();
+
+        verify(completions, never()).complete(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("CMS-27 AC03 [A]: skips when the deadline is still ahead after locking, or the commission is gone")
+    void skipsAutoCompleteWhenNotDueOrMissing() {
+        delivered(CommissionStatus.PREVIEW_DELIVERED, NOW.plusSeconds(1));
+        assertThat(worker.autoComplete(42L, NOW)).isFalse();
+
+        delivered(CommissionStatus.PREVIEW_DELIVERED, null);
+        assertThat(worker.autoComplete(42L, NOW)).isFalse();
+
+        when(commissions.findByIdForUpdate(42L)).thenReturn(Optional.empty());
+        assertThat(worker.autoComplete(42L, NOW)).isFalse();
+
+        verify(completions, never()).complete(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("CMS-27 AC05 [A]: a missing STAFF_APPROVED preview propagates so the transaction rolls back")
+    void propagatesAutoCompleteFailure() {
+        CommissionRequestEntity entity = delivered(CommissionStatus.PREVIEW_DELIVERED, NOW.minusSeconds(5));
+        when(completions.complete(entity, CommissionCompletionSource.AUTO_COMPLETED, NOW))
+                .thenThrow(new InvalidCommissionStatusTransitionException("no delivered preview"));
+
+        assertThatThrownBy(() -> worker.autoComplete(42L, NOW))
+                .isInstanceOf(InvalidCommissionStatusTransitionException.class);
+    }
+
+    @Test
+    @DisplayName("CMS-27 AC01 [N]: lists commissions due for auto-completion")
+    void findsDueAutoCompletions() {
+        when(commissions.findIdsDueForAutoCompletion(NOW)).thenReturn(List.of(7L, 8L));
+
+        assertThat(worker.findDueAutoCompletions(NOW)).containsExactly(7L, 8L);
     }
 }
