@@ -42,19 +42,6 @@ public class PricingInvariantValidator {
             Long currentConfigId,
             CommissionPriceOptionEntity parentOption,
             Function<Long, CommissionPriceOptionEntity> optionLookup) {
-        validateParentOptionDependency(currentConfigId, parentOption, optionLookup, 0);
-    }
-
-    /**
-     * Same as {@link #validateParentOptionDependency(Long, CommissionPriceOptionEntity, Function)} for an existing
-     * rule that already has {@code descendantLevels} levels of dependent rules below it: the ancestor chain plus
-     * those levels must stay within {@link #MAX_DEPENDENCY_DEPTH}.
-     */
-    public void validateParentOptionDependency(
-            Long currentConfigId,
-            CommissionPriceOptionEntity parentOption,
-            Function<Long, CommissionPriceOptionEntity> optionLookup,
-            int descendantLevels) {
         if (parentOption == null) {
             return;
         }
@@ -80,7 +67,7 @@ public class PricingInvariantValidator {
 
         while (cursor != null) {
             depth++;
-            if (depth + descendantLevels > MAX_DEPENDENCY_DEPTH) {
+            if (depth > MAX_DEPENDENCY_DEPTH) {
                 throw new InvalidRuleConfigurationException(
                         String.format("Conditional dependency depth exceeds maximum allowed depth of %d.", MAX_DEPENDENCY_DEPTH)
                 );

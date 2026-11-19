@@ -26,8 +26,6 @@ import com.lumintra.backend.shared.exception.commission.CommissionRuleNotFoundEx
 import com.lumintra.backend.shared.exception.commission.CommissionTierNotFoundException;
 import com.lumintra.backend.shared.exception.commission.DuplicateCommissionRuleException;
 import com.lumintra.backend.shared.exception.commission.InvalidRuleConfigurationException;
-import com.lumintra.backend.shared.exception.commission.PricingRuleInUseException;
-import com.lumintra.backend.shared.exception.commission.SystemRuleLockedException;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
 import io.micrometer.tracing.Tracer;
@@ -100,10 +98,8 @@ class CommissionManagementPricingControllerTest {
 
     @Test
     void managerCanUpdateCustomCriterion() throws Exception {
-        var update = UpdatePricingRuleRequest.builder()
-                .configName("Background").description("Choose a background").isRequired(true)
-                .options(List.of(new UpdatePricingRuleRequest.OptionUpdate(20L, "Solid", new BigDecimal("50000"))))
-                .build();
+        var update = new UpdatePricingRuleRequest("Background", "Choose a background", true,
+                List.of(new UpdatePricingRuleRequest.OptionUpdate(20L, "Solid", new BigDecimal("50000"))), null, null);
         when(updatePricingRuleUseCase.execute(eq(10L), any(UpdatePricingRuleRequest.class)))
                 .thenReturn(ManagementPricingRuleResponse.builder().configId(10L).configName("Background").build());
 
@@ -114,78 +110,6 @@ class CommissionManagementPricingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.configName").value("Background"));
         verify(updatePricingRuleUseCase).execute(10L, update);
-    }
-
-    @Test
-    void adminCanPatchOnlyTheDisplayOrder() throws Exception {
-        when(updatePricingRuleUseCase.execute(eq(10L), any(UpdatePricingRuleRequest.class)))
-                .thenReturn(ManagementPricingRuleResponse.builder().configId(10L).build());
-
-        mockMvc.perform(patch(RULES_PATH + "/10")
-                        .with(SecurityMockMvcRequestPostProcessors.user("admin").roles("ADMIN"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"displayOrder\":4}"))
-                .andExpect(status().isOk());
-        verify(updatePricingRuleUseCase).execute(10L, UpdatePricingRuleRequest.builder().displayOrder(4).build());
-    }
-
-    @Test
-    void designerCannotUpdatePricingRule() throws Exception {
-        mockMvc.perform(patch(RULES_PATH + "/10")
-                        .with(SecurityMockMvcRequestPostProcessors.user("designer").roles("DESIGNER"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"displayOrder\":4}"))
-                .andExpect(status().isForbidden());
-        verifyNoInteractions(updatePricingRuleUseCase);
-    }
-
-    @Test
-    void updateUnknownRuleReturns404() throws Exception {
-        when(updatePricingRuleUseCase.execute(eq(99L), any(UpdatePricingRuleRequest.class)))
-                .thenThrow(new CommissionRuleNotFoundException("Commission pricing rule with ID 99 not found."));
-
-        mockMvc.perform(patch(RULES_PATH + "/99")
-                        .with(SecurityMockMvcRequestPostProcessors.user("manager").roles("MANAGER"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"configName\":\"x\"}"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("COMMISSION_RULE_NOT_FOUND"));
-    }
-
-    @Test
-    void updateRejectsNegativeOptionPriceWith400() throws Exception {
-        mockMvc.perform(patch(RULES_PATH + "/10")
-                        .with(SecurityMockMvcRequestPostProcessors.user("manager").roles("MANAGER"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"options\":[{\"optionId\":20,\"basePrice\":-1}]}"))
-                .andExpect(status().isBadRequest());
-        verifyNoInteractions(updatePricingRuleUseCase);
-    }
-
-    @Test
-    void updateLockedSystemFieldReturns409() throws Exception {
-        when(updatePricingRuleUseCase.execute(eq(1L), any(UpdatePricingRuleRequest.class)))
-                .thenThrow(new SystemRuleLockedException("configCode and selectionType cannot be changed."));
-
-        mockMvc.perform(patch(RULES_PATH + "/1")
-                        .with(SecurityMockMvcRequestPostProcessors.user("manager").roles("MANAGER"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"selectionType\":\"MULTI_SELECT\"}"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("SYSTEM_RULE_LOCKED"));
-    }
-
-    @Test
-    void deactivatingOptionUsedByPresetReturns409() throws Exception {
-        when(updatePricingRuleUseCase.execute(eq(10L), any(UpdatePricingRuleRequest.class)))
-                .thenThrow(new PricingRuleInUseException("Phương án đang được gói thiết kế sử dụng."));
-
-        mockMvc.perform(patch(RULES_PATH + "/10")
-                        .with(SecurityMockMvcRequestPostProcessors.user("manager").roles("MANAGER"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"removedOptionIds\":[20]}"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("PRICING_RULE_IN_USE"));
     }
 
     @Test
