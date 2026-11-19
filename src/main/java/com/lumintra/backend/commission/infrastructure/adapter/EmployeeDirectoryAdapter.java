@@ -21,4 +21,12 @@ public class EmployeeDirectoryAdapter implements EmployeeDirectoryService {
         }
         return employeeLookupService.isActiveDesigner(employeeId);
     }
+
+    @Override
+    public boolean isStaff(Long employeeId) {
+        if (employeeId == null || employeeId <= 0) {
+            return false;
+        }
+        return employeeLookupService.isActiveStaff(employeeId);
+    }
 }

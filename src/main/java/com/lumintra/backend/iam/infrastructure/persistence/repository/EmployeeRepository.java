@@ -56,6 +56,15 @@ public interface EmployeeRepository
     boolean isActiveDesigner(@Param("employeeId") Long employeeId);
 
     @Query("""
+            select case when count(e) > 0 then true else false end
+            from EmployeeEntity e
+            where e.employeeId = :employeeId
+              and e.role.roleName = 'STAFF'
+              and e.account.status = com.lumintra.backend.iam.domain.model.AccountStatus.ACTIVE
+            """)
+    boolean isActiveStaff(@Param("employeeId") Long employeeId);
+
+    @Query("""
             select new com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot(e.employeeId, e.fullName, e.account.email)
             from EmployeeEntity e
             where e.role.roleName = 'DESIGNER'
