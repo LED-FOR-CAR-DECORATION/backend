@@ -1,0 +1,140 @@
+package com.lumintra.backend.commission.application;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.lumintra.backend.commission.api.response.ConfirmRevisionCardResponse;
+import com.lumintra.backend.commission.domain.model.CommissionMessageType;
+import com.lumintra.backend.commission.domain.model.CommissionStatus;
+import com.lumintra.backend.commission.domain.service.CommissionChatBroadcastPort;
+import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionMessageMapper;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionMessageRepository;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
+import com.lumintra.backend.payment.api.response.PaymentSessionResponse;
+import com.lumintra.backend.payment.domain.model.CreatePaymentSessionCommand;
+import com.lumintra.backend.payment.domain.model.PaymentTargetType;
+import com.lumintra.backend.payment.domain.service.PaymentSessionPort;
+import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
+import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
+import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
+import java.util.Objects;
+
+@Service
+@RequiredArgsConstructor
+public class ConfirmRevisionCardUseCase {
+    private final CommissionRequestRepository commissions;
+    private final CommissionMessageRepository messages;
+    private final PaymentSessionPort payments;
+    private final CommissionMessageMapper mapper;
+    private final CommissionChatBroadcastPort broadcast;
+    private final ObjectMapper json;
+
+    @Transactional
+    public ConfirmRevisionCardResponse execute(Long id, Long customerId, Long messageId) {
+        var commission =
+                commissions
+                        .findForRevisionConfirmation(id)
+                        .orElseThrow(
+                                () ->
+                                        new CommissionNotFoundException(
+                                                "Commission request not found."));
+        if (!commission.isOwnedBy(customerId)) {
+            throw new CommissionOwnershipMismatchException(
+                    "Only the owning customer can confirm a revision card.");
+        }
+        if (commission.getStatus() != CommissionStatus.PREVIEW_DELIVERED) {
+            throw conflict("Revision confirmation requires PREVIEW_DELIVERED status.");
+        }
+        var card =
+                messages.findFirstByCommissionIdAndMessageTypeOrderByMessageIdDesc(
+                                id, CommissionMessageType.EXTRA_FEE_CARD)
+                        .orElseThrow(() -> conflict("No revision brief card is available."));
+        if (!Objects.equals(card.getMessageId(), messageId)) {
+            throw conflict("Only the latest revision brief card can be confirmed.");
+        }
+        var preview =
+                messages.findFirstByCommissionIdAndMessageTypeOrderByMessageIdDesc(
+                        id, CommissionMessageType.DELIVERABLE_CARD);
+        if (preview.isPresent() && preview.get().getMessageId() > card.getMessageId()) {
+            throw conflict("Revision card belongs to an earlier preview.");
+        }
+        ObjectNode metadata;
+        try {
+            var node = json.readTree(card.getMetadataJson());
+            if (!(node instanceof ObjectNode object)) {
+                throw conflict("Invalid revision card metadata.");
+            }
+            metadata = object;
+        } catch (JsonProcessingException | IllegalArgumentException ex) {
+            throw conflict("Invalid revision card metadata.");
+        }
+        if (metadata.hasNonNull("status") && !"PENDING".equals(metadata.path("status").asText())) {
+            throw conflict("Revision card has already been processed.");
+        }
+        boolean free = commission.getRevisionsUsed() < commission.getMaxRevisions();
+        var fee =
+                free
+                        ? BigDecimal.ZERO.setScale(2)
+                        : commission
+                                .getInitialPrice()
+                                .multiply(new BigDecimal("0.10"))
+                                .setScale(2, RoundingMode.HALF_UP);
+        metadata.put("status", "CONFIRMED");
+        metadata.put("usesFreeQuota", free);
+        metadata.put("revisionFee", fee);
+        String confirmedMetadata;
+        try {
+            confirmedMetadata = json.writeValueAsString(metadata);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Unable to serialize confirmed revision card.", ex);
+        }
+        PaymentSessionResponse session = null;
+        if (free) {
+            commission.setRevisionsUsed(commission.getRevisionsUsed() + 1);
+            commission.setStatus(CommissionStatus.CUSTOMER_REVISION_REQUESTED);
+            commission.setActivePaymentCode(null);
+        } else {
+            if (fee.signum() <= 0) {
+                throw conflict("Paid revision fee must be greater than zero.");
+            }
+            session =
+                    payments.createSession(
+                            new CreatePaymentSessionCommand(
+                                    PaymentTargetType.COMMISSION_REVISION,
+                                    id,
+                                    customerId,
+                                    fee,
+                                    Duration.ofHours(24)));
+            commission.setExtraRevisionFee(commission.getExtraRevisionFee().add(fee));
+            commission.setTotalPrice(
+                    commission.getInitialPrice().add(commission.getExtraRevisionFee()));
+            commission.setActivePaymentCode(session.paymentCode());
+            commission.setStatus(CommissionStatus.AWAITING_EXTRA_PAYMENT);
+        }
+        commission.setAutoCompleteAt(null);
+        card.setMetadataJson(confirmedMetadata);
+        commissions.save(commission);
+        var savedCard = messages.save(card);
+        broadcast.broadcastMessage(id, mapper.toResponse(savedCard));
+        return new ConfirmRevisionCardResponse(
+                id,
+                messageId,
+                commission.getStatus(),
+                commission.getRevisionsUsed(),
+                commission.getExtraRevisionFee(),
+                session);
+    }
+
+    private InvalidCommissionStatusTransitionException conflict(String message) {
+        return new InvalidCommissionStatusTransitionException(message);
+    }
+}

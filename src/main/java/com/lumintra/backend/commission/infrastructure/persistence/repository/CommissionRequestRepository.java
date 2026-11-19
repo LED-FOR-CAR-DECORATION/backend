@@ -2,16 +2,13 @@ package com.lumintra.backend.commission.infrastructure.persistence.repository;
 
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
-
-import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -26,6 +23,10 @@ public interface CommissionRequestRepository extends JpaRepository<CommissionReq
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM CommissionRequestEntity c WHERE c.commissionId = :id")
     Optional<CommissionRequestEntity> findByIdForUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from CommissionRequestEntity c where c.commissionId = :id")
+    Optional<CommissionRequestEntity> findForRevisionConfirmation(@Param("id") Long id);
 
     Page<CommissionRequestEntity> findAllByCustomerId(Long customerId, Pageable pageable);
 
