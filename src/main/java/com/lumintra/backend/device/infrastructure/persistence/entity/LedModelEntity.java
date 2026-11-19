@@ -128,6 +128,22 @@ public class LedModelEntity {
         return stockQuantity != null && stockQuantity < LOW_STOCK_THRESHOLD;
     }
 
+    public void updateDetails(
+            String modelName,
+            Integer widthPx,
+            Integer heightPx,
+            Map<String, Object> spec,
+            long newStockQuantity) {
+        this.modelName = modelName;
+        this.widthPx = widthPx;
+        this.heightPx = heightPx;
+        this.spec = spec != null ? new LinkedHashMap<>(spec) : new LinkedHashMap<>();
+        this.stockQuantity = newStockQuantity;
+        if (this.status != LedModelStatus.DEPRECATED) {
+            this.status = newStockQuantity > 0L ? LedModelStatus.ACTIVE : LedModelStatus.OUT_OF_STOCK;
+        }
+    }
+
     /**
      * Extracts positive pixel dimensions from canonical ({@code widthPx}/{@code heightPx})
      * or legacy ({@code resolution}/{@code dimensions}) spec entries.

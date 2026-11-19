@@ -2,14 +2,18 @@ package com.lumintra.backend.device;
 
 import com.lumintra.backend.device.api.controller.ManagedLedModelController;
 import com.lumintra.backend.device.api.request.LedModelFilterRequest;
+import com.lumintra.backend.device.api.request.UpdateLedModelRequest;
 import com.lumintra.backend.device.api.response.LedModelListResponse;
 import com.lumintra.backend.device.application.CreateLedModelUseCase;
 import com.lumintra.backend.device.application.ListLedModelsUseCase;
+import com.lumintra.backend.device.application.UpdateLedModelUseCase;
 import com.lumintra.backend.device.domain.model.LedModelStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
 import com.lumintra.backend.shared.exception.device.DuplicateLedModelNameException;
+import com.lumintra.backend.shared.exception.device.LedModelDimensionsLockedException;
+import com.lumintra.backend.shared.exception.device.LedModelNotFoundException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
@@ -28,12 +32,14 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,6 +57,9 @@ class ManagedLedModelControllerTest {
 
     @MockitoBean
     private CreateLedModelUseCase createLedModelUseCase;
+
+    @MockitoBean
+    private UpdateLedModelUseCase updateLedModelUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -513,5 +522,314 @@ class ManagedLedModelControllerTest {
                 .andExpect(jsonPath("$.message").value("LED model with name 'Lumintra Matrix 64x64 Pro' already exists."));
 
         verify(createLedModelUseCase, times(1)).execute(any());
+    }
+
+    // =========================================================================
+    // DEV-03: PUT /api/management/admin/led-models/{id} Tests
+    // =========================================================================
+
+    @Test
+    @DisplayName("DEV-03 UTCID01 [N]: ADMIN role updates LED model successfully returns 200 OK")
+    void updateLedModel_asAdmin_returns200() throws Exception {
+        LedModelListResponse.LedModelItem updatedItem = LedModelListResponse.LedModelItem.builder()
+                .modelId(10L)
+                .productId(101L)
+                .modelName("Lumintra Matrix 64x64 Pro v2")
+                .stockQuantity(25L)
+                .isLowStock(false)
+                .status(LedModelStatus.ACTIVE)
+                .spec(LedModelListResponse.LedSpec.builder()
+                        .widthPx(64)
+                        .heightPx(64)
+                        .attributes(List.of(
+                                new LedModelListResponse.SpecAttribute("Pitch", "P2.5"),
+                                new LedModelListResponse.SpecAttribute("Power", "USB-C 10W")
+                        ))
+                        .build())
+                .build();
+
+        when(updateLedModelUseCase.execute(eq(10L), any(UpdateLedModelRequest.class)))
+                .thenReturn(updatedItem);
+
+        String requestBody = """
+                {
+                  "modelName": "Lumintra Matrix 64x64 Pro v2",
+                  "stockQuantity": 25,
+                  "spec": {
+                    "widthPx": 64,
+                    "heightPx": 64,
+                    "attributes": [
+                      { "label": "Pitch", "value": "P2.5" },
+                      { "label": "Power", "value": "USB-C 10W" }
+                    ]
+                  }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 10L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.modelId").value(10L))
+                .andExpect(jsonPath("$.data.productId").value(101L))
+                .andExpect(jsonPath("$.data.modelName").value("Lumintra Matrix 64x64 Pro v2"))
+                .andExpect(jsonPath("$.data.stockQuantity").value(25))
+                .andExpect(jsonPath("$.data.isLowStock").value(false))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.spec.widthPx").value(64))
+                .andExpect(jsonPath("$.data.spec.heightPx").value(64))
+                .andExpect(jsonPath("$.data.spec.attributes[0].label").value("Pitch"))
+                .andExpect(jsonPath("$.data.spec.attributes[0].value").value("P2.5"))
+                .andExpect(jsonPath("$.data.spec.attributes[1].label").value("Power"))
+                .andExpect(jsonPath("$.data.spec.attributes[1].value").value("USB-C 10W"));
+
+        verify(updateLedModelUseCase, times(1)).execute(eq(10L), any(UpdateLedModelRequest.class));
+    }
+
+    @Test
+    @DisplayName("DEV-03 UTCID02 [N]: MANAGER role updates LED model successfully returns 200 OK")
+    void updateLedModel_asManager_returns200() throws Exception {
+        LedModelListResponse.LedModelItem updatedItem = LedModelListResponse.LedModelItem.builder()
+                .modelId(5L)
+                .productId(null)
+                .modelName("Lumintra Matrix 32x32 Eco")
+                .stockQuantity(0L)
+                .isLowStock(true)
+                .status(LedModelStatus.OUT_OF_STOCK)
+                .spec(LedModelListResponse.LedSpec.builder()
+                        .widthPx(32)
+                        .heightPx(32)
+                        .attributes(List.of())
+                        .build())
+                .build();
+
+        when(updateLedModelUseCase.execute(eq(5L), any(UpdateLedModelRequest.class)))
+                .thenReturn(updatedItem);
+
+        String requestBody = """
+                {
+                  "modelName": "Lumintra Matrix 32x32 Eco",
+                  "stockQuantity": 0,
+                  "spec": {
+                    "widthPx": 32,
+                    "heightPx": 32,
+                    "attributes": []
+                  }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 5L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("2").roles("MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.modelId").value(5L))
+                .andExpect(jsonPath("$.data.stockQuantity").value(0))
+                .andExpect(jsonPath("$.data.status").value("OUT_OF_STOCK"));
+
+        verify(updateLedModelUseCase, times(1)).execute(eq(5L), any(UpdateLedModelRequest.class));
+    }
+
+    @Test
+    @DisplayName("DEV-03 UTCID03 [A]: Unauthenticated request returns 401 UNAUTHORIZED")
+    void updateLedModel_unauthenticated_returns401() throws Exception {
+        String requestBody = """
+                {
+                  "modelName": "Lumintra Matrix 64x64",
+                  "stockQuantity": 10,
+                  "spec": { "widthPx": 64, "heightPx": 64 }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(updateLedModelUseCase);
+    }
+
+    @Test
+    @DisplayName("DEV-03 UTCID04 [A]: Non-management roles (STAFF, CUSTOMER, DESIGNER) return 403 FORBIDDEN")
+    void updateLedModel_unauthorizedRoles_returns403() throws Exception {
+        String requestBody = """
+                {
+                  "modelName": "Lumintra Matrix 64x64",
+                  "stockQuantity": 10,
+                  "spec": { "widthPx": 64, "heightPx": 64 }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 1L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        mockMvc.perform(put(PATH + "/{id}", 1L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("4").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        mockMvc.perform(put(PATH + "/{id}", 1L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(updateLedModelUseCase);
+    }
+
+    @Test
+    @DisplayName("DEV-03 UTCID05 [A]: Non-existent modelId returns 404 NOT_FOUND with LED_MODEL_NOT_FOUND")
+    void updateLedModel_notFound_returns404() throws Exception {
+        when(updateLedModelUseCase.execute(eq(999L), any(UpdateLedModelRequest.class)))
+                .thenThrow(new LedModelNotFoundException(999L));
+
+        String requestBody = """
+                {
+                  "modelName": "Lumintra Matrix NonExistent",
+                  "stockQuantity": 10,
+                  "spec": { "widthPx": 64, "heightPx": 64 }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 999L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("LED_MODEL_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("LED model with id 999 not found."));
+
+        verify(updateLedModelUseCase, times(1)).execute(eq(999L), any(UpdateLedModelRequest.class));
+    }
+
+    @Test
+    @DisplayName("DEV-03 UTCID06 [A]: Dimension change when instances exist returns 409 CONFLICT with LED_MODEL_DIMENSIONS_LOCKED")
+    void updateLedModel_dimensionsLocked_returns409() throws Exception {
+        when(updateLedModelUseCase.execute(eq(10L), any(UpdateLedModelRequest.class)))
+                .thenThrow(new LedModelDimensionsLockedException(10L));
+
+        String requestBody = """
+                {
+                  "modelName": "Lumintra Matrix 32x64",
+                  "stockQuantity": 10,
+                  "spec": { "widthPx": 32, "heightPx": 64 }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 10L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("LED_MODEL_DIMENSIONS_LOCKED"))
+                .andExpect(jsonPath("$.message").value("Cannot modify canvas dimensions for LED model with id 10: physical LED instances have already been provisioned."));
+
+        verify(updateLedModelUseCase, times(1)).execute(eq(10L), any(UpdateLedModelRequest.class));
+    }
+
+    @Test
+    @DisplayName("DEV-03 UTCID07 [A]: Duplicate modelName returns 409 CONFLICT with DUPLICATE_LED_MODEL_NAME")
+    void updateLedModel_duplicateName_returns409() throws Exception {
+        when(updateLedModelUseCase.execute(eq(10L), any(UpdateLedModelRequest.class)))
+                .thenThrow(new DuplicateLedModelNameException("Existing LED Matrix"));
+
+        String requestBody = """
+                {
+                  "modelName": "Existing LED Matrix",
+                  "stockQuantity": 10,
+                  "spec": { "widthPx": 64, "heightPx": 64 }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 10L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_LED_MODEL_NAME"))
+                .andExpect(jsonPath("$.message").value("LED model with name 'Existing LED Matrix' already exists."));
+
+        verify(updateLedModelUseCase, times(1)).execute(eq(10L), any(UpdateLedModelRequest.class));
+    }
+
+    @Test
+    @DisplayName("DEV-03 UTCID08 [B]: Invalid request parameters return 400 VALIDATION_FAILED")
+    void updateLedModel_validationFailure_returns400() throws Exception {
+        String blankName = """
+                {
+                  "modelName": "",
+                  "stockQuantity": 10,
+                  "spec": { "widthPx": 64, "heightPx": 64 }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 10L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(blankName))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        String negativeStock = """
+                {
+                  "modelName": "Lumintra Matrix 64x64",
+                  "stockQuantity": -1,
+                  "spec": { "widthPx": 64, "heightPx": 64 }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 10L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(negativeStock))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        String invalidDimensions = """
+                {
+                  "modelName": "Lumintra Matrix 64x64",
+                  "stockQuantity": 10,
+                  "spec": { "widthPx": -5, "heightPx": 64 }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 10L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidDimensions))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(updateLedModelUseCase);
+    }
+
+    @Test
+    @DisplayName("DEV-03 UTCID09 [B]: Path variable id <= 0 returns 400 VALIDATION_FAILED")
+    void updateLedModel_invalidPathId_returns400() throws Exception {
+        String requestBody = """
+                {
+                  "modelName": "Lumintra Matrix 64x64",
+                  "stockQuantity": 10,
+                  "spec": { "widthPx": 64, "heightPx": 64 }
+                }
+                """;
+
+        mockMvc.perform(put(PATH + "/{id}", 0L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("1").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(updateLedModelUseCase);
     }
 }

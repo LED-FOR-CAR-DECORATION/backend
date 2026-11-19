@@ -13,6 +13,8 @@ public interface LedModelRepository extends JpaRepository<LedModelEntity, Long>,
 
     boolean existsByModelNameIgnoreCase(String modelName);
 
+    boolean existsByModelNameIgnoreCaseAndModelIdNot(String modelName, Long modelId);
+
     @Modifying
     @Query("""
             UPDATE LedModelEntity m

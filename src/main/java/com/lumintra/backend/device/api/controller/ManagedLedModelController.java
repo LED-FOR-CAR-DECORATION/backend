@@ -2,9 +2,11 @@ package com.lumintra.backend.device.api.controller;
 
 import com.lumintra.backend.device.api.request.CreateLedModelRequest;
 import com.lumintra.backend.device.api.request.LedModelFilterRequest;
+import com.lumintra.backend.device.api.request.UpdateLedModelRequest;
 import com.lumintra.backend.device.api.response.LedModelListResponse;
 import com.lumintra.backend.device.application.CreateLedModelUseCase;
 import com.lumintra.backend.device.application.ListLedModelsUseCase;
+import com.lumintra.backend.device.application.UpdateLedModelUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +27,9 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,6 +47,7 @@ public class ManagedLedModelController {
 
     private final ListLedModelsUseCase listLedModelsUseCase;
     private final CreateLedModelUseCase createLedModelUseCase;
+    private final UpdateLedModelUseCase updateLedModelUseCase;
 
     @Operation(
             summary = "List LED hardware models",
@@ -224,5 +230,83 @@ public class ManagedLedModelController {
         }
         LedModelListResponse.LedModelItem item = createLedModelUseCase.execute(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(item));
+    }
+
+    @Operation(
+            summary = "Update an LED hardware model (DEV-03)",
+            description = "Updates an LED model's name, stock quantity, and custom ordered specifications. Enforces canvas immutability (BR-FL5-11): if any physical LED instance exists for this model, pixel dimensions cannot be altered. Restricted to internal MANAGER and ADMIN roles.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "LED hardware model updated successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = LedModelListResponse.LedModelItem.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid path variable or validation failure",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing or expired authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: caller lacks MANAGER or ADMIN role",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Not Found: LED model does not exist",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict: duplicate modelName or canvas dimensions locked due to provisioned instances",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<LedModelListResponse.LedModelItem>> updateLedModel(
+            Authentication authentication,
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody UpdateLedModelRequest request) {
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            throw new AuthenticationCredentialsNotFoundException("Authentication is required.");
+        }
+        LedModelListResponse.LedModelItem item = updateLedModelUseCase.execute(id, request);
+        return ResponseEntity.ok(ApiResponse.success(item));
     }
 }
