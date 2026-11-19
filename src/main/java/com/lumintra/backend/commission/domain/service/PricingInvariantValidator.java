@@ -13,8 +13,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
@@ -24,6 +26,8 @@ import java.util.stream.Collectors;
 public class PricingInvariantValidator {
 
     public static final int MAX_DEPENDENCY_DEPTH = 5;
+    public static final int MIN_REVISIONS = 1;
+    public static final int MAX_REVISIONS = 5;
     private static final BigDecimal HUNDRED = new BigDecimal("100");
     private static final BigDecimal MAX_PERCENT_VALUE = new BigDecimal("1000.00");
 
@@ -147,8 +151,12 @@ public class PricingInvariantValidator {
         if ("ADVANCED".equalsIgnoreCase(code) && rev != 3) {
             throw new InvalidRuleConfigurationException("ADVANCED tier must have exactly 3 max revisions.");
         }
-        if ("CUSTOM".equalsIgnoreCase(code) && (rev < 1 || rev > 5)) {
+        if ("CUSTOM".equalsIgnoreCase(code) && (rev < MIN_REVISIONS || rev > MAX_REVISIONS)) {
             throw new InvalidRuleConfigurationException("CUSTOM tier max revisions must be between 1 and 5.");
+        }
+        if (rev < MIN_REVISIONS || rev > MAX_REVISIONS) {
+            throw new InvalidRuleConfigurationException(String.format(
+                    "Tier '%s' max revisions must be between %d and %d.", code, MIN_REVISIONS, MAX_REVISIONS));
         }
     }
 
@@ -455,35 +463,60 @@ public class PricingInvariantValidator {
         }
     }
 
+    /**
+     * Every bundled option's whole prerequisite chain (parent option, grandparent option, ... up to
+     * {@link #MAX_DEPENDENCY_DEPTH} levels) must be bundled or listed as a trigger option of the same tier.
+     */
     private void validateTierDependencyIntegrity(CommissionPricingTierEntity tier) {
         if (tier.getIncludedOptions() == null || tier.getIncludedOptions().isEmpty()) {
             return;
         }
 
-        Set<Long> satisfiedOptionIds = new HashSet<>();
-        tier.getIncludedOptions().stream()
-                .map(CommissionPriceOptionEntity::getOptionId)
-                .filter(Objects::nonNull)
-                .forEach(satisfiedOptionIds::add);
-
+        Map<Long, CommissionPriceOptionEntity> satisfied = new HashMap<>();
         Set<CommissionPriceOptionEntity> triggers = tier.getTriggerOptions() != null
                 ? tier.getTriggerOptions()
                 : Collections.emptySet();
-        triggers.stream()
-                .map(CommissionPriceOptionEntity::getOptionId)
-                .filter(Objects::nonNull)
-                .forEach(satisfiedOptionIds::add);
+        for (CommissionPriceOptionEntity option : tier.getIncludedOptions()) {
+            if (option != null && option.getOptionId() != null) satisfied.put(option.getOptionId(), option);
+        }
+        for (CommissionPriceOptionEntity option : triggers) {
+            if (option != null && option.getOptionId() != null) satisfied.put(option.getOptionId(), option);
+        }
 
         for (CommissionPriceOptionEntity option : tier.getIncludedOptions()) {
-            if (option.getConfig() != null) {
-                Long parentOptionId = option.getConfig().getDependsOnOptionId();
-                if (parentOptionId != null && !satisfiedOptionIds.contains(parentOptionId)) {
-                    throw new InvalidRuleConfigurationException(String.format(
-                            "Tier '%s' bundles dependent option '%s' without bundling or triggering on its prerequisite option (ID %d).",
-                            tier.getTierCode(), option.getOptionCode(), parentOptionId
-                    ));
-                }
+            if (option != null) {
+                validatePrerequisiteChain(tier.getTierCode(), option, satisfied);
             }
+        }
+    }
+
+    private void validatePrerequisiteChain(
+            String tierCode, CommissionPriceOptionEntity option, Map<Long, CommissionPriceOptionEntity> satisfied) {
+        Set<Long> visitedConfigIds = new HashSet<>();
+        CommissionPriceOptionEntity cursor = option;
+        int depth = 0;
+        while (cursor != null && cursor.getConfig() != null) {
+            CommissionPriceConfigEntity cursorConfig = cursor.getConfig();
+            if (cursorConfig.getConfigId() != null && !visitedConfigIds.add(cursorConfig.getConfigId())) {
+                throw new InvalidRuleConfigurationException(
+                        "Circular conditional dependency detected in pricing rule hierarchy.");
+            }
+            Long parentOptionId = cursorConfig.getDependsOnOptionId();
+            if (parentOptionId == null) {
+                return;
+            }
+            if (++depth > MAX_DEPENDENCY_DEPTH) {
+                throw new InvalidRuleConfigurationException(String.format(
+                        "Tier '%s' bundles option '%s' whose prerequisite chain exceeds the maximum depth of %d.",
+                        tierCode, option.getOptionCode(), MAX_DEPENDENCY_DEPTH));
+            }
+            CommissionPriceOptionEntity parent = satisfied.get(parentOptionId);
+            if (parent == null) {
+                throw new InvalidRuleConfigurationException(String.format(
+                        "Tier '%s' bundles dependent option '%s' without bundling or triggering on its prerequisite option (ID %d).",
+                        tierCode, option.getOptionCode(), parentOptionId));
+            }
+            cursor = parent;
         }
     }
 }
