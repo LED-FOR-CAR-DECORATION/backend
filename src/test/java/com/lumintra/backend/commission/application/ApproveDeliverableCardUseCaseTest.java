@@ -1,6 +1,9 @@
 package com.lumintra.backend.commission.application;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lumintra.backend.commission.api.response.ApproveDeliverableCardResponse;
+import com.lumintra.backend.commission.application.service.CommissionCompletionService;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRevisionRequestRepository;
 import com.lumintra.backend.commission.api.response.CommissionMessageResponse;
 import com.lumintra.backend.commission.domain.event.CommissionCompletedEvent;
 import com.lumintra.backend.commission.domain.model.CommissionCompletionSource;
@@ -26,7 +29,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -71,7 +73,9 @@ class ApproveDeliverableCardUseCaseTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
-    @InjectMocks
+    @Mock
+    private CommissionRevisionRequestRepository revisionRequestRepository;
+
     private ApproveDeliverableCardUseCase useCase;
 
     private CommissionRequestEntity commission;
@@ -79,6 +83,10 @@ class ApproveDeliverableCardUseCaseTest {
 
     @BeforeEach
     void setUp() {
+        useCase = new ApproveDeliverableCardUseCase(commissionRequestRepository, new CommissionCompletionService(
+                commissionRequestRepository, commissionSubmissionRepository, commissionMessageRepository,
+                revisionRequestRepository, commissionMessageMapper, chatBroadcastPort, eventPublisher, new ObjectMapper()));
+
         commission = CommissionRequestEntity.builder()
                 .commissionId(105L)
                 .customerId(501L)
