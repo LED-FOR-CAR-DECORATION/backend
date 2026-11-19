@@ -106,6 +106,21 @@ public class CommissionSubmissionEntity {
         this.deliveredAt = approvedAt;
     }
 
+    public boolean isStaffApproved() {
+        return this.status == CommissionSubmissionStatus.STAFF_APPROVED;
+    }
+
+    /**
+     * CMS-18 AC02: Customer accepts the delivered preview backing the Deliverable Card.
+     */
+    public void acceptByCustomer() {
+        if (!isStaffApproved()) {
+            throw new IllegalStateException(
+                    "Submission " + this.submissionId + " must be STAFF_APPROVED to be accepted (was " + this.status + ")");
+        }
+        this.status = CommissionSubmissionStatus.CUSTOMER_ACCEPTED;
+    }
+
     public boolean isCustomerVisible() {
         return this.status != null && this.status.isCustomerVisible();
     }
