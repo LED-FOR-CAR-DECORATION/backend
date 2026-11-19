@@ -14,8 +14,11 @@ import com.lumintra.backend.payment.infrastructure.integration.SePayProperties;
 import com.lumintra.backend.payment.infrastructure.persistence.entity.PaymentTransactionEntity;
 import com.lumintra.backend.payment.infrastructure.persistence.mapper.PaymentSessionMapper;
 import com.lumintra.backend.payment.infrastructure.persistence.repository.PaymentTransactionRepository;
+import com.lumintra.backend.shared.exception.payment.PaymentSessionNotCancellableException;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
+
 import lombok.RequiredArgsConstructor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -49,56 +52,84 @@ public class MockPaymentSuccessUseCase {
         }
 
         String normalizedCode = paymentCode.trim();
-        PaymentTransactionEntity transaction = findTransaction(normalizedCode)
-                .orElseThrow(() -> {
-                    log.warn("Mock payment session not found [paymentCode={}]", normalizedCode);
-                    return new PaymentSessionNotFoundException("Payment session not found.");
-                });
+        PaymentTransactionEntity transaction =
+                findTransaction(normalizedCode)
+                        .orElseThrow(
+                                () -> {
+                                    log.warn(
+                                            "Mock payment session not found [paymentCode={}]",
+                                            normalizedCode);
+                                    return new PaymentSessionNotFoundException(
+                                            "Payment session not found.");
+                                });
 
-        Optional<PaymentSessionMetadata> metadataOpt = metadataStore.findByPaymentCode(normalizedCode);
+        Optional<PaymentSessionMetadata> metadataOpt =
+                metadataStore.findByPaymentCode(normalizedCode);
         if (metadataOpt.isEmpty() && transaction.getTransactionCode() != null) {
             metadataOpt = metadataStore.findByPaymentCode(transaction.getTransactionCode());
         }
 
-        PaymentTargetType targetType = metadataOpt
-                .map(PaymentSessionMetadata::targetType)
-                .orElseGet(() -> PaymentTargetType.fromPaymentCode(
-                        transaction.getTransactionCode() != null ? transaction.getTransactionCode() : normalizedCode
-                ));
+        PaymentTargetType targetType =
+                metadataOpt
+                        .map(PaymentSessionMetadata::targetType)
+                        .orElseGet(
+                                () ->
+                                        PaymentTargetType.fromPaymentCode(
+                                                transaction.getTransactionCode() != null
+                                                        ? transaction.getTransactionCode()
+                                                        : normalizedCode));
 
         Long customerId = resolveCustomerId(metadataOpt, targetType, transaction.getOrderId());
         Instant now = Instant.now();
 
         if (transaction.getPaymentStatus() == PaymentStatus.PENDING) {
-            paymentTransactionRepository.markAsSucceededIfPending(
-                    transaction.getPaymentId(),
-                    PaymentTransactionEntity.DB_STATUS_SUCCESS,
-                    now
-            );
+            int updated =
+                    paymentTransactionRepository.markAsSucceededIfPending(
+                            transaction.getPaymentId(),
+                            PaymentTransactionEntity.DB_STATUS_SUCCESS,
+                            now);
+            if (updated == 0) {
+                throw new PaymentSessionNotCancellableException(
+                        "Payment session changed before mock success.");
+            }
             transaction.setPaymentStatus(PaymentStatus.SUCCEEDED);
             transaction.setPaidAt(now);
 
-            eventPublisher.publishEvent(new PaymentSucceededEvent(
+            eventPublisher.publishEvent(
+                    new PaymentSucceededEvent(
+                            transaction.getPaymentId(),
+                            normalizedCode,
+                            targetType,
+                            transaction.getOrderId(),
+                            customerId,
+                            transaction.getAmount(),
+                            System.currentTimeMillis(),
+                            "MOCK-" + normalizedCode,
+                            now));
+
+            log.info(
+                    "Mock payment succeeded event published [paymentId={}] [paymentCode={}]"
+                            + " [targetType={}] [targetId={}]",
                     transaction.getPaymentId(),
                     normalizedCode,
                     targetType,
-                    transaction.getOrderId(),
-                    customerId,
-                    transaction.getAmount(),
-                    System.currentTimeMillis(),
-                    "MOCK-" + normalizedCode,
-                    now
-            ));
-
-            log.info("Mock payment succeeded event published [paymentId={}] [paymentCode={}] [targetType={}] [targetId={}]",
-                    transaction.getPaymentId(), normalizedCode, targetType, transaction.getOrderId());
+                    transaction.getOrderId());
         } else {
-            log.info("Mock payment called for transaction already in status {} [paymentId={}] [paymentCode={}]",
-                    transaction.getPaymentStatus(), transaction.getPaymentId(), normalizedCode);
+            if (transaction.getPaymentStatus() != PaymentStatus.SUCCEEDED) {
+                throw new PaymentSessionNotCancellableException(
+                        "Payment session is no longer payable.");
+            }
+            log.info(
+                    "Mock payment called for transaction already in status {} [paymentId={}]"
+                            + " [paymentCode={}]",
+                    transaction.getPaymentStatus(),
+                    transaction.getPaymentId(),
+                    normalizedCode);
         }
 
         String qrPaymentCode = resolveQrPaymentCode(normalizedCode, transaction);
-        SePayQrDetails qrDetails = paymentGatewayPort.buildQrDetails(qrPaymentCode, transaction.getAmount());
+        SePayQrDetails qrDetails =
+                paymentGatewayPort.buildQrDetails(qrPaymentCode, transaction.getAmount());
         Instant expiresAt = metadataOpt.map(PaymentSessionMetadata::expiresAt).orElse(null);
 
         return paymentSessionMapper.toResponse(
@@ -107,28 +138,31 @@ public class MockPaymentSuccessUseCase {
                 targetType,
                 qrDetails,
                 PaymentStatus.SUCCEEDED,
-                expiresAt
-        );
+                expiresAt);
     }
 
     private Optional<PaymentTransactionEntity> findTransaction(String paymentCode) {
-        Optional<PaymentTransactionEntity> byCode = paymentTransactionRepository
-                .findFirstByTransactionCodeOrderByCreatedAtDescPaymentIdDesc(paymentCode);
+        Optional<PaymentTransactionEntity> byCode =
+                paymentTransactionRepository
+                        .findFirstByTransactionCodeOrderByCreatedAtDescPaymentIdDesc(paymentCode);
         if (byCode.isPresent()) {
             return byCode;
         }
 
         String upper = paymentCode.toUpperCase(Locale.ROOT);
         if (!upper.equals(paymentCode)) {
-            Optional<PaymentTransactionEntity> byUpper = paymentTransactionRepository
-                    .findFirstByTransactionCodeOrderByCreatedAtDescPaymentIdDesc(upper);
+            Optional<PaymentTransactionEntity> byUpper =
+                    paymentTransactionRepository
+                            .findFirstByTransactionCodeOrderByCreatedAtDescPaymentIdDesc(upper);
             if (byUpper.isPresent()) {
                 return byUpper;
             }
         }
 
         return extractOrderIdFromPrefixedCode(upper)
-                .flatMap(paymentTransactionRepository::findFirstByOrderIdOrderByCreatedAtDescPaymentIdDesc);
+                .flatMap(
+                        paymentTransactionRepository
+                                ::findFirstByOrderIdOrderByCreatedAtDescPaymentIdDesc);
     }
 
     private Optional<Long> extractOrderIdFromPrefixedCode(String upperPaymentCode) {
@@ -158,19 +192,22 @@ public class MockPaymentSuccessUseCase {
             return metadataOpt.get().customerId();
         }
         if (targetType == PaymentTargetType.ORDER && targetId != null) {
-            return orderPaymentLookupService.findByOrderId(targetId)
+            return orderPaymentLookupService
+                    .findByOrderId(targetId)
                     .map(OrderPaymentSnapshot::customerId)
                     .orElse(null);
         }
         return null;
     }
 
-    private String resolveQrPaymentCode(String requestedPaymentCode, PaymentTransactionEntity transaction) {
+    private String resolveQrPaymentCode(
+            String requestedPaymentCode, PaymentTransactionEntity transaction) {
         String prefix = sePayProperties.normalizedPaymentPrefix();
         if (requestedPaymentCode.toUpperCase(Locale.ROOT).startsWith(prefix)) {
             return requestedPaymentCode.toUpperCase(Locale.ROOT);
         }
-        if (transaction.getTransactionCode() != null && !transaction.getTransactionCode().isBlank()) {
+        if (transaction.getTransactionCode() != null
+                && !transaction.getTransactionCode().isBlank()) {
             return transaction.getTransactionCode();
         }
         return requestedPaymentCode;
