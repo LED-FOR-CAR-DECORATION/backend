@@ -15,6 +15,7 @@ import com.lumintra.backend.commission.infrastructure.persistence.entity.Commiss
 import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionMessageMapper;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionMessageRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRevisionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionSubmissionRepository;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionStaffLockException;
@@ -68,6 +69,11 @@ class PostDeliverableCardUseCaseTest {
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
+    @Mock(strictness = Mock.Strictness.LENIENT)
+    private CommissionRevisionRequestRepository commissionRevisionRequestRepository;
+
+    private com.lumintra.backend.commission.RevisionRequestFakes revisions;
+
     @InjectMocks
     private PostDeliverableCardUseCase useCase;
 
@@ -76,6 +82,7 @@ class PostDeliverableCardUseCaseTest {
 
     @BeforeEach
     void setUp() {
+        revisions = new com.lumintra.backend.commission.RevisionRequestFakes(commissionRevisionRequestRepository);
         commission = CommissionRequestEntity.builder()
                 .commissionId(105L)
                 .customerId(501L)
@@ -256,5 +263,24 @@ class PostDeliverableCardUseCaseTest {
                 .isInstanceOf(InvalidCommissionStatusTransitionException.class);
 
         verifyNoInteractions(commissionMessageRepository, chatBroadcastPort);
+    }
+
+    @Test
+    @DisplayName("Delivering a draft made for a revision completes that revision brief")
+    void execute_WhenDraftAnswersRevision_CompletesRevisionRequest() {
+        var revision = revisions.repository.save(
+                com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRevisionRequestEntity
+                        .open(105L, 402L, 1, "Brighter outline", true, java.math.BigDecimal.ZERO));
+        revision.confirmFree(1, Instant.now());
+        pendingDraft.setRevisionRequestId(revision.getRevisionRequestId());
+        when(commissionRequestRepository.findById(105L)).thenReturn(Optional.of(commission));
+        when(commissionSubmissionRepository.findTopByCommissionIdOrderByVersionNumberDesc(105L)).thenReturn(Optional.of(pendingDraft));
+        stubHappyPathPersistence();
+
+        useCase.execute(105L, 3L, false);
+
+        assertThat(revision.getStatus())
+                .isEqualTo(com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus.COMPLETED);
+        assertThat(revision.getCompletedAt()).isNotNull();
     }
 }

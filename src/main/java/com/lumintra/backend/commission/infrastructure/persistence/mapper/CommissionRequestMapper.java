@@ -12,11 +12,13 @@ import com.lumintra.backend.commission.api.response.RejectCommissionDraftRespons
 import com.lumintra.backend.commission.api.response.RejectCommissionResponse;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionSubmissionItem;
+import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse.ManagementCommissionRevisionRequestItem;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.StaffCommissionQueueResponse.StaffCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.UploadCommissionDraftResponse;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionAttachmentEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
+import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRevisionRequestEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
 import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
 import com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot;
@@ -292,6 +294,17 @@ public class CommissionRequestMapper {
             List<CommissionSubmissionEntity> submissions,
             CustomerProfileSnapshot customerProfile,
             Map<Long, EmployeeProfileSnapshot> employeeProfiles) {
+        return toManagementDetailResponse(
+                entity, attachments, submissions, List.of(), customerProfile, employeeProfiles);
+    }
+
+    public ManagementCommissionDetailResponse toManagementDetailResponse(
+            CommissionRequestEntity entity,
+            List<CommissionAttachmentEntity> attachments,
+            List<CommissionSubmissionEntity> submissions,
+            List<CommissionRevisionRequestEntity> revisionRequests,
+            CustomerProfileSnapshot customerProfile,
+            Map<Long, EmployeeProfileSnapshot> employeeProfiles) {
         if (entity == null) {
             return null;
         }
@@ -351,6 +364,29 @@ public class CommissionRequestMapper {
                 .updatedAt(entity.getUpdatedAt())
                 .attachments(attachmentItems)
                 .submissions(submissionItems)
+                .revisionRequests(revisionRequests == null
+                        ? List.of()
+                        : revisionRequests.stream()
+                                .filter(Objects::nonNull)
+                                .map(this::toManagementRevisionRequestItem)
+                                .toList())
+                .build();
+    }
+
+    public ManagementCommissionRevisionRequestItem toManagementRevisionRequestItem(
+            CommissionRevisionRequestEntity revision) {
+        return ManagementCommissionRevisionRequestItem.builder()
+                .revisionRequestId(revision.getRevisionRequestId())
+                .messageId(revision.getMessageId())
+                .revisionNumber(revision.getRevisionNumber())
+                .description(revision.getDescription())
+                .usesFreeQuota(revision.isUsesFreeQuota())
+                .revisionFee(revision.getRevisionFee())
+                .status(revision.getStatus())
+                .confirmedAt(revision.getConfirmedAt())
+                .paidAt(revision.getPaidAt())
+                .completedAt(revision.getCompletedAt())
+                .createdAt(revision.getCreatedAt())
                 .build();
     }
 
@@ -389,6 +425,7 @@ public class CommissionRequestMapper {
                 .versionNumber(submission.getVersionNumber())
                 .imageUrl(submission.getImageUrl())
                 .designerNote(submission.getDesignerNote())
+                .revisionRequestId(submission.getRevisionRequestId())
                 .status(submission.getStatus())
                 .reviewerStaffId(submission.getReviewerStaffId())
                 .reviewerStaffName(reviewer != null ? reviewer.fullName() : null)

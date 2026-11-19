@@ -2,11 +2,14 @@ package com.lumintra.backend.commission.application;
 
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionAttachmentEntity;
+import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
+import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRevisionRequestEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionRequestMapper;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionAttachmentRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRevisionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionSubmissionRepository;
 import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
 import com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot;
@@ -36,6 +39,7 @@ public class GetManagementCommissionDetailUseCase {
     private final CommissionRequestRepository commissionRequestRepository;
     private final CommissionAttachmentRepository commissionAttachmentRepository;
     private final CommissionSubmissionRepository commissionSubmissionRepository;
+    private final CommissionRevisionRequestRepository commissionRevisionRequestRepository;
     private final CommissionRequestMapper commissionRequestMapper;
     private final CustomerLookupService customerLookupService;
     private final EmployeeLookupService employeeLookupService;
@@ -64,6 +68,10 @@ public class GetManagementCommissionDetailUseCase {
 
         List<CommissionSubmissionEntity> submissions = commissionSubmissionRepository
                 .findAllByCommissionIdOrderByVersionNumberAscSubmissionIdAsc(commissionId);
+
+        List<CommissionRevisionRequestEntity> revisionRequests = commissionRevisionRequestRepository
+                .findAllByCommissionIdAndStatusNotOrderByRevisionRequestIdAsc(
+                        commissionId, CommissionRevisionRequestStatus.SUPERSEDED);
 
         CustomerProfileSnapshot customerProfile = commission.getCustomerId() != null
                 ? customerLookupService.findProfileByCustomerId(commission.getCustomerId()).orElse(null)
@@ -96,6 +104,7 @@ public class GetManagementCommissionDetailUseCase {
                 commission,
                 attachments,
                 submissions,
+                revisionRequests,
                 customerProfile,
                 employeeProfiles
         );

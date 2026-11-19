@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 public record ConfirmRevisionCardResponse(
         @Schema(description = "Commission ID", example = "105") Long commissionId,
         @Schema(description = "Confirmed chat message ID", example = "402") Long messageId,
-        @Schema(description = "Current commission state", example = "CUSTOMER_REVISION_REQUESTED")
+        @Schema(description = "Current commission state", example = "AWAITING_ESTIMATE")
                 CommissionStatus status,
         @Schema(
                         description =

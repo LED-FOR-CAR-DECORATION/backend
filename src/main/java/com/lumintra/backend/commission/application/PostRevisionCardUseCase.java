@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lumintra.backend.commission.api.request.PostRevisionCardRequest;
 import com.lumintra.backend.commission.api.response.CommissionMessageResponse;
+import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
 import com.lumintra.backend.commission.domain.model.CommissionMessageSenderRole;
 import com.lumintra.backend.commission.domain.model.CommissionMessageType;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
@@ -38,6 +39,7 @@ public class PostRevisionCardUseCase {
     private final CommissionMessageMapper mapper;
     private final CommissionChatBroadcastPort broadcast;
     private final ObjectMapper json;
+    private final CommissionRevisionRequestRecorder revisionRequests;
 
     @Transactional
     public CommissionMessageResponse execute(
@@ -90,12 +92,21 @@ public class PostRevisionCardUseCase {
                                 request.brief(),
                                 null,
                                 payload));
+        var revision =
+                revisionRequests.open(
+                        saved,
+                        commission.getRevisionsUsed() + 1,
+                        request.brief(),
+                        usesFreeQuota,
+                        fee);
         var response = mapper.toResponse(saved);
         broadcast.broadcastMessage(id, response);
         log.info(
-                "Revision card posted [commissionId={}] [messageId={}] [usesFreeQuota={}]",
+                "Revision card posted [commissionId={}] [messageId={}] [revisionRequestId={}]"
+                        + " [usesFreeQuota={}]",
                 id,
                 saved.getMessageId(),
+                revision.getRevisionRequestId(),
                 usesFreeQuota);
         return response;
     }

@@ -44,7 +44,7 @@ class CommissionRevisionConfirmationControllerTest {
                         new ConfirmRevisionCardResponse(
                                 105L,
                                 402L,
-                                CommissionStatus.CUSTOMER_REVISION_REQUESTED,
+                                CommissionStatus.AWAITING_ESTIMATE,
                                 1,
                                 BigDecimal.ZERO,
                                 null));
@@ -54,7 +54,7 @@ class CommissionRevisionConfirmationControllerTest {
                                 .contentType("application/json")
                                 .content("{\"messageId\":402}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("CUSTOMER_REVISION_REQUESTED"));
+                .andExpect(jsonPath("$.data.status").value("AWAITING_ESTIMATE"));
         verify(useCase).execute(105L, 501L, 402L);
     }
 

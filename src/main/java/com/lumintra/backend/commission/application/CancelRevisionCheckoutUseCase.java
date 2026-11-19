@@ -3,7 +3,9 @@ package com.lumintra.backend.commission.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
 import com.lumintra.backend.commission.domain.model.CommissionMessageType;
+import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.service.CommissionChatBroadcastPort;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
@@ -33,6 +35,7 @@ public class CancelRevisionCheckoutUseCase {
     private final CommissionMessageMapper mapper;
     private final CommissionChatBroadcastPort broadcast;
     private final ObjectMapper json;
+    private final CommissionRevisionRequestRecorder revisionRequests;
 
     @Transactional
     public void execute(Long id, Long customerId) {
@@ -83,6 +86,13 @@ public class CancelRevisionCheckoutUseCase {
                         && !code.equalsIgnoreCase(metadata.path("paymentCode").asText()))) {
             throw conflict("Card does not match the pending paid revision checkout.");
         }
+        var revision =
+                revisionRequests.forCard(card, metadata, commission.getRevisionsUsed() + 1);
+        if (revision.getStatus() != CommissionRevisionRequestStatus.AWAITING_PAYMENT
+                && !revision.isPending()) {
+            throw conflict("Revision request is not awaiting payment.");
+        }
+        revision.reopen();
         metadata.put("status", "PENDING");
         metadata.remove("paymentCode");
         metadata.put("cancelledPaymentCode", code);
@@ -100,6 +110,7 @@ public class CancelRevisionCheckoutUseCase {
         commission.setStatus(CommissionStatus.PREVIEW_DELIVERED);
         card.setMetadataJson(cancelledMetadata);
         commissions.save(commission);
+        revisionRequests.save(revision);
         var savedCard = messages.save(card);
         broadcast.broadcastMessage(id, mapper.toResponse(savedCard));
     }

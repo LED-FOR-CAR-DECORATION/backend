@@ -3,7 +3,9 @@ package com.lumintra.backend.commission.application.listener;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
 import com.lumintra.backend.commission.domain.model.CommissionMessageType;
+import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.service.CommissionChatBroadcastPort;
 import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionMessageMapper;
@@ -32,6 +34,7 @@ public class CommissionRevisionPaymentEventListener {
     private final CommissionMessageMapper mapper;
     private final CommissionChatBroadcastPort broadcast;
     private final ObjectMapper json;
+    private final CommissionRevisionRequestRecorder revisionRequests;
 
     @EventListener
     @Transactional
@@ -90,11 +93,23 @@ public class CommissionRevisionPaymentEventListener {
                                 .equalsIgnoreCase(event.paymentCode()))) {
             throw new IllegalStateException("Revision card does not match the successful payment.");
         }
+        var paidAt = event.paidAt() != null ? event.paidAt() : Instant.now();
+        int revisionNumber = commission.getRevisionsUsed() + 1;
+        var revision = revisionRequests.forCard(card, metadata, revisionNumber);
+        if (revision.isPending()) {
+            // Card confirmed before revision requests were recorded.
+            revision.awaitPayment(
+                    revisionNumber, fee.decimalValue(), commission.getActivePaymentCode(), paidAt);
+        }
+        if (revision.getStatus() != CommissionRevisionRequestStatus.AWAITING_PAYMENT) {
+            throw new IllegalStateException(
+                    "Revision request is not awaiting payment: " + revision.getStatus());
+        }
+        revision.markPaid(paidAt);
         metadata.put("status", "PAID");
         metadata.put("paymentCode", commission.getActivePaymentCode());
         metadata.put("paymentId", event.paymentId());
-        metadata.put(
-                "paidAt", (event.paidAt() != null ? event.paidAt() : Instant.now()).toString());
+        metadata.put("paidAt", paidAt.toString());
         String paidMetadata;
         try {
             paidMetadata = json.writeValueAsString(metadata);
@@ -102,11 +117,12 @@ public class CommissionRevisionPaymentEventListener {
             throw new IllegalStateException("Unable to serialize paid revision card.", ex);
         }
         commission.setActivePaymentCode(null);
-        commission.setStatus(CommissionStatus.CUSTOMER_REVISION_REQUESTED);
+        commission.setStatus(CommissionStatus.AWAITING_ESTIMATE);
         commission.setRevisionsUsed(commission.getRevisionsUsed() + 1);
         commission.setAutoCompleteAt(null);
         card.setMetadataJson(paidMetadata);
         commissions.save(commission);
+        revisionRequests.save(revision);
         var savedCard = messages.save(card);
         broadcast.broadcastMessage(event.targetId(), mapper.toResponse(savedCard));
         log.info(

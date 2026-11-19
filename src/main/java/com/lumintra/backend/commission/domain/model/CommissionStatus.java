@@ -12,7 +12,6 @@ public enum CommissionStatus {
     INTERNAL_REVISION_REQUIRED,
     PREVIEW_DELIVERED,
     AWAITING_EXTRA_PAYMENT,
-    CUSTOMER_REVISION_REQUESTED,
     AWAITING_ESTIMATE,
     COMPLETED,
     CANCELLED,
@@ -30,7 +29,6 @@ public enum CommissionStatus {
                  INTERNAL_REVISION_REQUIRED,
                  PREVIEW_DELIVERED,
                  AWAITING_EXTRA_PAYMENT,
-                 CUSTOMER_REVISION_REQUESTED,
                  AWAITING_ESTIMATE -> true;
             default -> false;
         };

@@ -55,6 +55,10 @@ public class CommissionSubmissionEntity {
     @Column(name = "designer_note", columnDefinition = "TEXT")
     private String designerNote;
 
+    /** Revision brief this draft answers; null for drafts of the original request. */
+    @Column(name = "revision_request_id")
+    private Long revisionRequestId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 40)
     @Builder.Default
