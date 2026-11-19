@@ -12,6 +12,7 @@ import com.lumintra.backend.shared.exception.media.InvalidMediaRequestException;
 import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
 import com.lumintra.backend.shared.exception.media.StorageServiceException;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
+import com.lumintra.backend.shared.exception.payment.PaymentSessionNotCancellableException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductTagNotFoundException;
@@ -255,6 +256,12 @@ public class GlobalExceptionHandler {
     }
 
     // Payment exceptions
+    @ExceptionHandler(PaymentSessionNotCancellableException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentSessionNotCancellable(
+            PaymentSessionNotCancellableException ex) {
+        return buildErrorResponse("PAYMENT_SESSION_NOT_CANCELLABLE", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(PaymentSessionNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePaymentSessionNotFound(PaymentSessionNotFoundException ex) {
         return buildErrorResponse("PAYMENT_SESSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
