@@ -195,6 +195,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("LED_INSTANCE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(LedModelNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleLedModelNotFound(LedModelNotFoundException ex) {
+        return buildErrorResponse("LED_MODEL_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
     @ExceptionHandler(InvalidDeviceQrException.class)
     public ResponseEntity<ErrorResponse> handleInvalidDeviceQr(InvalidDeviceQrException ex) {
         return buildErrorResponse("INVALID_DEVICE_QR", ex.getMessage(), HttpStatus.BAD_REQUEST);
@@ -203,6 +208,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DeviceAlreadyBoundException.class)
     public ResponseEntity<ErrorResponse> handleDeviceAlreadyBound(DeviceAlreadyBoundException ex) {
         return buildErrorResponse("DEVICE_ALREADY_BOUND", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(DuplicateLedModelNameException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateLedModelName(DuplicateLedModelNameException ex) {
+        return buildErrorResponse("DUPLICATE_LED_MODEL_NAME", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(LedModelDimensionsLockedException.class)
+    public ResponseEntity<ErrorResponse> handleLedModelDimensionsLocked(LedModelDimensionsLockedException ex) {
+        return buildErrorResponse("LED_MODEL_DIMENSIONS_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(DeviceOwnershipMismatchException.class)
