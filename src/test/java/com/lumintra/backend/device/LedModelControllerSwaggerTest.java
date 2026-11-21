@@ -76,8 +76,10 @@ class LedModelControllerSwaggerTest {
         assertSchemaOnRecordAndFields(LedModelListResponse.class, "items", "meta");
         assertSchemaOnRecordAndFields(
                 LedModelListResponse.LedModelItem.class,
-                "modelId", "productId", "modelName", "stockQuantity", "isLowStock", "status", "spec"
+                "modelId", "productId", "modelName", "stockQuantity", "isLowStock", "status", "spec", "activeFirmware"
         );
+        assertSchemaOnRecordAndFields(LedModelListResponse.ActiveFirmwareSummary.class,
+                "firmwareId", "version", "uploadedAt", "installedDeviceCount");
         assertSchemaOnRecordAndFields(LedModelListResponse.LedSpec.class, "widthPx", "heightPx", "attributes");
         assertSchemaOnRecordAndFields(LedModelListResponse.SpecAttribute.class, "label", "value");
     }

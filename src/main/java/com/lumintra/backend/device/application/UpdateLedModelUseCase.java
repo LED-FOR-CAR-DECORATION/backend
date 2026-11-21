@@ -29,6 +29,7 @@ public class UpdateLedModelUseCase {
     private final LedModelRepository ledModelRepository;
     private final LedInstanceRepository ledInstanceRepository;
     private final LedModelMapper ledModelMapper;
+    private final ActiveFirmwareSummaryResolver activeFirmwareResolver;
 
     @Transactional
     public LedModelListResponse.LedModelItem execute(Long id, UpdateLedModelRequest request) {
@@ -76,6 +77,6 @@ public class UpdateLedModelUseCase {
         log.info("LED model updated successfully [modelId={}] [modelName={}] [status={}] [stock={}]",
                 saved.getModelId(), saved.getModelName(), saved.getStatus(), saved.getStockQuantity());
 
-        return ledModelMapper.toItem(saved);
+        return ledModelMapper.toItem(saved, activeFirmwareResolver.resolve(saved.getModelId()));
     }
 }

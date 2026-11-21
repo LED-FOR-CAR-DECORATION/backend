@@ -39,6 +39,22 @@ public interface LedInstanceRepository extends JpaRepository<LedInstanceEntity, 
             @Param("customerId") Long customerId,
             Pageable pageable);
 
+    /** Number of customer-bound devices recorded on each of the given firmware releases. */
+    @Query("""
+            SELECT i.currentFirmwareId AS firmwareId, COUNT(i) AS deviceCount
+            FROM LedInstanceEntity i
+            WHERE i.currentFirmwareId IN :firmwareIds
+              AND i.status = LedInstanceStatus.BOUND
+            GROUP BY i.currentFirmwareId
+            """)
+    List<FirmwareInstallCount> countBoundDevicesByFirmwareIds(@Param("firmwareIds") Collection<Long> firmwareIds);
+
+    interface FirmwareInstallCount {
+        Long getFirmwareId();
+
+        Long getDeviceCount();
+    }
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             UPDATE LedInstanceEntity i

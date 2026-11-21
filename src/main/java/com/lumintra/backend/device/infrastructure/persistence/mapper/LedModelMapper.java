@@ -19,6 +19,11 @@ public class LedModelMapper {
     private static final Set<String> RESERVED_SPEC_KEYS = Set.of("widthPx", "heightPx", "attributes");
 
     public LedModelListResponse.LedModelItem toItem(LedModelEntity entity) {
+        return toItem(entity, null);
+    }
+
+    public LedModelListResponse.LedModelItem toItem(
+            LedModelEntity entity, LedModelListResponse.ActiveFirmwareSummary activeFirmware) {
         long stockQuantity = entity.getStockQuantity() != null ? entity.getStockQuantity() : 0L;
 
         return LedModelListResponse.LedModelItem.builder()
@@ -29,6 +34,7 @@ public class LedModelMapper {
                 .isLowStock(stockQuantity < LedModelEntity.LOW_STOCK_THRESHOLD)
                 .status(resolveStatus(entity))
                 .spec(toSpec(entity))
+                .activeFirmware(activeFirmware)
                 .build();
     }
 
