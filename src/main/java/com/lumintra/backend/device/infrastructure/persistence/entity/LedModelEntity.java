@@ -28,6 +28,7 @@ public class LedModelEntity {
     private static final Pattern DIMENSION_PATTERN = Pattern.compile("^\\s*(\\d+)\\s*[xX×]\\s*(\\d+)\\s*$");
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "model_id")
     private Long modelId;
 
@@ -64,6 +65,15 @@ public class LedModelEntity {
 
     public static LedModelEntity create(Long modelId, String modelName, Map<String, Object> spec, Long stockQuantity) {
         return createInternal(modelId, null, modelName, null, null, spec, stockQuantity, null);
+    }
+
+    public static LedModelEntity createStandalone(
+            String modelName,
+            Integer widthPx,
+            Integer heightPx,
+            Map<String, Object> spec,
+            Long stockQuantity) {
+        return createInternal(null, null, modelName, widthPx, heightPx, spec, stockQuantity, null);
     }
 
     public static LedModelEntity createForProduct(
@@ -116,6 +126,26 @@ public class LedModelEntity {
 
     public boolean isLowStock() {
         return stockQuantity != null && stockQuantity < LOW_STOCK_THRESHOLD;
+    }
+
+    public void updateDetails(
+            String modelName,
+            Integer widthPx,
+            Integer heightPx,
+            Map<String, Object> spec,
+            long newStockQuantity) {
+        this.modelName = modelName;
+        this.widthPx = widthPx;
+        this.heightPx = heightPx;
+        this.spec = spec != null ? new LinkedHashMap<>(spec) : new LinkedHashMap<>();
+        this.stockQuantity = newStockQuantity;
+        if (this.status != LedModelStatus.DEPRECATED) {
+            this.status = newStockQuantity > 0L ? LedModelStatus.ACTIVE : LedModelStatus.OUT_OF_STOCK;
+        }
+    }
+
+    public void deprecate() {
+        this.status = LedModelStatus.DEPRECATED;
     }
 
     /**

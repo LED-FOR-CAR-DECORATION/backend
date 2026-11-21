@@ -3,6 +3,7 @@ package com.lumintra.backend.payment.application;
 import com.lumintra.backend.commerce.domain.model.OrderPaymentSnapshot;
 import com.lumintra.backend.commerce.domain.service.OrderPaymentLookupService;
 import com.lumintra.backend.payment.api.response.PaymentSessionResponse;
+import com.lumintra.backend.payment.domain.model.CancelPaymentSessionCommand;
 import com.lumintra.backend.payment.domain.model.CreatePaymentSessionCommand;
 import com.lumintra.backend.payment.domain.model.PaymentSessionMetadata;
 import com.lumintra.backend.payment.domain.model.PaymentStatus;
@@ -14,7 +15,11 @@ import com.lumintra.backend.payment.domain.service.PaymentSessionPort;
 import com.lumintra.backend.payment.infrastructure.persistence.entity.PaymentTransactionEntity;
 import com.lumintra.backend.payment.infrastructure.persistence.mapper.PaymentSessionMapper;
 import com.lumintra.backend.payment.infrastructure.persistence.repository.PaymentTransactionRepository;
+import com.lumintra.backend.shared.exception.payment.PaymentSessionNotCancellableException;
+import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
+
 import lombok.RequiredArgsConstructor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -24,6 +29,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -49,43 +56,48 @@ public class CreatePaymentSessionUseCase implements PaymentSessionPort {
         Duration effectiveTtl = resolveTtl(targetType, command.ttl());
         Instant now = Instant.now();
 
-        OrderPaymentSnapshot orderSnapshot = targetType == PaymentTargetType.ORDER
-                ? orderPaymentLookupService.findByOrderId(command.targetId()).orElse(null)
-                : null;
+        OrderPaymentSnapshot orderSnapshot =
+                targetType == PaymentTargetType.ORDER
+                        ? orderPaymentLookupService.findByOrderId(command.targetId()).orElse(null)
+                        : null;
 
-        Long resolvedCustomerId = command.customerId() != null
-                ? command.customerId()
-                : (orderSnapshot != null ? orderSnapshot.customerId() : null);
-        Instant expiresAt = (orderSnapshot != null && orderSnapshot.expiresAt() != null)
-                ? orderSnapshot.expiresAt()
-                : now.plus(effectiveTtl);
+        Long resolvedCustomerId =
+                command.customerId() != null
+                        ? command.customerId()
+                        : (orderSnapshot != null ? orderSnapshot.customerId() : null);
+        Instant expiresAt =
+                (orderSnapshot != null && orderSnapshot.expiresAt() != null)
+                        ? orderSnapshot.expiresAt()
+                        : now.plus(effectiveTtl);
 
         String paymentCode = paymentGatewayPort.generatePaymentCode(targetType, command.targetId());
         SePayQrDetails qrDetails = paymentGatewayPort.buildQrDetails(paymentCode, normalizedAmount);
 
-        PaymentTransactionEntity entity = PaymentTransactionEntity.createPending(
-                command.targetId(),
-                PaymentTransactionEntity.GATEWAY_SEPAY,
-                paymentCode,
-                normalizedAmount
-        );
+        PaymentTransactionEntity entity =
+                PaymentTransactionEntity.createPending(
+                        command.targetId(),
+                        PaymentTransactionEntity.GATEWAY_SEPAY,
+                        paymentCode,
+                        normalizedAmount);
         PaymentTransactionEntity saved = paymentTransactionRepository.save(entity);
         if (saved.getCreatedAt() == null) {
             saved.setCreatedAt(now);
         }
 
         if (resolvedCustomerId != null && resolvedCustomerId > 0) {
-            PaymentSessionMetadata metadata = new PaymentSessionMetadata(
-                    paymentCode,
-                    targetType,
-                    command.targetId(),
-                    resolvedCustomerId,
-                    expiresAt
-            );
+            PaymentSessionMetadata metadata =
+                    new PaymentSessionMetadata(
+                            paymentCode,
+                            targetType,
+                            command.targetId(),
+                            resolvedCustomerId,
+                            expiresAt);
             metadataStore.save(metadata, effectiveTtl.plusHours(1));
         }
 
-        log.info("Created SePay payment session [paymentId={}] [paymentCode={}] [targetType={}] [targetId={}] [customerId={}]",
+        log.info(
+                "Created SePay payment session [paymentId={}] [paymentCode={}] [targetType={}]"
+                        + " [targetId={}] [customerId={}]",
                 saved.getPaymentId(),
                 paymentCode,
                 targetType,
@@ -93,13 +105,7 @@ public class CreatePaymentSessionUseCase implements PaymentSessionPort {
                 resolvedCustomerId);
 
         return paymentSessionMapper.toResponse(
-                saved,
-                paymentCode,
-                targetType,
-                qrDetails,
-                PaymentStatus.PENDING,
-                expiresAt
-        );
+                saved, paymentCode, targetType, qrDetails, PaymentStatus.PENDING, expiresAt);
     }
 
     private void validateCommand(CreatePaymentSessionCommand command) {
@@ -116,11 +122,79 @@ public class CreatePaymentSessionUseCase implements PaymentSessionPort {
             throw new IllegalArgumentException("Payment customerId must be a positive identifier.");
         }
         if (command.targetType() != PaymentTargetType.ORDER && command.customerId() == null) {
-            throw new IllegalArgumentException("Payment customerId is required for non-order targets.");
+            throw new IllegalArgumentException(
+                    "Payment customerId is required for non-order targets.");
         }
         if (command.amount() == null || command.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Payment amount must be greater than zero.");
         }
+    }
+
+    @Override
+    @Transactional
+    public void cancelSession(CancelPaymentSessionCommand command) {
+        if (command == null
+                || command.paymentCode() == null
+                || command.paymentCode().isBlank()
+                || command.targetType() != PaymentTargetType.COMMISSION_REVISION
+                || command.targetId() == null
+                || command.targetId() <= 0
+                || command.customerId() == null
+                || command.customerId() <= 0) {
+            throw new IllegalArgumentException(
+                    "A revision payment code, target and customer are required.");
+        }
+        String code = command.paymentCode().trim().toUpperCase(Locale.ROOT);
+        var transaction =
+                paymentTransactionRepository
+                        .findFirstByTransactionCodeOrderByCreatedAtDescPaymentIdDesc(code)
+                        .orElseThrow(
+                                () ->
+                                        new PaymentSessionNotFoundException(
+                                                "Payment session not found."));
+        var metadata = metadataStore.findByPaymentCode(code);
+        PaymentTargetType type =
+                metadata.map(PaymentSessionMetadata::targetType)
+                        .orElseGet(
+                                () ->
+                                        PaymentTargetType.fromPaymentCode(
+                                                transaction.getTransactionCode()));
+        if (!Objects.equals(transaction.getOrderId(), command.targetId())
+                || type != command.targetType()
+                || metadata.filter(
+                                m ->
+                                        !Objects.equals(m.targetId(), command.targetId())
+                                                || !Objects.equals(
+                                                        m.customerId(), command.customerId()))
+                        .isPresent()) {
+            throw new PaymentSessionNotCancellableException(
+                    "Payment session does not match the revision checkout.");
+        }
+        if (transaction.getPaymentStatus() != PaymentStatus.PENDING
+                && transaction.getPaymentStatus() != PaymentStatus.EXPIRED) {
+            throw new PaymentSessionNotCancellableException(
+                    "Payment session is already finalized.");
+        }
+        int updated =
+                paymentTransactionRepository.markAsExpiredIfPending(
+                        transaction.getPaymentId(), PaymentTransactionEntity.DB_STATUS_EXPIRED);
+        if (updated == 0) {
+            var current =
+                    paymentTransactionRepository
+                            .findFirstByTransactionCodeOrderByCreatedAtDescPaymentIdDesc(code)
+                            .orElseThrow(
+                                    () ->
+                                            new PaymentSessionNotFoundException(
+                                                    "Payment session not found."));
+            if (current.getPaymentStatus() != PaymentStatus.EXPIRED) {
+                throw new PaymentSessionNotCancellableException(
+                        "Payment session changed before cancellation.");
+            }
+        }
+        log.info(
+                "Revision payment session cancelled [paymentId={}] [targetId={}]",
+                transaction.getPaymentId(),
+                command.targetId());
     }
 
     private Duration resolveTtl(PaymentTargetType targetType, Duration requestedTtl) {

@@ -1,6 +1,7 @@
 package com.lumintra.backend.store.infrastructure.persistence.repository;
 
 import com.lumintra.backend.store.domain.model.ProductStatus;
+import com.lumintra.backend.store.domain.model.ProductType;
 import com.lumintra.backend.store.infrastructure.persistence.entity.ProductEntity;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -13,12 +14,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface ProductRepository extends JpaRepository<ProductEntity, Long>,
         JpaSpecificationExecutor<ProductEntity> {
 
     Optional<ProductEntity> findFirstByProductName(String productName);
+    List<ProductEntity> findAllByProductTypeAndStatusOrderByProductIdDesc(ProductType type, ProductStatus status);
 
     @EntityGraph(attributePaths = "tags")
     Optional<ProductEntity> findWithTagsByProductIdAndStatusIn(Long productId, Collection<ProductStatus> statuses);

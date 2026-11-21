@@ -102,7 +102,7 @@ class CommissionControllerSwaggerTest {
                 "initialPrice", "extraRevisionFee", "totalPrice",
                 "revisionsUsed", "maxRevisions", "status", "activePaymentCode",
                 "approvedSubmissionId", "rejectionReason", "chatActive",
-                "quoteExpiresAt", "slaDueAt", "autoCompleteAt",
+                "quoteExpiresAt", "estimatedDeliveryAt", "autoCompleteAt",
                 "createdAt", "updatedAt", "attachments", "deliveredPreviews"
         );
 

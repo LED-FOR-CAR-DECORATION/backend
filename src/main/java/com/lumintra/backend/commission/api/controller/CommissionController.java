@@ -2,9 +2,11 @@ package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.CustomerCommissionFilterRequest;
 import com.lumintra.backend.commission.api.request.SubmitCommissionRequest;
+import com.lumintra.backend.commission.api.response.ApproveDeliverableCardResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse.CustomerCommissionSummaryItem;
+import com.lumintra.backend.commission.application.ApproveDeliverableCardUseCase;
 import com.lumintra.backend.commission.application.GetCustomerCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.ListCustomerCommissionsUseCase;
 import com.lumintra.backend.commission.application.SubmitCommissionUseCase;
@@ -60,6 +62,7 @@ public class CommissionController {
     private final SubmitCommissionUseCase submitCommissionUseCase;
     private final ListCommissionMessagesUseCase listCommissionMessagesUseCase;
     private final SendCommissionMessageUseCase sendCommissionMessageUseCase;
+    private final ApproveDeliverableCardUseCase approveDeliverableCardUseCase;
     private final InternalEmployeeAccessService internalEmployeeAccessService;
 
     @Operation(
@@ -250,7 +253,7 @@ public class CommissionController {
                                           ],
                                           "attachments": [
                                             {
-                                              "imageUrl": "https://cdn.lumintra.com/commissions/references/42/ref-01.png",
+                                              "imageUrl": "commissions/references/42/123e4567-e89b-12d3-a456-426614174000-ref-01.png",
                                               "caption": "Neon color palette reference"
                                             }
                                           ]
@@ -476,6 +479,62 @@ public class CommissionController {
                 id, callerId, senderRole, isPrivilegedManagement, request
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Approve Deliverable Card and complete commission (CMS-18)",
+            description = """
+                    Allows the owning `CUSTOMER` to approve the Deliverable Card currently delivered in the commission chat.
+                    Marks the delivered submission `CUSTOMER_ACCEPTED` (card accepted), records it as `approvedSubmissionId`,
+                    clears the auto-complete countdown, transitions the commission from `PREVIEW_DELIVERED` to `COMPLETED`,
+                    posts a `SYSTEM` chat message and publishes `CommissionCompletedEvent`.
+                    """,
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Deliverable Card approved; commission transitioned to COMPLETED",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApproveDeliverableCardResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid or non-positive commission id path parameter",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Missing, expired, or invalid JWT access token",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Caller does not hold the CUSTOMER role or does not own the commission (COMMISSION_OWNERSHIP_MISMATCH)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Commission request not found (COMMISSION_NOT_FOUND)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Commission is not PREVIEW_DELIVERED (e.g. already COMPLETED) or has no delivered preview awaiting approval (INVALID_COMMISSION_STATUS_TRANSITION)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))
+            )
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @PostMapping("/{id}/deliverable-card/approve")
+    public ResponseEntity<ApiResponse<ApproveDeliverableCardResponse>> approveDeliverableCard(
+            Authentication authentication,
+            @Parameter(description = "Unique commission request identifier", example = "105")
+            @PathVariable("id") @Positive(message = "id must be greater than 0") Long id) {
+        Long customerId = extractCustomerId(authentication);
+        ApproveDeliverableCardResponse response = approveDeliverableCardUseCase.execute(id, customerId);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     private Long requireEmployeeId(Authentication authentication) {

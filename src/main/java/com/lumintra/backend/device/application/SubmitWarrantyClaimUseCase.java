@@ -10,7 +10,9 @@ import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstance
 import com.lumintra.backend.device.infrastructure.persistence.entity.WarrantyTicketEntity;
 import com.lumintra.backend.device.infrastructure.persistence.repository.LedInstanceRepository;
 import com.lumintra.backend.device.infrastructure.persistence.repository.WarrantyTicketRepository;
-import com.lumintra.backend.media.domain.service.MediaUrlValidator;
+import com.lumintra.backend.media.domain.model.MediaPurpose;
+import com.lumintra.backend.media.domain.service.PrivateMediaReferenceValidator;
+import com.lumintra.backend.media.domain.service.MediaViewUrlResolver;
 import com.lumintra.backend.shared.exception.device.DeviceOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException;
 import com.lumintra.backend.shared.exception.device.WarrantyClaimConflictException;
@@ -37,7 +39,8 @@ public class SubmitWarrantyClaimUseCase {
     private final LedInstanceRepository ledInstanceRepository;
     private final WarrantyTicketRepository warrantyTicketRepository;
     private final OrderFulfillmentLookupService orderFulfillmentLookupService;
-    private final MediaUrlValidator mediaUrlValidator;
+    private final PrivateMediaReferenceValidator privateMediaReferenceValidator;
+    private final MediaViewUrlResolver mediaViewUrlResolver;
 
     @Transactional
     public WarrantyClaimResponse execute(Long customerId, Long deviceId, SubmitWarrantyClaimRequest request) {
@@ -48,14 +51,13 @@ public class SubmitWarrantyClaimUseCase {
             throw new LedInstanceNotFoundException("LED hardware device not found.");
         }
 
-        // 1. Validate evidence media URLs if provided (MED-01)
+        // 1. Validate evidence media: each must be a WARRANTY_EVIDENCE upload for this device; object keys are persisted
         List<String> validatedEvidenceUrls = new ArrayList<>();
         if (request != null && request.evidenceMediaUrls() != null) {
-            for (String url : request.evidenceMediaUrls()) {
-                if (url != null && !url.isBlank()) {
-                    String trimmedUrl = url.strip();
-                    mediaUrlValidator.validateMediaUrl(trimmedUrl);
-                    validatedEvidenceUrls.add(trimmedUrl);
+            for (String reference : request.evidenceMediaUrls()) {
+                if (reference != null && !reference.isBlank()) {
+                    validatedEvidenceUrls.add(privateMediaReferenceValidator.requireOwnedObjectKey(
+                            reference.strip(), MediaPurpose.WARRANTY_EVIDENCE, deviceId));
                 }
             }
         }
@@ -123,7 +125,7 @@ public class SubmitWarrantyClaimUseCase {
                 instance.getDeviceName(),
                 ticket.getStatus(),
                 ticket.getIssueDescription(),
-                ticket.getEvidenceMediaUrls(),
+                mediaViewUrlResolver.toViewUrls(ticket.getEvidenceMediaUrls()),
                 ticket.getResolutionNotes(),
                 ticket.getCreatedAt()
         );

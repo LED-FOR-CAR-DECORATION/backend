@@ -17,8 +17,8 @@ public class MediaUrlValidator {
     private final String storageBucket;
 
     public MediaUrlValidator(
-            @Value("${lumintra.cdn.base-url:https://cdn.lumintra.com}") String cdnBaseUrl,
-            @Value("${lumintra.storage.firebase.bucket:}") String storageBucket) {
+            @Value("${app.cdn.base-url:https://cdn.lumintra.com}") String cdnBaseUrl,
+            @Value("${app.firebase.storage-bucket:}") String storageBucket) {
         this.cdnBaseUrl = cdnBaseUrl != null ? cdnBaseUrl.trim() : "";
         this.storageBucket = storageBucket != null ? storageBucket.trim() : "";
     }

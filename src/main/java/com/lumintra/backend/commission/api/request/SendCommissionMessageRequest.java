@@ -13,7 +13,7 @@ public record SendCommissionMessageRequest(
         @Size(max = 2000, message = "Message content must not exceed 2000 characters")
         String content,
 
-        @Schema(description = "Uploaded image URL validated via media service (required for `IMAGE`)", example = "https://cdn.lumintra.com/commissions/chat/105/ref-02.png")
+        @Schema(description = "objectKey returned by POST /api/media/upload-url with purpose COMMISSION_CHAT for this commission (required for `IMAGE`). Responses return a short-lived signed URL in this field.", example = "commissions/105/chat/123e4567-e89b-12d3-a456-426614174000-ref-02.png")
         @Size(max = 1000, message = "Media URL must not exceed 1000 characters")
         String mediaUrl
 ) {

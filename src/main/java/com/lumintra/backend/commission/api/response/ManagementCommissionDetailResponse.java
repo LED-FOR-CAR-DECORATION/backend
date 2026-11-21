@@ -1,5 +1,7 @@
 package com.lumintra.backend.commission.api.response;
 
+import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
+import com.lumintra.backend.commission.domain.model.RevisionEstimateSource;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -106,8 +108,60 @@ public record ManagementCommissionDetailResponse(
         List<ManagementCommissionAttachmentItem> attachments,
 
         @Schema(description = "Full internal draft submission history including pending review and rejected drafts", requiredMode = Schema.RequiredMode.REQUIRED)
-        List<ManagementCommissionSubmissionItem> submissions
+        List<ManagementCommissionSubmissionItem> submissions,
+
+        @Schema(description = "Customer revision briefs in revision order (superseded briefs excluded). The designer works on the entry whose status is CONFIRMED (waiting for the designer's estimate) or IN_PROGRESS.", requiredMode = Schema.RequiredMode.REQUIRED)
+        List<ManagementCommissionRevisionRequestItem> revisionRequests
 ) {
+    @Schema(description = "Customer revision brief agreed through a Revision Brief Card")
+    @Builder
+    public record ManagementCommissionRevisionRequestItem(
+            @Schema(description = "Revision request identifier", example = "31", requiredMode = Schema.RequiredMode.REQUIRED)
+            Long revisionRequestId,
+
+            @Schema(description = "Revision Brief Card chat message ID", example = "402", requiredMode = Schema.RequiredMode.REQUIRED)
+            Long messageId,
+
+            @Schema(description = "1-based revision sequence number", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
+            int revisionNumber,
+
+            @Schema(description = "What the customer wants changed", example = "Make the outline brighter and slow the blink", requiredMode = Schema.RequiredMode.REQUIRED)
+            String description,
+
+            @Schema(description = "Whether the revision consumed free revision quota", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)
+            boolean usesFreeQuota,
+
+            @Schema(description = "Extra revision fee in VND (0 for free revisions)", example = "35000.00", requiredMode = Schema.RequiredMode.REQUIRED)
+            BigDecimal revisionFee,
+
+            @Schema(description = "Revision request lifecycle status", example = "CONFIRMED", requiredMode = Schema.RequiredMode.REQUIRED)
+            CommissionRevisionRequestStatus status,
+
+            @Schema(description = "Timestamp when the customer confirmed the brief", example = "2026-11-19T08:00:00Z", nullable = true)
+            Instant confirmedAt,
+
+            @Schema(description = "Timestamp when the extra revision fee was paid", example = "2026-11-19T08:05:00Z", nullable = true)
+            Instant paidAt,
+
+            @Schema(description = "Estimated hours to deliver the revision; null until estimated", example = "36", nullable = true)
+            Integer estimatedHours,
+
+            @Schema(description = "Who set the estimate", example = "DESIGNER", nullable = true)
+            RevisionEstimateSource estimateSource,
+
+            @Schema(description = "Designer's internal delivery deadline for this revision", example = "2026-11-21T10:00:00Z", nullable = true)
+            Instant designerDueAt,
+
+            @Schema(description = "Delivery deadline shown to the customer (designer deadline + 24h)", example = "2026-11-22T10:00:00Z", nullable = true)
+            Instant customerDueAt,
+
+            @Schema(description = "Timestamp when a preview answering this revision was delivered", example = "2026-11-20T08:00:00Z", nullable = true)
+            Instant completedAt,
+
+            @Schema(description = "Timestamp when the brief was posted", example = "2026-11-19T07:50:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
+            Instant createdAt
+    ) {}
+
     @Schema(description = "Customer reference image attachment")
     @Builder
     public record ManagementCommissionAttachmentItem(
@@ -147,6 +201,9 @@ public record ManagementCommissionDetailResponse(
 
             @Schema(description = "Notes attached by designer", example = "Initial neon purple background", nullable = true)
             String designerNote,
+
+            @Schema(description = "Revision request this draft answers; null for drafts of the original request", example = "31", nullable = true)
+            Long revisionRequestId,
 
             @Schema(description = "Review status of this draft submission", example = "STAFF_REJECTED", requiredMode = Schema.RequiredMode.REQUIRED)
             CommissionSubmissionStatus status,

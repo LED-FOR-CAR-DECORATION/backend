@@ -2,13 +2,16 @@ package com.lumintra.backend.commission.application;
 
 import com.lumintra.backend.commission.api.request.UploadCommissionDraftRequest;
 import com.lumintra.backend.commission.api.response.UploadCommissionDraftResponse;
+import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionSubmissionEntity;
 import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionRequestMapper;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRevisionRequestRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionSubmissionRepository;
-import com.lumintra.backend.media.domain.service.MediaUrlValidator;
+import com.lumintra.backend.media.domain.model.MediaPurpose;
+import com.lumintra.backend.media.domain.service.PrivateMediaReferenceValidator;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
@@ -28,7 +31,8 @@ public class UploadCommissionDraftUseCase {
 
     private final CommissionRequestRepository commissionRequestRepository;
     private final CommissionSubmissionRepository commissionSubmissionRepository;
-    private final MediaUrlValidator mediaUrlValidator;
+    private final CommissionRevisionRequestRepository commissionRevisionRequestRepository;
+    private final PrivateMediaReferenceValidator privateMediaReferenceValidator;
     private final CommissionRequestMapper commissionRequestMapper;
 
     @Transactional
@@ -64,8 +68,9 @@ public class UploadCommissionDraftUseCase {
             );
         }
 
-        // AC02: Validate MED-01 media URL domain rules (no server-side pixel/150KB inspection required)
-        mediaUrlValidator.validateMediaUrl(request.imageUrl());
+        // AC02: Must be a COMMISSION_DRAFT upload for this commission; the object key is persisted
+        String draftObjectKey = privateMediaReferenceValidator.requireOwnedObjectKey(
+                request.imageUrl(), MediaPurpose.COMMISSION_DRAFT, commissionId);
 
         int nextVersionNumber = commissionSubmissionRepository
                 .findTopByCommissionIdOrderByVersionNumberDesc(commissionId)
@@ -76,9 +81,13 @@ public class UploadCommissionDraftUseCase {
                 commissionId,
                 callerDesignerId,
                 nextVersionNumber,
-                request.imageUrl(),
+                draftObjectKey,
                 request.designerNote()
         );
+        commissionRevisionRequestRepository
+                .findFirstByCommissionIdAndStatusInOrderByRevisionRequestIdDesc(
+                        commissionId, CommissionRevisionRequestStatus.designerActiveStatuses())
+                .ifPresent(revision -> draft.setRevisionRequestId(revision.getRevisionRequestId()));
         CommissionSubmissionEntity savedDraft = commissionSubmissionRepository.save(draft);
 
         // AC03: Transition status to INTERNAL_REVIEW

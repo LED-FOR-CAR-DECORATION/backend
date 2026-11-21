@@ -2,16 +2,24 @@ package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.CustomerCommissionFilterRequest;
 import com.lumintra.backend.commission.api.request.SubmitCommissionRequest;
+import com.lumintra.backend.commission.api.response.ApproveDeliverableCardResponse;
+import com.lumintra.backend.commission.api.response.CommissionMessageResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse.CustomerCommissionAttachmentItem;
 import com.lumintra.backend.commission.api.response.CustomerCommissionDetailResponse.CustomerDeliveredPreviewItem;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse;
 import com.lumintra.backend.commission.api.response.CustomerCommissionListResponse.CustomerCommissionSummaryItem;
+import com.lumintra.backend.commission.application.ApproveDeliverableCardUseCase;
 import com.lumintra.backend.commission.application.GetCustomerCommissionDetailUseCase;
+import com.lumintra.backend.commission.application.ListCommissionMessagesUseCase;
+import com.lumintra.backend.commission.application.SendCommissionMessageUseCase;
 import com.lumintra.backend.commission.application.ListCustomerCommissionsUseCase;
 import com.lumintra.backend.commission.application.SubmitCommissionUseCase;
+import com.lumintra.backend.commission.domain.model.CommissionMessageSenderRole;
+import com.lumintra.backend.commission.domain.model.CommissionMessageType;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import com.lumintra.backend.commission.domain.model.CommissionSubmissionStatus;
+import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
@@ -19,6 +27,7 @@ import com.lumintra.backend.shared.exception.commission.CommissionNotFoundExcept
 import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.commission.CommissionTierNotFoundException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionRuleSelectionException;
+import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
 import com.lumintra.backend.shared.exception.commission.PresetSelectionMismatchException;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
@@ -63,6 +72,7 @@ class CommissionControllerTest {
     private static final String MY_COMMISSIONS_PATH = "/api/commissions/my";
     private static final String COMMISSION_DETAIL_PATH = "/api/commissions/{id}";
     private static final String SUBMIT_COMMISSION_PATH = "/api/commissions";
+    private static final String APPROVE_DELIVERABLE_CARD_PATH = "/api/commissions/{id}/deliverable-card/approve";
 
     @Autowired
     private MockMvc mockMvc;
@@ -75,6 +85,18 @@ class CommissionControllerTest {
 
     @MockitoBean
     private SubmitCommissionUseCase submitCommissionUseCase;
+
+    @MockitoBean
+    private ListCommissionMessagesUseCase listCommissionMessagesUseCase;
+
+    @MockitoBean
+    private SendCommissionMessageUseCase sendCommissionMessageUseCase;
+
+    @MockitoBean
+    private ApproveDeliverableCardUseCase approveDeliverableCardUseCase;
+
+    @MockitoBean
+    private InternalEmployeeAccessService internalEmployeeAccessService;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -628,5 +650,110 @@ class CommissionControllerTest {
         assertThat(captor.getValue().selectedOptions()).hasSize(4);
         assertThat(captor.getValue().selectedOptions().get(2).quantity()).isEqualTo(2);
         assertThat(captor.getValue().selectedOptions().get(3).textValue()).isEqualTo("Purple and cyan neon palette");
+    }
+
+    @Test
+    @DisplayName("CMS-18 Controller UTCID01 [N]: Owning CUSTOMER approves Deliverable Card -> 200 COMPLETED")
+    void approveDeliverableCard_customerRole_returns200Completed() throws Exception {
+        ApproveDeliverableCardResponse response = ApproveDeliverableCardResponse.builder()
+                .commissionId(105L)
+                .commissionStatus(CommissionStatus.COMPLETED)
+                .approvedSubmissionId(43L)
+                .versionNumber(2)
+                .submissionStatus(CommissionSubmissionStatus.CUSTOMER_ACCEPTED)
+                .completedAt(Instant.parse("2026-11-18T10:00:00Z"))
+                .systemMessage(CommissionMessageResponse.builder()
+                        .messageId(1301L)
+                        .commissionId(105L)
+                        .senderRole(CommissionMessageSenderRole.SYSTEM)
+                        .messageType(CommissionMessageType.SYSTEM)
+                        .content("Customer approved preview version 2. The commission is now completed.")
+                        .createdAt(Instant.parse("2026-11-18T10:00:00Z"))
+                        .build())
+                .build();
+        when(approveDeliverableCardUseCase.execute(105L, 501L)).thenReturn(response);
+
+        mockMvc.perform(post(APPROVE_DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("501").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.commissionId").value(105))
+                .andExpect(jsonPath("$.data.commissionStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.approvedSubmissionId").value(43))
+                .andExpect(jsonPath("$.data.submissionStatus").value("CUSTOMER_ACCEPTED"))
+                .andExpect(jsonPath("$.data.systemMessage.messageType").value("SYSTEM"));
+
+        verify(approveDeliverableCardUseCase).execute(105L, 501L);
+    }
+
+    @Test
+    @DisplayName("CMS-18 Controller UTCID02 [A]: AC01 - STAFF role cannot approve Deliverable Card -> 403")
+    void approveDeliverableCard_staffRole_returns403() throws Exception {
+        mockMvc.perform(post(APPROVE_DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("3").roles("STAFF"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(approveDeliverableCardUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-18 Controller UTCID03 [A]: Unauthenticated request -> 401")
+    void approveDeliverableCard_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(post(APPROVE_DELIVERABLE_CARD_PATH, 105L)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(approveDeliverableCardUseCase);
+    }
+
+    @Test
+    @DisplayName("CMS-18 Controller UTCID04 [A]: AC01 - Non-owning CUSTOMER -> 403 COMMISSION_OWNERSHIP_MISMATCH")
+    void approveDeliverableCard_notOwner_returns403() throws Exception {
+        when(approveDeliverableCardUseCase.execute(105L, 777L))
+                .thenThrow(new CommissionOwnershipMismatchException("You do not have permission to access this commission request."));
+
+        mockMvc.perform(post(APPROVE_DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("777").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMISSION_OWNERSHIP_MISMATCH"));
+    }
+
+    @Test
+    @DisplayName("CMS-18 Controller UTCID05 [A]: Commission not PREVIEW_DELIVERED -> 409 INVALID_COMMISSION_STATUS_TRANSITION")
+    void approveDeliverableCard_invalidStatus_returns409() throws Exception {
+        when(approveDeliverableCardUseCase.execute(105L, 501L))
+                .thenThrow(new InvalidCommissionStatusTransitionException("Cannot approve deliverable card for commission in status COMPLETED (must be PREVIEW_DELIVERED)"));
+
+        mockMvc.perform(post(APPROVE_DELIVERABLE_CARD_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("501").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_COMMISSION_STATUS_TRANSITION"));
+    }
+
+    @Test
+    @DisplayName("CMS-18 Controller UTCID06 [A]: Commission not found -> 404 COMMISSION_NOT_FOUND")
+    void approveDeliverableCard_notFound_returns404() throws Exception {
+        when(approveDeliverableCardUseCase.execute(999L, 501L))
+                .thenThrow(new CommissionNotFoundException("Commission request not found with id: 999"));
+
+        mockMvc.perform(post(APPROVE_DELIVERABLE_CARD_PATH, 999L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("501").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COMMISSION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("CMS-18 Controller UTCID07 [B]: Non-positive id -> 400")
+    void approveDeliverableCard_nonPositiveId_returns400() throws Exception {
+        mockMvc.perform(post(APPROVE_DELIVERABLE_CARD_PATH, 0L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("501").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(approveDeliverableCardUseCase);
     }
 }

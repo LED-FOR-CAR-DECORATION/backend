@@ -12,4 +12,12 @@ public interface EmployeeDirectoryService {
      * @return true if target is an active DESIGNER, false otherwise
      */
     boolean isDesigner(Long employeeId);
+
+    /**
+     * Checks if the employee exists, is active, and possesses the STAFF role.
+     *
+     * @param employeeId target employee ID
+     * @return true if target is an active STAFF member, false otherwise
+     */
+    boolean isStaff(Long employeeId);
 }

@@ -14,6 +14,7 @@ import com.lumintra.backend.shared.exception.media.StorageServiceException;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
 import com.lumintra.backend.shared.exception.store.BundleNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidBundlePriceException;
+import com.lumintra.backend.shared.exception.payment.PaymentSessionNotCancellableException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
 import com.lumintra.backend.shared.exception.store.ProductNotFoundException;
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException;
@@ -194,6 +195,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("LED_INSTANCE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(LedModelNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleLedModelNotFound(LedModelNotFoundException ex) {
+        return buildErrorResponse("LED_MODEL_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
     @ExceptionHandler(InvalidDeviceQrException.class)
     public ResponseEntity<ErrorResponse> handleInvalidDeviceQr(InvalidDeviceQrException ex) {
         return buildErrorResponse("INVALID_DEVICE_QR", ex.getMessage(), HttpStatus.BAD_REQUEST);
@@ -202,6 +208,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DeviceAlreadyBoundException.class)
     public ResponseEntity<ErrorResponse> handleDeviceAlreadyBound(DeviceAlreadyBoundException ex) {
         return buildErrorResponse("DEVICE_ALREADY_BOUND", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(DuplicateLedModelNameException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateLedModelName(DuplicateLedModelNameException ex) {
+        return buildErrorResponse("DUPLICATE_LED_MODEL_NAME", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(LedModelDimensionsLockedException.class)
+    public ResponseEntity<ErrorResponse> handleLedModelDimensionsLocked(LedModelDimensionsLockedException ex) {
+        return buildErrorResponse("LED_MODEL_DIMENSIONS_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(DeviceOwnershipMismatchException.class)
@@ -255,6 +271,12 @@ public class GlobalExceptionHandler {
     }
 
     // Payment exceptions
+    @ExceptionHandler(PaymentSessionNotCancellableException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentSessionNotCancellable(
+            PaymentSessionNotCancellableException ex) {
+        return buildErrorResponse("PAYMENT_SESSION_NOT_CANCELLABLE", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(PaymentSessionNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePaymentSessionNotFound(PaymentSessionNotFoundException ex) {
         return buildErrorResponse("PAYMENT_SESSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
@@ -431,6 +453,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("COMMISSION_TIER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(PricingRuleInUseException.class)
+    public ResponseEntity<ErrorResponse> handlePricingRuleInUse(PricingRuleInUseException ex) {
+        return buildErrorResponse("PRICING_RULE_IN_USE", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(SystemRuleLockedException.class)
     public ResponseEntity<ErrorResponse> handleSystemRuleLocked(SystemRuleLockedException ex) {
         return buildErrorResponse("SYSTEM_RULE_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
@@ -474,6 +501,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCommissionStatusTransitionException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCommissionStatusTransition(InvalidCommissionStatusTransitionException ex) {
         return buildErrorResponse("INVALID_COMMISSION_STATUS_TRANSITION", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(InvalidStaffAssignmentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidStaffAssignment(InvalidStaffAssignmentException ex) {
+        return buildErrorResponse("INVALID_STAFF_ASSIGNMENT", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(InvalidCommissionReassignmentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCommissionReassignment(InvalidCommissionReassignmentException ex) {
+        return buildErrorResponse("INVALID_COMMISSION_REASSIGNMENT", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(InvalidDesignerAssignmentException.class)

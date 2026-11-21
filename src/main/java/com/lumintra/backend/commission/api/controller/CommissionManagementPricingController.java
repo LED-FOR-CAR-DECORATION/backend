@@ -61,7 +61,12 @@ public class CommissionManagementPricingController {
 
     @PatchMapping("/rules/{ruleId}")
     @Operation(summary = "Update a commission pricing rule",
-            description = "Updates labels, instructions and prices and adds options to eligible choice rules. Only custom rules can change the required flag.")
+            description = "Partial update; null fields keep their value. System rules: name, description, display order and "
+                    + "option label/price/modifierType/isActive/displayOrder; rule code, selection type, UI type, base flag, "
+                    + "quantity bounds, required flag, dependency, rule deactivation and removal of core options are locked (409). "
+                    + "Custom rules: also UI type, base flag, quantity bounds, required/active flags and an acyclic dependency "
+                    + "(max depth 5). Options are soft-deactivated; deactivating anything an active preset or rule still uses "
+                    + "returns 409 PRICING_RULE_IN_USE. Validation failures return 400, unknown rule 404.")
     public ResponseEntity<ApiResponse<ManagementPricingRuleResponse>> updatePricingRule(
             @PathVariable @Positive Long ruleId,
             @Valid @RequestBody UpdatePricingRuleRequest request) {

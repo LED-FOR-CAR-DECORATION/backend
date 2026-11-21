@@ -6,6 +6,7 @@ import com.lumintra.backend.shared.exception.store.StoreProductReferenceExceptio
 import com.lumintra.backend.shared.exception.store.StoreProductReferenceException.Reason;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -19,6 +20,16 @@ public class CharacterProductLinkServiceImpl implements CharacterProductLinkServ
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void linkVersion(long versionId, long productId) {
+        link(versionId, productId, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void linkOwnedVersion(long versionId, long productId, long designerEmployeeId) {
+        link(versionId, productId, designerEmployeeId);
+    }
+
+    private void link(long versionId, long productId, Long designerEmployeeId) {
         var version =
                 versions.findForProductLink(versionId)
                         .orElseThrow(
@@ -26,6 +37,9 @@ public class CharacterProductLinkServiceImpl implements CharacterProductLinkServ
                                         new StoreProductReferenceException(
                                                 Reason.CHARACTER_VERSION_NOT_FOUND,
                                                 "Character version not found."));
+        if (designerEmployeeId != null && !version.getCharacter().isOwnedBy(designerEmployeeId)) {
+            throw new AccessDeniedException("Only the designer who owns this character can submit it for sale.");
+        }
         if (version.getProductId() != null) {
             throw new StoreProductReferenceException(
                     Reason.CHARACTER_VERSION_ALREADY_LINKED,

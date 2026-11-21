@@ -10,7 +10,8 @@ import com.lumintra.backend.commission.infrastructure.persistence.entity.Commiss
 import com.lumintra.backend.commission.infrastructure.persistence.mapper.CommissionMessageMapper;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionMessageRepository;
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
-import com.lumintra.backend.media.domain.service.MediaUrlValidator;
+import com.lumintra.backend.media.domain.model.MediaPurpose;
+import com.lumintra.backend.media.domain.service.PrivateMediaReferenceValidator;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.commission.CommissionStaffLockException;
@@ -33,7 +34,7 @@ public class SendCommissionMessageUseCase {
     private final CommissionMessageRepository commissionMessageRepository;
     private final CommissionMessageMapper commissionMessageMapper;
     private final CommissionChatBroadcastPort chatBroadcastPort;
-    private final MediaUrlValidator mediaUrlValidator;
+    private final PrivateMediaReferenceValidator privateMediaReferenceValidator;
 
     @Transactional
     public CommissionMessageResponse execute(
@@ -71,7 +72,7 @@ public class SendCommissionMessageUseCase {
             commissionRequestRepository.save(commission);
         }
 
-        ValidatedPayload payload = validateAndNormalizePayload(request);
+        ValidatedPayload payload = validateAndNormalizePayload(commissionId, request);
 
         CommissionMessageEntity entity = CommissionMessageEntity.create(
                 commissionId,
@@ -120,7 +121,7 @@ public class SendCommissionMessageUseCase {
         }
     }
 
-    private ValidatedPayload validateAndNormalizePayload(SendCommissionMessageRequest request) {
+    private ValidatedPayload validateAndNormalizePayload(Long commissionId, SendCommissionMessageRequest request) {
         if (request == null) {
             throw new InvalidRuleConfigurationException("Message request payload is required.");
         }
@@ -140,13 +141,14 @@ public class SendCommissionMessageUseCase {
             return new ValidatedPayload(CommissionMessageType.TEXT, request.content(), null);
         }
 
-        // IMAGE message validation (MED-01 AC05 URL domain verification)
+        // IMAGE message validation: must be a COMMISSION_CHAT upload for this commission; the object key is persisted
         if (request.mediaUrl() == null || request.mediaUrl().isBlank()) {
             throw new InvalidRuleConfigurationException("IMAGE messages require a valid mediaUrl.");
         }
-        mediaUrlValidator.validateMediaUrl(request.mediaUrl());
+        String objectKey = privateMediaReferenceValidator.requireOwnedObjectKey(
+                request.mediaUrl(), MediaPurpose.COMMISSION_CHAT, commissionId);
         String resolvedCaption = request.content() != null ? request.content() : "";
-        return new ValidatedPayload(CommissionMessageType.IMAGE, resolvedCaption, request.mediaUrl());
+        return new ValidatedPayload(CommissionMessageType.IMAGE, resolvedCaption, objectKey);
     }
 
     private record ValidatedPayload(

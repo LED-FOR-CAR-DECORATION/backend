@@ -1,5 +1,6 @@
 package com.lumintra.backend.commission.infrastructure.persistence.entity;
 
+import com.lumintra.backend.commission.domain.model.CommissionRevisionEstimatePolicy;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -155,6 +156,68 @@ public class CommissionRequestEntity {
 
     public boolean isOwnedBy(Long candidateCustomerId) {
         return candidateCustomerId != null && Objects.equals(this.customerId, candidateCustomerId);
+    }
+
+    /**
+     * CMS-17 AC02: Records the staff-approved submission as delivered preview, starts the
+     * auto-complete countdown and transitions the commission to PREVIEW_DELIVERED.
+     */
+    public void deliverPreview(Long submissionId, Instant autoCompleteAt) {
+        this.approvedSubmissionId = submissionId;
+        this.autoCompleteAt = autoCompleteAt;
+        this.status = CommissionStatus.PREVIEW_DELIVERED;
+    }
+
+    /**
+     * CMS-26 AC01: the initial quote's payment session expired unpaid; PENDING_PAYMENT to EXPIRED.
+     * {@code quoteExpiresAt} is kept so the customer can still see when the quote ran out.
+     */
+    public void expireQuote() {
+        if (this.status != CommissionStatus.PENDING_PAYMENT) {
+            throw new IllegalStateException(
+                    "Commission " + this.commissionId + " must be PENDING_PAYMENT to expire its quote (was " + this.status + ")");
+        }
+        this.activePaymentCode = null;
+        this.status = CommissionStatus.EXPIRED;
+    }
+
+    /**
+     * CMS-18 AC02: Finalizes the commission with the customer-accepted submission,
+     * stops the auto-complete countdown and transitions PREVIEW_DELIVERED to COMPLETED.
+     */
+    public void complete(Long acceptedSubmissionId) {
+        if (this.status != CommissionStatus.PREVIEW_DELIVERED) {
+            throw new IllegalStateException(
+                    "Commission " + this.commissionId + " must be PREVIEW_DELIVERED to complete (was " + this.status + ")");
+        }
+        this.approvedSubmissionId = acceptedSubmissionId;
+        this.autoCompleteAt = null;
+        this.status = CommissionStatus.COMPLETED;
+    }
+
+    /**
+     * CMS-20/21: an agreed revision goes straight to the designer, who must estimate it within
+     * the estimate window (BR-FL3-13). {@code sla_due_at} becomes the estimate deadline.
+     */
+    public void awaitRevisionEstimate(Instant now) {
+        this.status = CommissionStatus.AWAITING_ESTIMATE;
+        this.slaDueAt = now.plus(CommissionRevisionEstimatePolicy.ESTIMATE_WINDOW);
+        this.isSlaOverdue = false;
+        this.autoCompleteAt = null;
+    }
+
+    /**
+     * CMS-24 / CMS-28: the revision estimate is set; {@code sla_due_at} becomes the designer's
+     * delivery deadline and work starts (AWAITING_ESTIMATE to IN_PROGRESS).
+     */
+    public void startRevisionWork(Instant designerDueAt) {
+        if (this.status != CommissionStatus.AWAITING_ESTIMATE) {
+            throw new IllegalStateException(
+                    "Commission " + this.commissionId + " must be AWAITING_ESTIMATE to start revision work (was " + this.status + ")");
+        }
+        this.slaDueAt = designerDueAt;
+        this.isSlaOverdue = false;
+        this.status = CommissionStatus.IN_PROGRESS;
     }
 
     public String resolveActivePaymentCode() {

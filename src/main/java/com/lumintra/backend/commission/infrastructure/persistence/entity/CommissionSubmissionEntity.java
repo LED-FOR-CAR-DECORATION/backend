@@ -55,6 +55,10 @@ public class CommissionSubmissionEntity {
     @Column(name = "designer_note", columnDefinition = "TEXT")
     private String designerNote;
 
+    /** Revision brief this draft answers; null for drafts of the original request. */
+    @Column(name = "revision_request_id")
+    private Long revisionRequestId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 40)
     @Builder.Default
@@ -90,6 +94,35 @@ public class CommissionSubmissionEntity {
                 .designerNote(designerNote != null && !designerNote.isBlank() ? designerNote.trim() : null)
                 .status(CommissionSubmissionStatus.PENDING_STAFF_REVIEW)
                 .build();
+    }
+
+    public boolean isPendingStaffReview() {
+        return this.status == CommissionSubmissionStatus.PENDING_STAFF_REVIEW;
+    }
+
+    /**
+     * CMS-17 AC02: Staff approves this draft for customer delivery.
+     */
+    public void approveByStaff(Long staffId, Instant approvedAt) {
+        this.status = CommissionSubmissionStatus.STAFF_APPROVED;
+        this.reviewerStaffId = staffId;
+        this.reviewedAt = approvedAt;
+        this.deliveredAt = approvedAt;
+    }
+
+    public boolean isStaffApproved() {
+        return this.status == CommissionSubmissionStatus.STAFF_APPROVED;
+    }
+
+    /**
+     * CMS-18 AC02: Customer accepts the delivered preview backing the Deliverable Card.
+     */
+    public void acceptByCustomer() {
+        if (!isStaffApproved()) {
+            throw new IllegalStateException(
+                    "Submission " + this.submissionId + " must be STAFF_APPROVED to be accepted (was " + this.status + ")");
+        }
+        this.status = CommissionSubmissionStatus.CUSTOMER_ACCEPTED;
     }
 
     public boolean isCustomerVisible() {

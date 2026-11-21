@@ -18,7 +18,7 @@ public class FirebaseStorageConfig {
 
     private static final Logger log = LoggerFactory.getLogger(FirebaseStorageConfig.class);
 
-    @Value("${lumintra.storage.firebase.credentials-base64:}")
+    @Value("${app.firebase.credentials-base64:}")
     private String credentialsBase64;
 
     @Bean

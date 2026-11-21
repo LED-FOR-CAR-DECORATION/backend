@@ -23,6 +23,8 @@ public interface LedInstanceRepository extends JpaRepository<LedInstanceEntity, 
 
     boolean existsByMacAddress(String macAddress);
 
+    boolean existsByModelId(Long modelId);
+
     Optional<LedInstanceEntity> findBySerialNumber(String serialNumber);
 
     Optional<LedInstanceEntity> findBySerialNumberAndMacAddress(String serialNumber, String macAddress);

@@ -66,8 +66,8 @@ public record CustomerCommissionDetailResponse(
         @Schema(description = "ISO-8601 UTC expiration timestamp for initial quote payment (`PENDING_PAYMENT`)", example = "2026-11-17T09:00:00Z", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         Instant quoteExpiresAt,
 
-        @Schema(description = "ISO-8601 UTC target delivery deadline for the current draft or revision", example = "2026-11-19T09:00:00Z", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-        Instant slaDueAt,
+        @Schema(description = "ISO-8601 UTC delivery deadline promised to the customer for the draft or revision being worked on: the designer's deadline plus a 24h buffer (BR-FL3-14). Null when no draft is being worked on, including while the designer is still estimating a revision.", example = "2026-11-20T09:00:00Z", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        Instant estimatedDeliveryAt,
 
         @Schema(description = "ISO-8601 UTC timestamp when a delivered preview will auto-complete if no customer action is taken", example = "2026-11-23T09:00:00Z", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         Instant autoCompleteAt,
