@@ -1,7 +1,10 @@
 package com.lumintra.backend.device.api.controller;
 
+import com.lumintra.backend.device.api.request.FirmwareFilterRequest;
 import com.lumintra.backend.device.api.request.UploadFirmwareRequest;
+import com.lumintra.backend.device.api.response.FirmwareReleaseResponse;
 import com.lumintra.backend.device.api.response.UploadFirmwareResponse;
+import com.lumintra.backend.device.application.ListFirmwareReleasesUseCase;
 import com.lumintra.backend.device.application.UploadFirmwareUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -21,10 +24,13 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/management/admin/firmware")
@@ -33,6 +39,33 @@ import org.springframework.web.bind.annotation.RestController;
 public class ManagedFirmwareController {
 
     private final UploadFirmwareUseCase uploadFirmwareUseCase;
+    private final ListFirmwareReleasesUseCase listFirmwareReleasesUseCase;
+
+    @Operation(
+            summary = "List firmware releases (DEV-11)",
+            description = "ADMIN only (BR-FL4-04). Paginated catalog (size up to 100) filtered by modelId and status "
+                    + "(ACTIVE, SUPERSEDED, DEPRECATED), newest upload first. Items are in data, paging in meta. "
+                    + "installedDeviceCount is the number of customer-bound (BOUND) devices recorded on the release. "
+                    + "status=ACTIVE&size=1 returns the latest ACTIVE release.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Firmware releases retrieved"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "VALIDATION_FAILED: invalid page, size, modelId or status",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Missing or invalid JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not ADMIN",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<FirmwareReleaseResponse>>> listFirmwareReleases(
+            @Valid @ModelAttribute FirmwareFilterRequest filter) {
+        ListFirmwareReleasesUseCase.Result result = listFirmwareReleasesUseCase.execute(filter);
+        return ResponseEntity.ok(ApiResponse.success(result.items(), result.meta()));
+    }
 
     @Operation(
             summary = "Upload a firmware release (DEV-12)",

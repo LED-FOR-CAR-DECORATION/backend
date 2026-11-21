@@ -13,7 +13,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
+import com.lumintra.backend.device.api.request.FirmwareFilterRequest;
+import com.lumintra.backend.device.infrastructure.persistence.repository.FirmwareVersionSpecifications;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
@@ -124,5 +128,31 @@ class FirmwareQueriesPersistenceTest {
                         LedInstanceRepository.FirmwareInstallCount::getDeviceCount));
 
         assertThat(counts).containsExactly(Map.entry(a, 2L));
+    }
+
+    @Test
+    @DisplayName("DEV-11 Persistence [N]: Catalog filters by model and status and sorts newest upload first")
+    void catalogSpecification_filtersAndSorts() {
+        FirmwareVersionEntity oldest = firmwareRepository.save(FirmwareVersionEntity.create(500L, "1.0.0", null,
+                "k1", 1L, "c".repeat(64), FirmwareStatus.SUPERSEDED, 1L, Instant.parse("2026-11-01T00:00:00Z")));
+        FirmwareVersionEntity newest = firmwareRepository.save(FirmwareVersionEntity.create(500L, "1.2.0", null,
+                "k2", 1L, "c".repeat(64), FirmwareStatus.ACTIVE, 1L, Instant.parse("2026-11-20T00:00:00Z")));
+        FirmwareVersionEntity middle = firmwareRepository.save(FirmwareVersionEntity.create(500L, "1.1.0", null,
+                "k3", 1L, "c".repeat(64), FirmwareStatus.DEPRECATED, 1L, Instant.parse("2026-11-10T00:00:00Z")));
+        firmwareRepository.save(FirmwareVersionEntity.create(501L, "9.0.0", null,
+                "k4", 1L, "c".repeat(64), FirmwareStatus.ACTIVE, 1L, Instant.parse("2026-11-21T00:00:00Z")));
+        Sort sort = Sort.by(Sort.Order.desc("uploadedAt"), Sort.Order.desc("firmwareId"));
+
+        var byModel = firmwareRepository.findAll(
+                FirmwareVersionSpecifications.withFilter(new FirmwareFilterRequest(0, 20, 500L, null)),
+                PageRequest.of(0, 20, sort));
+        assertThat(byModel.getContent()).extracting(FirmwareVersionEntity::getFirmwareId)
+                .containsExactly(newest.getFirmwareId(), middle.getFirmwareId(), oldest.getFirmwareId());
+
+        var latestActive = firmwareRepository.findAll(
+                FirmwareVersionSpecifications.withFilter(new FirmwareFilterRequest(0, 1, null, FirmwareStatus.ACTIVE)),
+                PageRequest.of(0, 1, sort));
+        assertThat(latestActive.getContent()).extracting(FirmwareVersionEntity::getVersion).containsExactly("9.0.0");
+        assertThat(latestActive.getTotalElements()).isEqualTo(2);
     }
 }

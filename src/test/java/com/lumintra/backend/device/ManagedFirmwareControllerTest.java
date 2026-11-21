@@ -3,7 +3,11 @@ package com.lumintra.backend.device;
 import com.lumintra.backend.device.api.controller.ManagedFirmwareController;
 import com.lumintra.backend.device.api.request.UploadFirmwareRequest;
 import com.lumintra.backend.device.api.response.UploadFirmwareResponse;
+import com.lumintra.backend.device.api.request.FirmwareFilterRequest;
+import com.lumintra.backend.device.api.response.FirmwareReleaseResponse;
+import com.lumintra.backend.device.application.ListFirmwareReleasesUseCase;
 import com.lumintra.backend.device.application.UploadFirmwareUseCase;
+import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.device.domain.model.FirmwareStatus;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
@@ -27,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
@@ -35,6 +40,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -50,6 +56,9 @@ class ManagedFirmwareControllerTest {
 
     @MockitoBean
     private UploadFirmwareUseCase uploadFirmwareUseCase;
+
+    @MockitoBean
+    private ListFirmwareReleasesUseCase listFirmwareReleasesUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -152,5 +161,72 @@ class ManagedFirmwareControllerTest {
         mockMvc.perform(validUpload().with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("FIRMWARE_VERSION_CONFLICT"));
+    }
+
+    private static ListFirmwareReleasesUseCase.Result sampleList() {
+        FirmwareReleaseResponse release = FirmwareReleaseResponse.builder()
+                .firmwareId(12L).modelId(3L).modelName("Matrix 64x64").version("1.2.0").status(FirmwareStatus.ACTIVE)
+                .changelog("Fix BLE").fileSizeBytes(2048L).sha256("e".repeat(64)).uploadedBy("Nguyen Van A")
+                .uploadedAt(Instant.parse("2026-11-20T10:00:00Z")).installedDeviceCount(5L).build();
+        PaginationMeta meta = PaginationMeta.builder().page(0).size(1).totalElements(1).totalPages(1)
+                .hasNext(false).hasPrevious(false).build();
+        return new ListFirmwareReleasesUseCase.Result(List.of(release), meta);
+    }
+
+    @Test
+    @DisplayName("DEV-11 Controller UTCID01 [N]: ADMIN lists releases with filters; items in data and paging in meta")
+    void list_admin_returnsDataAndMeta() throws Exception {
+        when(listFirmwareReleasesUseCase.execute(any(FirmwareFilterRequest.class))).thenReturn(sampleList());
+
+        mockMvc.perform(get(PATH).param("status", "ACTIVE").param("size", "1").param("modelId", "3")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].firmwareId").value(12))
+                .andExpect(jsonPath("$.data[0].modelName").value("Matrix 64x64"))
+                .andExpect(jsonPath("$.data[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data[0].uploadedBy").value("Nguyen Van A"))
+                .andExpect(jsonPath("$.data[0].deprecatedBy").value(nullValue()))
+                .andExpect(jsonPath("$.data[0].installedDeviceCount").value(5))
+                .andExpect(jsonPath("$.meta.page").value(0))
+                .andExpect(jsonPath("$.meta.size").value(1))
+                .andExpect(jsonPath("$.meta.totalElements").value(1))
+                .andExpect(jsonPath("$.meta.totalPages").value(1));
+        verify(listFirmwareReleasesUseCase).execute(new FirmwareFilterRequest(0, 1, 3L, FirmwareStatus.ACTIVE));
+    }
+
+    @Test
+    @DisplayName("DEV-11 Controller UTCID02 [B]: Defaults page 0 size 20; size 100 is accepted")
+    void list_defaultsAndMaxSize() throws Exception {
+        when(listFirmwareReleasesUseCase.execute(any(FirmwareFilterRequest.class))).thenReturn(sampleList());
+
+        mockMvc.perform(get(PATH).with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(PATH).param("size", "100").with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                .andExpect(status().isOk());
+        verify(listFirmwareReleasesUseCase).execute(new FirmwareFilterRequest(0, 20, null, null));
+        verify(listFirmwareReleasesUseCase).execute(new FirmwareFilterRequest(0, 100, null, null));
+    }
+
+    @Test
+    @DisplayName("DEV-11 Controller UTCID03 [A]: Invalid size, page, modelId or status returns 400")
+    void list_invalidParams_returns400() throws Exception {
+        String[][] invalid = {{"size", "101"}, {"size", "0"}, {"page", "-1"}, {"modelId", "0"}, {"status", "BROKEN"}};
+        for (String[] param : invalid) {
+            mockMvc.perform(get(PATH).param(param[0], param[1])
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                    .andExpect(status().isBadRequest());
+        }
+        verifyNoInteractions(listFirmwareReleasesUseCase);
+    }
+
+    @Test
+    @DisplayName("DEV-11 Controller UTCID04 [A]: Non-ADMIN roles get 403 and anonymous callers get 401")
+    void list_nonAdmin_isRejected() throws Exception {
+        for (String role : new String[]{"MANAGER", "STAFF", "CUSTOMER"}) {
+            mockMvc.perform(get(PATH).with(SecurityMockMvcRequestPostProcessors.user("7").roles(role)))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(get(PATH)).andExpect(status().isUnauthorized());
+        verifyNoInteractions(listFirmwareReleasesUseCase);
     }
 }
