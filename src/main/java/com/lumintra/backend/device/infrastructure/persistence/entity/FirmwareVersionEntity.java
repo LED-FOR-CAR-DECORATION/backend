@@ -63,8 +63,9 @@ public class FirmwareVersionEntity {
     @Column(name = "status", nullable = false, length = 20)
     private FirmwareStatus status = FirmwareStatus.ACTIVE;
 
-    @Column(name = "uploaded_by_user_id")
-    private Long uploadedByUserId;
+    /** Employee id of the ADMIN who uploaded the release. */
+    @Column(name = "uploaded_by_employee_id")
+    private Long uploadedByEmployeeId;
 
     @Column(name = "uploaded_at", nullable = false)
     private Instant uploadedAt;
@@ -72,8 +73,8 @@ public class FirmwareVersionEntity {
     @Column(name = "deprecated_at")
     private Instant deprecatedAt;
 
-    @Column(name = "deprecated_by_user_id")
-    private Long deprecatedByUserId;
+    @Column(name = "deprecated_by_employee_id")
+    private Long deprecatedByEmployeeId;
 
     @Column(name = "deprecation_reason", length = 1000)
     private String deprecationReason;
@@ -86,6 +87,11 @@ public class FirmwareVersionEntity {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    /** Moves a previously ACTIVE release aside when a newer one is uploaded. */
+    public void supersede() {
+        this.status = FirmwareStatus.SUPERSEDED;
+    }
+
     public static FirmwareVersionEntity create(
             Long modelId,
             String version,
@@ -94,7 +100,7 @@ public class FirmwareVersionEntity {
             long fileSizeBytes,
             String sha256,
             FirmwareStatus status,
-            Long uploadedByUserId,
+            Long uploadedByEmployeeId,
             Instant uploadedAt) {
         FirmwareVersionEntity entity = new FirmwareVersionEntity();
         entity.modelId = modelId;
@@ -104,7 +110,7 @@ public class FirmwareVersionEntity {
         entity.fileSizeBytes = fileSizeBytes;
         entity.sha256 = sha256;
         entity.status = status != null ? status : FirmwareStatus.ACTIVE;
-        entity.uploadedByUserId = uploadedByUserId;
+        entity.uploadedByEmployeeId = uploadedByEmployeeId;
         entity.uploadedAt = uploadedAt;
         return entity;
     }
