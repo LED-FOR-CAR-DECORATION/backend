@@ -6,6 +6,7 @@ import com.lumintra.backend.shared.response.PaginationMeta;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
+import java.time.Instant;
 import java.util.List;
 
 @Schema(description = "Paginated list of LED hardware models for internal catalog and inventory management")
@@ -54,7 +55,34 @@ public record LedModelListResponse(
             LedModelStatus status,
 
             @Schema(description = "Structured technical specifications including canvas dimensions and ordered attributes", requiredMode = Schema.RequiredMode.REQUIRED)
-            LedSpec spec
+            LedSpec spec,
+
+            @Schema(
+                    description = "Current ACTIVE firmware release for this model, or null when the model has no ACTIVE release",
+                    nullable = true,
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED
+            )
+            ActiveFirmwareSummary activeFirmware
+    ) {}
+
+    @Schema(description = "Summary of the ACTIVE firmware release of an LED model")
+    @Builder
+    public record ActiveFirmwareSummary(
+            @Schema(description = "Firmware release identifier", example = "12", requiredMode = Schema.RequiredMode.REQUIRED)
+            Long firmwareId,
+
+            @Schema(description = "Semantic firmware version", example = "1.2.0", requiredMode = Schema.RequiredMode.REQUIRED)
+            String version,
+
+            @Schema(description = "When the release was uploaded (UTC)", example = "2026-11-20T10:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
+            Instant uploadedAt,
+
+            @Schema(
+                    description = "Number of customer-bound (BOUND) devices whose recorded firmware is this release",
+                    example = "5",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            long installedDeviceCount
     ) {}
 
     @Schema(description = "Structured technical specifications for an LED hardware model")

@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Use case for listing and filtering LED hardware models for internal catalog management.
@@ -30,6 +31,7 @@ public class ListLedModelsUseCase {
 
     private final LedModelRepository ledModelRepository;
     private final LedModelMapper ledModelMapper;
+    private final ActiveFirmwareSummaryResolver activeFirmwareResolver;
 
     @Transactional(readOnly = true)
     public LedModelListResponse execute(LedModelFilterRequest request) {
@@ -46,8 +48,11 @@ public class ListLedModelsUseCase {
                 LedModelSpecifications.withFilter(effective),
                 pageable);
 
+        Map<Long, LedModelListResponse.ActiveFirmwareSummary> activeFirmwareByModel = activeFirmwareResolver.resolve(
+                page.getContent().stream().map(LedModelEntity::getModelId).toList());
+
         List<LedModelListResponse.LedModelItem> items = page.getContent().stream()
-                .map(ledModelMapper::toItem)
+                .map(entity -> ledModelMapper.toItem(entity, activeFirmwareByModel.get(entity.getModelId())))
                 .toList();
 
         log.info("Listed LED hardware models [page={}] [size={}] [totalElements={}] [status={}] [unlinkedOnly={}] [lowStockOnly={}]",

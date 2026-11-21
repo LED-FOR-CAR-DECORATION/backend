@@ -55,7 +55,7 @@ public class ManagedLedModelController {
 
     @Operation(
             summary = "List LED hardware models",
-            description = "Retrieves a paginated list of LED hardware models and warehouse inventory counts for internal ADMIN, MANAGER, and STAFF users. Supports filtering by status, canvas dimensions (widthPx/heightPx), unlinked Store product status, low-stock threshold (< 5), and case-insensitive modelName keyword."
+            description = "Retrieves a paginated list of LED hardware models and warehouse inventory counts for internal ADMIN, MANAGER, and STAFF users. Supports filtering by status, canvas dimensions (widthPx/heightPx), unlinked Store product status, low-stock threshold (< 5), and case-insensitive modelName keyword. Each item includes `activeFirmware` (firmwareId, version, uploadedAt, installedDeviceCount of BOUND devices) or null when the model has no ACTIVE firmware release; releases and counts are fetched in batch for the whole page."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {
