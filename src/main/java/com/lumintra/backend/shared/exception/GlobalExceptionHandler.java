@@ -200,6 +200,23 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("LED_MODEL_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(InvalidFirmwareBinaryException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidFirmwareBinary(InvalidFirmwareBinaryException ex) {
+        return buildErrorResponse("INVALID_FIRMWARE_BINARY", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(FirmwareVersionConflictException.class)
+    public ResponseEntity<ErrorResponse> handleFirmwareVersionConflict(FirmwareVersionConflictException ex) {
+        return buildErrorResponse("FIRMWARE_VERSION_CONFLICT", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return buildErrorResponse("PAYLOAD_TOO_LARGE", "Uploaded file exceeds the server upload limit.",
+                HttpStatus.CONTENT_TOO_LARGE);
+    }
+
     @ExceptionHandler(InvalidDeviceQrException.class)
     public ResponseEntity<ErrorResponse> handleInvalidDeviceQr(InvalidDeviceQrException ex) {
         return buildErrorResponse("INVALID_DEVICE_QR", ex.getMessage(), HttpStatus.BAD_REQUEST);

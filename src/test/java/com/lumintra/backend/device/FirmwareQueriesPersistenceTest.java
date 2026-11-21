@@ -72,6 +72,39 @@ class FirmwareQueriesPersistenceTest {
                 .containsExactlyInAnyOrder(activeOne.getFirmwareId(), activeTwo.getFirmwareId());
     }
 
+    @Autowired
+    private LedModelRepository modelRepository;
+
+    @Test
+    @DisplayName("DEV-12 Persistence [N]: findByModelId returns every release of the model and the row lock query loads the model")
+    void findByModelId_andLockedModelLookup() {
+        LedModelEntity model = modelRepository.save(LedModelEntity.createStandalone(
+                "Firmware Lock Model", 64, 64, Map.of("widthPx", 64, "heightPx", 64), 5L));
+        saveFirmware(model.getModelId(), "1.0.0", FirmwareStatus.SUPERSEDED);
+        saveFirmware(model.getModelId(), "1.1.0", FirmwareStatus.DEPRECATED);
+        saveFirmware(model.getModelId(), "1.2.0", FirmwareStatus.ACTIVE);
+        saveFirmware(model.getModelId() + 1000, "9.0.0", FirmwareStatus.ACTIVE);
+
+        assertThat(firmwareRepository.findByModelId(model.getModelId()))
+                .extracting(FirmwareVersionEntity::getVersion)
+                .containsExactlyInAnyOrder("1.0.0", "1.1.0", "1.2.0");
+        assertThat(modelRepository.findByIdForUpdate(model.getModelId()))
+                .get().extracting(LedModelEntity::getModelName).isEqualTo("Firmware Lock Model");
+        assertThat(modelRepository.findByIdForUpdate(-1L)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("DEV-12 Persistence [A]: The same version cannot be stored twice for one model")
+    void uniqueModelVersion_isEnforced() {
+        saveFirmware(77L, "1.0.0", FirmwareStatus.ACTIVE);
+        firmwareRepository.flush();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> {
+            saveFirmware(77L, "1.0.0", FirmwareStatus.ACTIVE);
+            firmwareRepository.flush();
+        }).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
     @Test
     @DisplayName("#284 Persistence [N]: Installed counts group BOUND devices per firmware and ignore other statuses")
     void countBoundDevicesByFirmwareIds_countsOnlyBoundDevices() {

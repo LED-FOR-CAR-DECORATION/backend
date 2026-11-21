@@ -13,4 +13,7 @@ public interface FirmwareVersionRepository extends JpaRepository<FirmwareVersion
 
     /** Batch lookup for a page of models; one query regardless of page size. */
     List<FirmwareVersionEntity> findByModelIdInAndStatus(Collection<Long> modelIds, FirmwareStatus status);
+
+    /** Every release of a model, any status; used to keep versions unique and increasing. */
+    List<FirmwareVersionEntity> findByModelId(Long modelId);
 }
