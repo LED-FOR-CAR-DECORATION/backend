@@ -485,7 +485,7 @@ public class DeviceController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403",
                     description = "Not a CUSTOMER, or DEVICE_OWNERSHIP_MISMATCH",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "DEVICE_NOT_FOUND",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "LED_INSTANCE_NOT_FOUND",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "DEVICE_NOT_BOUND",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))

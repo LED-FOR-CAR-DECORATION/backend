@@ -9,7 +9,7 @@ import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstance
 import com.lumintra.backend.device.infrastructure.persistence.repository.FirmwareVersionRepository;
 import com.lumintra.backend.device.infrastructure.persistence.repository.LedInstanceRepository;
 import com.lumintra.backend.shared.exception.device.DeviceNotBoundException;
-import com.lumintra.backend.shared.exception.device.DeviceNotFoundException;
+import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException;
 import com.lumintra.backend.shared.exception.device.DeviceOwnershipMismatchException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -155,7 +155,7 @@ class CheckFirmwareUpdateUseCaseTest {
     @DisplayName("DEV-10 UTCID08 [A]: Unknown device, someone else's device or a device not BOUND is rejected")
     void execute_deviceChecks_reject() {
         when(ledInstanceRepository.findById(404L)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> useCase.execute(CUSTOMER, 404L, null)).isInstanceOf(DeviceNotFoundException.class);
+        assertThatThrownBy(() -> useCase.execute(CUSTOMER, 404L, null)).isInstanceOf(LedInstanceNotFoundException.class);
 
         assertThatThrownBy(() -> useCase.execute(99L, DEVICE, null)).isInstanceOf(DeviceOwnershipMismatchException.class);
 

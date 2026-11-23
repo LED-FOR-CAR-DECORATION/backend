@@ -10,7 +10,7 @@ import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstance
 import com.lumintra.backend.device.infrastructure.persistence.repository.FirmwareVersionRepository;
 import com.lumintra.backend.device.infrastructure.persistence.repository.LedInstanceRepository;
 import com.lumintra.backend.shared.exception.device.DeviceNotBoundException;
-import com.lumintra.backend.shared.exception.device.DeviceNotFoundException;
+import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException;
 import com.lumintra.backend.shared.exception.device.DeviceOwnershipMismatchException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -40,7 +40,7 @@ public class CheckFirmwareUpdateUseCase {
     @Transactional(readOnly = true)
     public OtaCheckResponse execute(Long customerId, Long deviceId, String reportedVersion) {
         LedInstanceEntity device = ledInstanceRepository.findById(deviceId)
-                .orElseThrow(() -> new DeviceNotFoundException("LED device with id " + deviceId + " not found."));
+                .orElseThrow(() -> new LedInstanceNotFoundException("LED hardware device not found."));
         if (!Objects.equals(device.getOwnerCustomerId(), customerId)) {
             log.warn("OTA check ownership mismatch [customerId={}] [deviceId={}]", customerId, deviceId);
             throw new DeviceOwnershipMismatchException("You do not own this LED hardware device.");

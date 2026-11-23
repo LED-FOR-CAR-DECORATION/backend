@@ -11,7 +11,7 @@ import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
 import com.lumintra.backend.shared.exception.device.DeviceNotBoundException;
-import com.lumintra.backend.shared.exception.device.DeviceNotFoundException;
+import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException;
 import com.lumintra.backend.shared.exception.device.DeviceOwnershipMismatchException;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
@@ -110,16 +110,16 @@ class DeviceOtaCheckControllerTest {
     }
 
     @Test
-    @DisplayName("DEV-10 Controller UTCID04 [A]: Errors map to DEVICE_NOT_FOUND, DEVICE_OWNERSHIP_MISMATCH and DEVICE_NOT_BOUND")
+    @DisplayName("DEV-10 Controller UTCID04 [A]: Errors map to LED_INSTANCE_NOT_FOUND, DEVICE_OWNERSHIP_MISMATCH and DEVICE_NOT_BOUND")
     void check_useCaseErrors_mapToCodes() throws Exception {
         when(checkFirmwareUpdateUseCase.execute(eq(55L), anyLong(), any()))
-                .thenThrow(new DeviceNotFoundException("missing"))
+                .thenThrow(new LedInstanceNotFoundException("missing"))
                 .thenThrow(new DeviceOwnershipMismatchException("not yours"))
                 .thenThrow(new DeviceNotBoundException("returned"));
 
         mockMvc.perform(get(PATH).with(SecurityMockMvcRequestPostProcessors.user("55").roles("CUSTOMER")))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("DEVICE_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("LED_INSTANCE_NOT_FOUND"));
         mockMvc.perform(get(PATH).with(SecurityMockMvcRequestPostProcessors.user("55").roles("CUSTOMER")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("DEVICE_OWNERSHIP_MISMATCH"));
