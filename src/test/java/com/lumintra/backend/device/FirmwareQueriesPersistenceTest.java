@@ -155,4 +155,13 @@ class FirmwareQueriesPersistenceTest {
         assertThat(latestActive.getContent()).extracting(FirmwareVersionEntity::getVersion).containsExactly("9.0.0");
         assertThat(latestActive.getTotalElements()).isEqualTo(2);
     }
+
+    @Test
+    @DisplayName("DEV-13 Persistence [N]: findModelIdByFirmwareId returns the release's model id or empty")
+    void findModelIdByFirmwareId_returnsModelId() {
+        FirmwareVersionEntity release = saveFirmware(42L, "1.0.0", FirmwareStatus.ACTIVE);
+
+        assertThat(firmwareRepository.findModelIdByFirmwareId(release.getFirmwareId())).contains(42L);
+        assertThat(firmwareRepository.findModelIdByFirmwareId(-1L)).isEmpty();
+    }
 }
