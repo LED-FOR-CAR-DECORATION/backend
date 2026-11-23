@@ -48,6 +48,7 @@ class DeviceOtaCheckControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @MockitoBean private CheckFirmwareUpdateUseCase checkFirmwareUpdateUseCase;
+    @MockitoBean private com.lumintra.backend.device.application.CreateOtaSessionUseCase createOtaSessionUseCase;
     @MockitoBean private ClaimDeviceUseCase claimDeviceUseCase;
     @MockitoBean private ListCustomerDevicesUseCase listCustomerDevicesUseCase;
     @MockitoBean private GetCustomerDeviceDetailUseCase getCustomerDeviceDetailUseCase;

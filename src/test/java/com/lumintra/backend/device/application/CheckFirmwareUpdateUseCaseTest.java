@@ -50,7 +50,7 @@ class CheckFirmwareUpdateUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new CheckFirmwareUpdateUseCase(ledInstanceRepository, firmwareVersionRepository);
+        useCase = new CheckFirmwareUpdateUseCase(new CustomerDeviceAccess(ledInstanceRepository), firmwareVersionRepository);
         device = LedInstanceEntity.createWithState(3L, "SN-1", "AA:BB:CC:00:00:01", null, CUSTOMER, "Car",
                 LedInstanceStatus.BOUND, Instant.now(), Instant.now(), Instant.now());
         device.setInstanceId(DEVICE);

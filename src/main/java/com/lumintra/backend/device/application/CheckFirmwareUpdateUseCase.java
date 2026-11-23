@@ -3,15 +3,10 @@ package com.lumintra.backend.device.application;
 import com.lumintra.backend.device.api.response.OtaCheckResponse;
 import com.lumintra.backend.device.domain.model.FirmwareStatus;
 import com.lumintra.backend.device.domain.model.FirmwareVersionNumber;
-import com.lumintra.backend.device.domain.model.LedInstanceStatus;
 import com.lumintra.backend.device.domain.model.OtaVersionStatus;
 import com.lumintra.backend.device.infrastructure.persistence.entity.FirmwareVersionEntity;
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstanceEntity;
 import com.lumintra.backend.device.infrastructure.persistence.repository.FirmwareVersionRepository;
-import com.lumintra.backend.device.infrastructure.persistence.repository.LedInstanceRepository;
-import com.lumintra.backend.shared.exception.device.DeviceNotBoundException;
-import com.lumintra.backend.shared.exception.device.LedInstanceNotFoundException;
-import com.lumintra.backend.shared.exception.device.DeviceOwnershipMismatchException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,20 +29,12 @@ public class CheckFirmwareUpdateUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(CheckFirmwareUpdateUseCase.class);
 
-    private final LedInstanceRepository ledInstanceRepository;
+    private final CustomerDeviceAccess deviceAccess;
     private final FirmwareVersionRepository firmwareVersionRepository;
 
     @Transactional(readOnly = true)
     public OtaCheckResponse execute(Long customerId, Long deviceId, String reportedVersion) {
-        LedInstanceEntity device = ledInstanceRepository.findById(deviceId)
-                .orElseThrow(() -> new LedInstanceNotFoundException("LED hardware device not found."));
-        if (!Objects.equals(device.getOwnerCustomerId(), customerId)) {
-            log.warn("OTA check ownership mismatch [customerId={}] [deviceId={}]", customerId, deviceId);
-            throw new DeviceOwnershipMismatchException("You do not own this LED hardware device.");
-        }
-        if (device.getStatus() != LedInstanceStatus.BOUND) {
-            throw new DeviceNotBoundException("LED device " + deviceId + " is " + device.getStatus() + ", not BOUND.");
-        }
+        LedInstanceEntity device = deviceAccess.requireOwnedBoundDevice(customerId, deviceId);
 
         List<FirmwareVersionEntity> releases = firmwareVersionRepository.findByModelId(device.getModelId());
         String currentVersion = resolveCurrentVersion(device, reportedVersion);
