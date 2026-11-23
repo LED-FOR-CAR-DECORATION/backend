@@ -210,6 +210,16 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("FIRMWARE_VERSION_CONFLICT", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(FirmwareNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleFirmwareNotFound(FirmwareNotFoundException ex) {
+        return buildErrorResponse("FIRMWARE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(FirmwareAlreadyDeprecatedException.class)
+    public ResponseEntity<ErrorResponse> handleFirmwareAlreadyDeprecated(FirmwareAlreadyDeprecatedException ex) {
+        return buildErrorResponse("FIRMWARE_ALREADY_DEPRECATED", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(
             org.springframework.web.multipart.MaxUploadSizeExceededException ex) {

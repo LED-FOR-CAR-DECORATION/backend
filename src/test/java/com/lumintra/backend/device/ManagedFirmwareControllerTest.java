@@ -5,7 +5,13 @@ import com.lumintra.backend.device.api.request.UploadFirmwareRequest;
 import com.lumintra.backend.device.api.response.UploadFirmwareResponse;
 import com.lumintra.backend.device.api.request.FirmwareFilterRequest;
 import com.lumintra.backend.device.api.response.FirmwareReleaseResponse;
+import com.lumintra.backend.device.api.request.DeprecateFirmwareRequest;
+import com.lumintra.backend.device.api.response.DeprecateFirmwareResponse;
+import com.lumintra.backend.device.application.DeprecateFirmwareUseCase;
 import com.lumintra.backend.device.application.ListFirmwareReleasesUseCase;
+import com.lumintra.backend.shared.exception.device.FirmwareAlreadyDeprecatedException;
+import com.lumintra.backend.shared.exception.device.FirmwareNotFoundException;
+import org.springframework.http.MediaType;
 import com.lumintra.backend.device.application.UploadFirmwareUseCase;
 import com.lumintra.backend.shared.response.PaginationMeta;
 import com.lumintra.backend.device.domain.model.FirmwareStatus;
@@ -42,6 +48,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -59,6 +66,9 @@ class ManagedFirmwareControllerTest {
 
     @MockitoBean
     private ListFirmwareReleasesUseCase listFirmwareReleasesUseCase;
+
+    @MockitoBean
+    private DeprecateFirmwareUseCase deprecateFirmwareUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -228,5 +238,95 @@ class ManagedFirmwareControllerTest {
         }
         mockMvc.perform(get(PATH)).andExpect(status().isUnauthorized());
         verifyNoInteractions(listFirmwareReleasesUseCase);
+    }
+
+    private static FirmwareReleaseResponse releaseWith(long id, String version, FirmwareStatus status) {
+        return FirmwareReleaseResponse.builder()
+                .firmwareId(id).modelId(3L).modelName("Matrix 64x64").version(version).status(status)
+                .changelog("notes").fileSizeBytes(2048L).sha256("a".repeat(64)).uploadedBy("Nguyen Van A")
+                .uploadedAt(Instant.parse("2026-11-20T10:00:00Z")).installedDeviceCount(0L).build();
+    }
+
+    @Test
+    @DisplayName("DEV-13 Controller UTCID01 [N]: ADMIN deprecates a release and receives deprecated, newActiveFirmware, affectedDeviceCount")
+    void deprecate_admin_returns200() throws Exception {
+        when(deprecateFirmwareUseCase.execute(eq("7"), eq(12L), any(DeprecateFirmwareRequest.class)))
+                .thenReturn(new DeprecateFirmwareResponse(
+                        releaseWith(12L, "1.2.0", FirmwareStatus.DEPRECATED),
+                        releaseWith(11L, "1.1.0", FirmwareStatus.ACTIVE), 5L));
+
+        mockMvc.perform(patch(PATH + "/12/deprecate").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Boot loop\"}")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.deprecated.firmwareId").value(12))
+                .andExpect(jsonPath("$.data.deprecated.status").value("DEPRECATED"))
+                .andExpect(jsonPath("$.data.newActiveFirmware.firmwareId").value(11))
+                .andExpect(jsonPath("$.data.newActiveFirmware.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.affectedDeviceCount").value(5));
+        verify(deprecateFirmwareUseCase).execute("7", 12L, new DeprecateFirmwareRequest("Boot loop"));
+    }
+
+    @Test
+    @DisplayName("DEV-13 Controller UTCID02 [B]: newActiveFirmware is null when nothing is promoted")
+    void deprecate_noPromotion_returnsNullNewActive() throws Exception {
+        when(deprecateFirmwareUseCase.execute(eq("7"), eq(11L), any(DeprecateFirmwareRequest.class)))
+                .thenReturn(new DeprecateFirmwareResponse(releaseWith(11L, "1.1.0", FirmwareStatus.DEPRECATED), null, 0L));
+
+        mockMvc.perform(patch(PATH + "/11/deprecate").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Old\"}")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.newActiveFirmware").value(nullValue()))
+                .andExpect(jsonPath("$.data.affectedDeviceCount").value(0));
+    }
+
+    @Test
+    @DisplayName("DEV-13 Controller UTCID03 [A]: Missing, blank or over-long reason and non-positive id return 400")
+    void deprecate_invalidInput_returns400() throws Exception {
+        String[] bodies = {"{}", "{\"reason\":\"   \"}", "{\"reason\":\"" + "x".repeat(1001) + "\"}"};
+        for (String body : bodies) {
+            mockMvc.perform(patch(PATH + "/12/deprecate").contentType(MediaType.APPLICATION_JSON).content(body)
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                    .andExpect(status().isBadRequest());
+        }
+        mockMvc.perform(patch(PATH + "/0/deprecate").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"x\"}")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(deprecateFirmwareUseCase);
+    }
+
+    @Test
+    @DisplayName("DEV-13 Controller UTCID04 [A]: Errors map to FIRMWARE_NOT_FOUND (404) and FIRMWARE_ALREADY_DEPRECATED (409)")
+    void deprecate_useCaseErrors_mapToContractCodes() throws Exception {
+        when(deprecateFirmwareUseCase.execute(eq("7"), any(Long.class), any(DeprecateFirmwareRequest.class)))
+                .thenThrow(new FirmwareNotFoundException(99L))
+                .thenThrow(new FirmwareAlreadyDeprecatedException(12L));
+
+        mockMvc.perform(patch(PATH + "/99/deprecate").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"x\"}")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("FIRMWARE_NOT_FOUND"));
+        mockMvc.perform(patch(PATH + "/12/deprecate").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"x\"}")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("FIRMWARE_ALREADY_DEPRECATED"));
+    }
+
+    @Test
+    @DisplayName("DEV-13 Controller UTCID05 [A]: Non-ADMIN roles get 403 and anonymous callers get 401")
+    void deprecate_nonAdmin_isRejected() throws Exception {
+        for (String role : new String[]{"MANAGER", "STAFF", "CUSTOMER"}) {
+            mockMvc.perform(patch(PATH + "/12/deprecate").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"reason\":\"x\"}")
+                            .with(SecurityMockMvcRequestPostProcessors.user("7").roles(role)))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(patch(PATH + "/12/deprecate").contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"x\"}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(deprecateFirmwareUseCase);
     }
 }
