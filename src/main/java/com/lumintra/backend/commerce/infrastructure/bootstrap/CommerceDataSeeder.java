@@ -41,7 +41,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -56,6 +60,12 @@ public class CommerceDataSeeder implements ApplicationRunner {
     private static final String LEGACY_SEED_MARKER = "LMT-SEED-TXN-001";
     private static final String SEED_ORDER_MARKER_SUFFIX = "SEED0001";
     private static final String WEBHOOK_TEST_SEED_MARKER_SUFFIX = "SEED0011";
+    private static final String WARRANTY_ORDERS_SEED_MARKER_SUFFIX = "SEED0012";
+    private static final String DASHBOARD_SALES_SEED_MARKER_SUFFIX = "SALES001";
+
+    private static final String SEED_CUSTOMER_2_EMAIL = "minhanh.nguyen@gmail.com";
+    private static final String SEED_CUSTOMER_3_EMAIL = "quocbao.tran@gmail.com";
+    private static final String SEED_CUSTOMER_4_EMAIL = "thaovy.le@gmail.com";
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -95,6 +105,8 @@ public class CommerceDataSeeder implements ApplicationRunner {
         seedShoppingCart(customerId, products);
         seedOrders(customerId, customer, products);
         seedWebhookTestOrder(customerId, customer, products);
+        seedWarrantyAndAdditionalOrders(customerId, customer, products);
+        seedDashboardSalesHistory(customer, products);
         seedSubscriptionAndOwnership(customerId, products);
 
         log.info("Commerce seed data verification complete.");
@@ -110,6 +122,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
         List<ProductSnapshot> allProducts = productLookupService.findAllSnapshots();
 
         ProductSnapshot physical = findPreferredProduct(allProducts, ProductType.LED);
+        ProductSnapshot secondaryPhysical = findSecondaryLedProduct(allProducts, physical);
         ProductSnapshot digital = findPreferredProduct(allProducts, ProductType.CHARACTER);
         ProductSnapshot subscription = findPreferredProduct(allProducts, ProductType.SUBSCRIPTION);
 
@@ -119,12 +132,48 @@ public class CommerceDataSeeder implements ApplicationRunner {
 
         Long ownedCharacterVersionId = resolveOwnedCharacterVersionId(allProducts, digital.productId());
 
+        List<ProductSnapshot> ledProducts = filterPublishedByType(allProducts, ProductType.LED, physical);
+        List<ProductSnapshot> characterProducts = filterPublishedByType(allProducts, ProductType.CHARACTER, digital);
+        List<ProductSnapshot> bundleProducts = filterPublishedByType(allProducts, ProductType.BUNDLE, null);
+        List<ProductSnapshot> subscriptionProducts = filterPublishedByType(allProducts, ProductType.SUBSCRIPTION, subscription);
+
         return new ProductSeedContext(
                 physical.productId(), physical.basePrice(),
+                secondaryPhysical.productId(), secondaryPhysical.basePrice(),
                 digital.productId(), digital.basePrice(),
                 subscription.productId(), subscription.basePrice(),
-                ownedCharacterVersionId
+                ownedCharacterVersionId,
+                ledProducts,
+                characterProducts,
+                bundleProducts,
+                subscriptionProducts
         );
+    }
+
+    private List<ProductSnapshot> filterPublishedByType(
+            List<ProductSnapshot> allProducts, ProductType type, ProductSnapshot fallback) {
+        List<ProductSnapshot> matches = allProducts.stream()
+                .filter(p -> p.productType() == type
+                        && p.status() == ProductStatus.PUBLISHED
+                        && isValidSeedProduct(p))
+                .toList();
+        if (!matches.isEmpty()) {
+            return matches;
+        }
+        return isValidSeedProduct(fallback) ? List.of(fallback) : List.of();
+    }
+
+    private ProductSnapshot findSecondaryLedProduct(List<ProductSnapshot> allProducts, ProductSnapshot primaryPhysical) {
+        if (primaryPhysical == null) {
+            return null;
+        }
+        return allProducts.stream()
+                .filter(p -> p.productType() == ProductType.LED
+                        && p.status() == ProductStatus.PUBLISHED
+                        && p.productId() != null
+                        && !p.productId().equals(primaryPhysical.productId()))
+                .findFirst()
+                .orElse(primaryPhysical);
     }
 
     private ProductSnapshot findPreferredProduct(List<ProductSnapshot> allProducts, ProductType type) {
@@ -510,6 +559,450 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 buildSeedPaymentCode(webhookTestOrder.getOrderId(), WEBHOOK_TEST_SEED_MARKER_SUFFIX));
     }
 
+    private void seedWarrantyAndAdditionalOrders(
+            Long primaryCustomerId,
+            CustomerProfileSnapshot primaryCustomer,
+            ProductSeedContext products) {
+        if (paymentTransactionRepository.existsByTransactionCodeEndingWith(WARRANTY_ORDERS_SEED_MARKER_SUFFIX)) {
+            log.info("Warranty & additional customer orders already seeded [marker=*{}]. Skipping.",
+                    WARRANTY_ORDERS_SEED_MARKER_SUFFIX);
+            return;
+        }
+
+        Instant now = Instant.now();
+        String primaryName = primaryCustomer.fullName() != null && !primaryCustomer.fullName().isBlank()
+                ? primaryCustomer.fullName() : "Test Customer";
+        String primaryPhone = primaryCustomer.phone() != null && !primaryCustomer.phone().isBlank()
+                ? primaryCustomer.phone() : "0901234567";
+
+        int seededOrders = 0;
+
+        // 12. COMPLETED MIXED (Primary customer: active clean LED + character) -> for clean warranty claim submission
+        BigDecimal mixedProTotal = products.physicalPrice().add(products.digitalPrice());
+        createOrderWithMultipleItems(
+                primaryCustomerId,
+                OrderType.MIXED,
+                OrderStatus.COMPLETED,
+                mixedProTotal,
+                now.minus(12, ChronoUnit.DAYS),
+                List.of(
+                        new ItemSeed(products.physicalId(), 1, products.physicalPrice()),
+                        new ItemSeed(products.digitalId(), 1, products.digitalPrice())
+                ),
+                new ShippingSeed(
+                        primaryName,
+                        primaryPhone,
+                        "123 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+                        new BigDecimal("10.7768890"),
+                        new BigDecimal("106.7008060"),
+                        DeliveryStatus.DELIVERED,
+                        "AHA-LMT-WARR-0012",
+                        "https://ahamove.com/tracking/AHA-LMT-WARR-0012",
+                        new BigDecimal("25000.00"),
+                        null,
+                        now.minus(10, ChronoUnit.DAYS)
+                ),
+                new PaymentSeed("SEED0012", PaymentStatus.SUCCESS, now.minus(12, ChronoUnit.DAYS))
+        );
+        seededOrders++;
+
+        // 13. COMPLETED PHYSICAL (Primary customer: Compact LED delivered 200 days ago) -> for expired warranty test
+        createOrder(
+                primaryCustomerId,
+                OrderType.PHYSICAL,
+                OrderStatus.COMPLETED,
+                products.secondaryPhysicalPrice(),
+                now.minus(202, ChronoUnit.DAYS),
+                products.secondaryPhysicalId(),
+                1,
+                products.secondaryPhysicalPrice(),
+                new ShippingSeed(
+                        primaryName,
+                        primaryPhone,
+                        "123 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+                        new BigDecimal("10.7768890"),
+                        new BigDecimal("106.7008060"),
+                        DeliveryStatus.DELIVERED,
+                        "AHA-LMT-WARR-0013",
+                        "https://ahamove.com/tracking/AHA-LMT-WARR-0013",
+                        new BigDecimal("25000.00"),
+                        null,
+                        now.minus(200, ChronoUnit.DAYS)
+                ),
+                new PaymentSeed("SEED0013", PaymentStatus.SUCCESS, now.minus(202, ChronoUnit.DAYS))
+        );
+        seededOrders++;
+
+        CustomerProfileSnapshot customer2 = customerLookupService.findProfileByEmail(SEED_CUSTOMER_2_EMAIL).orElse(null);
+        if (customer2 != null) {
+            String c2Phone = customer2.phone() != null ? customer2.phone() : "0902345678";
+            // 14. Customer 2 COMPLETED PHYSICAL -> linked to PENDING warranty claim
+            createOrder(
+                    customer2.customerId(),
+                    OrderType.PHYSICAL,
+                    OrderStatus.COMPLETED,
+                    products.physicalPrice(),
+                    now.minus(17, ChronoUnit.DAYS),
+                    products.physicalId(),
+                    1,
+                    products.physicalPrice(),
+                    new ShippingSeed(
+                            customer2.fullName(),
+                            c2Phone,
+                            "88 Đồng Khởi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+                            new BigDecimal("10.7751000"),
+                            new BigDecimal("106.7031000"),
+                            DeliveryStatus.DELIVERED,
+                            "AHA-LMT-WARR-0014",
+                            "https://ahamove.com/tracking/AHA-LMT-WARR-0014",
+                            new BigDecimal("22000.00"),
+                            null,
+                            now.minus(15, ChronoUnit.DAYS)
+                    ),
+                    new PaymentSeed("SEED0014", PaymentStatus.SUCCESS, now.minus(17, ChronoUnit.DAYS))
+            );
+            seededOrders++;
+
+            // 15. Customer 2 COMPLETED MIXED -> linked to APPROVED warranty claim
+            BigDecimal c2MixedTotal = products.secondaryPhysicalPrice().add(products.digitalPrice());
+            createOrderWithMultipleItems(
+                    customer2.customerId(),
+                    OrderType.MIXED,
+                    OrderStatus.COMPLETED,
+                    c2MixedTotal,
+                    now.minus(27, ChronoUnit.DAYS),
+                    List.of(
+                            new ItemSeed(products.secondaryPhysicalId(), 1, products.secondaryPhysicalPrice()),
+                            new ItemSeed(products.digitalId(), 1, products.digitalPrice())
+                    ),
+                    new ShippingSeed(
+                            customer2.fullName(),
+                            c2Phone,
+                            "88 Đồng Khởi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+                            new BigDecimal("10.7751000"),
+                            new BigDecimal("106.7031000"),
+                            DeliveryStatus.DELIVERED,
+                            "AHA-LMT-WARR-0015",
+                            "https://ahamove.com/tracking/AHA-LMT-WARR-0015",
+                            new BigDecimal("22000.00"),
+                            null,
+                            now.minus(25, ChronoUnit.DAYS)
+                    ),
+                    new PaymentSeed("SEED0015", PaymentStatus.SUCCESS, now.minus(27, ChronoUnit.DAYS))
+            );
+            seededOrders++;
+        }
+
+        CustomerProfileSnapshot customer3 = customerLookupService.findProfileByEmail(SEED_CUSTOMER_3_EMAIL).orElse(null);
+        if (customer3 != null) {
+            String c3Phone = customer3.phone() != null ? customer3.phone() : "0903456789";
+            // 16. Customer 3 COMPLETED PHYSICAL (qty 2) -> linked to COMPLETED warranty claim
+            BigDecimal c3Total = products.physicalPrice().multiply(BigDecimal.valueOf(2));
+            createOrder(
+                    customer3.customerId(),
+                    OrderType.PHYSICAL,
+                    OrderStatus.COMPLETED,
+                    c3Total,
+                    now.minus(42, ChronoUnit.DAYS),
+                    products.physicalId(),
+                    2,
+                    products.physicalPrice(),
+                    new ShippingSeed(
+                            customer3.fullName(),
+                            c3Phone,
+                            "250 Nguyễn Văn Linh, Phường Tân Phong, Quận 7, TP. Hồ Chí Minh",
+                            new BigDecimal("10.7295000"),
+                            new BigDecimal("106.7120000"),
+                            DeliveryStatus.DELIVERED,
+                            "AHA-LMT-WARR-0016",
+                            "https://ahamove.com/tracking/AHA-LMT-WARR-0016",
+                            new BigDecimal("30000.00"),
+                            null,
+                            now.minus(40, ChronoUnit.DAYS)
+                    ),
+                    new PaymentSeed("SEED0016", PaymentStatus.SUCCESS, now.minus(42, ChronoUnit.DAYS))
+            );
+            seededOrders++;
+        }
+
+        CustomerProfileSnapshot customer4 = customerLookupService.findProfileByEmail(SEED_CUSTOMER_4_EMAIL).orElse(null);
+        if (customer4 != null) {
+            String c4Phone = customer4.phone() != null ? customer4.phone() : "0904567890";
+            // 17. Customer 4 COMPLETED PHYSICAL -> linked to REJECTED warranty claim
+            createOrder(
+                    customer4.customerId(),
+                    OrderType.PHYSICAL,
+                    OrderStatus.COMPLETED,
+                    products.secondaryPhysicalPrice(),
+                    now.minus(14, ChronoUnit.DAYS),
+                    products.secondaryPhysicalId(),
+                    1,
+                    products.secondaryPhysicalPrice(),
+                    new ShippingSeed(
+                            customer4.fullName(),
+                            c4Phone,
+                            "15 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP. Hồ Chí Minh",
+                            new BigDecimal("10.8505000"),
+                            new BigDecimal("106.7652000"),
+                            DeliveryStatus.DELIVERED,
+                            "AHA-LMT-WARR-0017",
+                            "https://ahamove.com/tracking/AHA-LMT-WARR-0017",
+                            new BigDecimal("28000.00"),
+                            null,
+                            now.minus(12, ChronoUnit.DAYS)
+                    ),
+                    new PaymentSeed("SEED0017", PaymentStatus.SUCCESS, now.minus(14, ChronoUnit.DAYS))
+            );
+            seededOrders++;
+
+            // 18. Customer 4 COMPLETED PHYSICAL -> linked to PENDING warranty claim
+            createOrder(
+                    customer4.customerId(),
+                    OrderType.PHYSICAL,
+                    OrderStatus.COMPLETED,
+                    products.physicalPrice(),
+                    now.minus(9, ChronoUnit.DAYS),
+                    products.physicalId(),
+                    1,
+                    products.physicalPrice(),
+                    new ShippingSeed(
+                            customer4.fullName(),
+                            c4Phone,
+                            "15 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP. Hồ Chí Minh",
+                            new BigDecimal("10.8505000"),
+                            new BigDecimal("106.7652000"),
+                            DeliveryStatus.DELIVERED,
+                            "AHA-LMT-WARR-0018",
+                            "https://ahamove.com/tracking/AHA-LMT-WARR-0018",
+                            new BigDecimal("28000.00"),
+                            null,
+                            now.minus(7, ChronoUnit.DAYS)
+                    ),
+                    new PaymentSeed("SEED0018", PaymentStatus.SUCCESS, now.minus(9, ChronoUnit.DAYS))
+            );
+            seededOrders++;
+        }
+
+        log.info("Seeded {} additional warranty & multi-customer orders.", seededOrders);
+    }
+
+    private void seedDashboardSalesHistory(
+            CustomerProfileSnapshot primaryCustomer,
+            ProductSeedContext products) {
+        if (paymentTransactionRepository.existsByTransactionCodeEndingWith(DASHBOARD_SALES_SEED_MARKER_SUFFIX)) {
+            log.info("Dashboard multi-month sales history already seeded [marker=*{}]. Skipping.",
+                    DASHBOARD_SALES_SEED_MARKER_SUFFIX);
+            return;
+        }
+
+        List<CustomerProfileSnapshot> customerPool = resolveSalesCustomerPool(primaryCustomer);
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        YearMonth currentYm = YearMonth.from(today);
+        YearMonth prev1Ym = currentYm.minusMonths(1);
+        YearMonth prev2Ym = currentYm.minusMonths(2);
+        YearMonth prev3Ym = currentYm.minusMonths(3);
+
+        List<ProductSnapshot> leds = products.ledProducts();
+        List<ProductSnapshot> chars = products.characterProducts();
+        List<ProductSnapshot> bundles = products.bundleProducts();
+        List<ProductSnapshot> subs = products.subscriptionProducts();
+
+        ProductSnapshot led0 = pickAt(leds, 0);
+        ProductSnapshot led1 = pickAt(leds, 1);
+        ProductSnapshot bundle0 = bundles.isEmpty() ? null : bundles.get(0);
+        ProductSnapshot sub0 = pickAt(subs, 0);
+
+        int seq = 1;
+
+        // ==================== CURRENT MONTH (8 orders, distributed up to today for MTD) ====================
+        // Order 1: Primary LED + 2 characters (MIXED)
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 0),
+                resolveCurrentMonthInstant(today, 0.12, 9), OrderType.MIXED,
+                buildItems(item(led0, 2), item(pickAt(chars, 0), 2), item(pickAt(chars, 1), 1)));
+        // Order 2: Multiple characters (DIGITAL)
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 1),
+                resolveCurrentMonthInstant(today, 0.24, 11), OrderType.DIGITAL,
+                buildItems(item(pickAt(chars, 2), 2), item(pickAt(chars, 3), 2), item(pickAt(chars, 4), 1)));
+        // Order 3: Bundle + character (MIXED) or Secondary LED + character
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 2),
+                resolveCurrentMonthInstant(today, 0.36, 14), OrderType.MIXED,
+                buildItems(item(bundle0 != null ? bundle0 : led1, 2), item(pickAt(chars, 5), 2)));
+        // Order 4: Secondary LED (PHYSICAL)
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 3),
+                resolveCurrentMonthInstant(today, 0.48, 10), OrderType.PHYSICAL,
+                buildItems(item(led1, 2)));
+        // Order 5: Subscription + characters (DIGITAL)
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 1),
+                resolveCurrentMonthInstant(today, 0.60, 15), OrderType.DIGITAL,
+                buildItems(item(sub0, 2), item(pickAt(chars, 6), 2), item(pickAt(chars, 7), 1)));
+        // Order 6: Primary LED + characters (MIXED)
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 2),
+                resolveCurrentMonthInstant(today, 0.72, 16), OrderType.MIXED,
+                buildItems(item(led0, 1), item(pickAt(chars, 1), 2), item(pickAt(chars, 8), 2)));
+        // Order 7: Bundle + Secondary LED (PHYSICAL)
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 0),
+                resolveCurrentMonthInstant(today, 0.84, 13), OrderType.PHYSICAL,
+                buildItems(item(bundle0 != null ? bundle0 : led0, 1), item(led1, 1)));
+        // Order 8: Digital characters + VIP Subscription (DIGITAL)
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 3),
+                resolveCurrentMonthInstant(today, 0.94, 17), OrderType.DIGITAL,
+                buildItems(item(pickAt(chars, 0), 2), item(pickAt(chars, 9), 2), item(sub0, 1)));
+
+        // ==================== 1 MONTH AGO (7 orders, strong baseline across days 2..25) ====================
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 1),
+                resolvePastMonthInstant(prev1Ym, 2, 10), OrderType.MIXED,
+                buildItems(item(led0, 1), item(pickAt(chars, 0), 2), item(pickAt(chars, 2), 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 2),
+                resolvePastMonthInstant(prev1Ym, 5, 14), OrderType.DIGITAL,
+                buildItems(item(pickAt(chars, 3), 2), item(pickAt(chars, 4), 1), item(sub0, 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 3),
+                resolvePastMonthInstant(prev1Ym, 9, 11), OrderType.PHYSICAL,
+                buildItems(item(led1, 2)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 0),
+                resolvePastMonthInstant(prev1Ym, 13, 15), OrderType.MIXED,
+                buildItems(item(bundle0 != null ? bundle0 : led0, 1), item(pickAt(chars, 5), 2)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 1),
+                resolvePastMonthInstant(prev1Ym, 17, 9), OrderType.DIGITAL,
+                buildItems(item(pickAt(chars, 6), 2), item(pickAt(chars, 7), 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 2),
+                resolvePastMonthInstant(prev1Ym, 21, 16), OrderType.PHYSICAL,
+                buildItems(item(led0, 1), item(led1, 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 3),
+                resolvePastMonthInstant(prev1Ym, 25, 13), OrderType.DIGITAL,
+                buildItems(item(pickAt(chars, 8), 2), item(sub0, 1)));
+
+        // ==================== 2 MONTHS AGO (5 orders) ====================
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 0),
+                resolvePastMonthInstant(prev2Ym, 3, 10), OrderType.MIXED,
+                buildItems(item(led0, 1), item(pickAt(chars, 1), 2)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 2),
+                resolvePastMonthInstant(prev2Ym, 8, 14), OrderType.PHYSICAL,
+                buildItems(item(bundle0 != null ? bundle0 : led1, 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 1),
+                resolvePastMonthInstant(prev2Ym, 14, 11), OrderType.DIGITAL,
+                buildItems(item(pickAt(chars, 2), 2), item(pickAt(chars, 5), 1), item(sub0, 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 3),
+                resolvePastMonthInstant(prev2Ym, 19, 15), OrderType.PHYSICAL,
+                buildItems(item(led1, 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 0),
+                resolvePastMonthInstant(prev2Ym, 24, 12), OrderType.DIGITAL,
+                buildItems(item(pickAt(chars, 4), 2), item(pickAt(chars, 9), 1)));
+
+        // ==================== 3 MONTHS AGO (4 orders) ====================
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 1),
+                resolvePastMonthInstant(prev3Ym, 4, 10), OrderType.PHYSICAL,
+                buildItems(item(led0, 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 3),
+                resolvePastMonthInstant(prev3Ym, 11, 14), OrderType.DIGITAL,
+                buildItems(item(pickAt(chars, 0), 2), item(pickAt(chars, 3), 1), item(sub0, 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 2),
+                resolvePastMonthInstant(prev3Ym, 18, 11), OrderType.MIXED,
+                buildItems(item(bundle0 != null ? bundle0 : led1, 1), item(pickAt(chars, 6), 1)));
+        seq = seedHistoricalSalesOrder(seq, pickCustomer(customerPool, 0),
+                resolvePastMonthInstant(prev3Ym, 23, 16), OrderType.DIGITAL,
+                buildItems(item(pickAt(chars, 7), 1), item(pickAt(chars, 8), 1)));
+
+        log.info("Seeded {} multi-month dashboard sales orders spanning {} through {}.",
+                seq - 1, prev3Ym, currentYm);
+    }
+
+    private List<CustomerProfileSnapshot> resolveSalesCustomerPool(CustomerProfileSnapshot primaryCustomer) {
+        List<CustomerProfileSnapshot> pool = new ArrayList<>();
+        pool.add(primaryCustomer);
+        customerLookupService.findProfileByEmail(SEED_CUSTOMER_2_EMAIL).ifPresent(pool::add);
+        customerLookupService.findProfileByEmail(SEED_CUSTOMER_3_EMAIL).ifPresent(pool::add);
+        customerLookupService.findProfileByEmail(SEED_CUSTOMER_4_EMAIL).ifPresent(pool::add);
+        return pool;
+    }
+
+    private CustomerProfileSnapshot pickCustomer(List<CustomerProfileSnapshot> pool, int index) {
+        return pool.get(index % pool.size());
+    }
+
+    private ProductSnapshot pickAt(List<ProductSnapshot> list, int index) {
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        return list.get(index % list.size());
+    }
+
+    private ItemSeed item(ProductSnapshot product, int quantity) {
+        if (product == null || product.productId() == null || product.basePrice() == null || quantity <= 0) {
+            return null;
+        }
+        return new ItemSeed(product.productId(), quantity, product.basePrice());
+    }
+
+    private List<ItemSeed> buildItems(ItemSeed... candidates) {
+        List<ItemSeed> result = new ArrayList<>();
+        for (ItemSeed candidate : candidates) {
+            if (candidate != null) {
+                result.add(candidate);
+            }
+        }
+        return result;
+    }
+
+    private Instant resolveCurrentMonthInstant(LocalDate today, double ratio, int hourUtc) {
+        int maxDay = Math.max(1, today.getDayOfMonth());
+        int day = Math.max(1, Math.min(maxDay, (int) Math.round(1 + (maxDay - 1) * ratio)));
+        return YearMonth.from(today).atDay(day).atTime(hourUtc, 15).toInstant(ZoneOffset.UTC);
+    }
+
+    private Instant resolvePastMonthInstant(YearMonth ym, int dayOfMonth, int hourUtc) {
+        int clampedDay = Math.min(dayOfMonth, ym.lengthOfMonth());
+        return ym.atDay(clampedDay).atTime(hourUtc, 30).toInstant(ZoneOffset.UTC);
+    }
+
+    private int seedHistoricalSalesOrder(
+            int seq,
+            CustomerProfileSnapshot customer,
+            Instant orderCreatedAt,
+            OrderType orderType,
+            List<ItemSeed> items) {
+        if (items.isEmpty()) {
+            return seq;
+        }
+        BigDecimal totalAmount = items.stream()
+                .map(i -> i.unitPrice().multiply(BigDecimal.valueOf(i.quantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        String codeSuffix = String.format("SALES%03d", seq);
+        String recipientName = customer.fullName() != null && !customer.fullName().isBlank()
+                ? customer.fullName() : "Lumintra Customer";
+        String recipientPhone = customer.phone() != null && !customer.phone().isBlank()
+                ? customer.phone() : "0901234567";
+
+        ShippingSeed shipping = (orderType == OrderType.DIGITAL)
+                ? null
+                : new ShippingSeed(
+                        recipientName,
+                        recipientPhone,
+                        "123 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+                        new BigDecimal("10.7768890"),
+                        new BigDecimal("106.7008060"),
+                        DeliveryStatus.DELIVERED,
+                        "AHA-LMT-" + codeSuffix,
+                        "https://ahamove.com/tracking/AHA-LMT-" + codeSuffix,
+                        new BigDecimal("25000.00"),
+                        null,
+                        orderCreatedAt.plus(2, ChronoUnit.DAYS)
+                );
+
+        OrderEntity savedOrder = createOrderWithMultipleItems(
+                customer.customerId(),
+                orderType,
+                OrderStatus.COMPLETED,
+                totalAmount,
+                orderCreatedAt.plus(1, ChronoUnit.HOURS),
+                items,
+                shipping,
+                new PaymentSeed(codeSuffix, PaymentStatus.SUCCESS, orderCreatedAt.plus(10, ChronoUnit.MINUTES))
+        );
+        orderRepository.updateTimestampsForSeed(savedOrder.getOrderId(), orderCreatedAt);
+        return seq + 1;
+    }
+
     private void migrateLegacySeedTransactionCodes() {
         List<PaymentTransactionEntity> legacyTransactions =
                 paymentTransactionRepository.findByTransactionCodeStartingWith(LEGACY_SEED_PREFIX);
@@ -655,9 +1148,14 @@ public class CommerceDataSeeder implements ApplicationRunner {
 
     private record ProductSeedContext(
             Long physicalId, BigDecimal physicalPrice,
+            Long secondaryPhysicalId, BigDecimal secondaryPhysicalPrice,
             Long digitalId, BigDecimal digitalPrice,
             Long subscriptionId, BigDecimal subscriptionPrice,
-            Long ownedCharacterVersionId
+            Long ownedCharacterVersionId,
+            List<ProductSnapshot> ledProducts,
+            List<ProductSnapshot> characterProducts,
+            List<ProductSnapshot> bundleProducts,
+            List<ProductSnapshot> subscriptionProducts
     ) {}
 
     private record ItemSeed(Long productId, int quantity, BigDecimal unitPrice) {}

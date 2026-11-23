@@ -53,7 +53,7 @@ public class CreateSubscriptionUseCase {
                                 request.basePrice(),
                                 request.description(),
                                 request.thumbnailUrl(),
-                                List.of(),
+                                request.galleryUrls() == null ? List.of() : request.galleryUrls(),
                                 ProductStatus.UNPUBLISHED,
                                 new HashSet<>(selectedTags)));
         var detail =

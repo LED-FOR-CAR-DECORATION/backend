@@ -140,18 +140,19 @@ class StoreAndCommerceSeederIntegrationTest {
         commerceDataSeeder.run(args);
 
         // Verify store catalog counts
-        assertThat(tagRepository.count()).isEqualTo(4);
-        assertThat(productRepository.count()).isEqualTo(8);
+        assertThat(tagRepository.count()).isEqualTo(12);
+        assertThat(productRepository.count()).isEqualTo(17);
         assertThat(ledModelRepository.count()).isEqualTo(3);
-        assertThat(characterRepository.count()).isEqualTo(3);
-        assertThat(characterVersionRepository.count()).isEqualTo(3);
-        assertThat(bundleRepository.count()).isEqualTo(1);
-        assertThat(bundleItemRepository.count()).isEqualTo(2);
-        assertThat(subscriptionDetailRepository.count()).isEqualTo(1);
+        assertThat(characterRepository.count()).isEqualTo(10);
+        assertThat(characterVersionRepository.count()).isEqualTo(10);
+        assertThat(bundleRepository.count()).isEqualTo(2);
+        assertThat(bundleItemRepository.count()).isEqualTo(5);
+        assertThat(subscriptionDetailRepository.count()).isEqualTo(2);
 
         ProductEntity ledPro = productRepository.findFirstByProductName(StoreDataSeeder.PRODUCT_LED_PRO).orElseThrow();
-        ProductEntity charCat = productRepository.findFirstByProductName(StoreDataSeeder.PRODUCT_CHAR_CAT).orElseThrow();
-        ProductEntity charMascot = productRepository.findFirstByProductName(StoreDataSeeder.PRODUCT_CHAR_MASCOT).orElseThrow();
+        ProductEntity ledCompact = productRepository.findFirstByProductName(StoreDataSeeder.PRODUCT_LED_COMPACT).orElseThrow();
+        ProductEntity charFirst = productRepository.findFirstByProductName(StoreDataSeeder.PRODUCT_CHAR_01).orElseThrow();
+        ProductEntity charLast = productRepository.findFirstByProductName(StoreDataSeeder.PRODUCT_CHAR_10).orElseThrow();
         ProductEntity subVip = productRepository.findFirstByProductName(StoreDataSeeder.PRODUCT_SUB_VIP).orElseThrow();
 
         // Verify cart and cart items reference real seeded products
@@ -162,47 +163,50 @@ class StoreAndCommerceSeederIntegrationTest {
         List<CartItemEntity> cartItems = cartItemRepository.findAll();
         assertThat(cartItems)
                 .extracting(CartItemEntity::getProductId)
-                .containsExactlyInAnyOrder(ledPro.getProductId(), charCat.getProductId(), subVip.getProductId());
+                .containsExactlyInAnyOrder(ledPro.getProductId(), charFirst.getProductId(), subVip.getProductId());
 
-        // Verify orders & order items reference real seeded products
+        // Verify orders & order items reference real seeded products across multiple months
         List<OrderEntity> orders = orderRepository.findAll();
-        assertThat(orders).hasSize(11); // 10 lifecycle orders + 1 webhook test order
-        assertThat(paymentTransactionRepository.count()).isEqualTo(11);
+        assertThat(orders).hasSize(37); // 10 lifecycle + 1 webhook + 2 primary warranty + 24 multi-month sales
+        assertThat(paymentTransactionRepository.count()).isEqualTo(37);
 
-        Set<Long> seededCommerceProductIds = Set.of(
-                ledPro.getProductId(), charCat.getProductId(), subVip.getProductId());
+        Set<Long> allSeededProductIds = productRepository.findAll().stream()
+                .map(ProductEntity::getProductId)
+                .collect(java.util.stream.Collectors.toSet());
         List<OrderItemEntity> orderItems = orderItemRepository.findAll();
         assertThat(orderItems).isNotEmpty();
         assertThat(orderItems)
                 .extracting(OrderItemEntity::getProductId)
-                .allMatch(seededCommerceProductIds::contains);
+                .allMatch(allSeededProductIds::contains);
+        assertThat(orderItems.stream().map(OrderItemEntity::getProductId).distinct().count())
+                .isGreaterThanOrEqualTo(10);
 
         // Verify subscription and owned character reference real seeded records
         List<CustomerSubscriptionEntity> subscriptions = customerSubscriptionRepository.findAll();
         assertThat(subscriptions).hasSize(1);
         assertThat(subscriptions.get(0).getProductId()).isEqualTo(subVip.getProductId());
 
-        Long mascotVersionId = characterLookupService.findVersionIdByProductId(charMascot.getProductId())
+        Long ownedVersionId = characterLookupService.findVersionIdByProductId(charLast.getProductId())
                 .orElseThrow();
         List<OwnedCharacterEntity> ownedCharacters = ownedCharacterRepository.findAll();
         assertThat(ownedCharacters).hasSize(1);
-        assertThat(ownedCharacters.get(0).getVersionId()).isEqualTo(mascotVersionId);
+        assertThat(ownedCharacters.get(0).getVersionId()).isEqualTo(ownedVersionId);
 
         // Re-running both seeders must remain strictly idempotent
         storeDataSeeder.run(args);
         commerceDataSeeder.run(args);
 
-        assertThat(tagRepository.count()).isEqualTo(4);
-        assertThat(productRepository.count()).isEqualTo(8);
+        assertThat(tagRepository.count()).isEqualTo(12);
+        assertThat(productRepository.count()).isEqualTo(17);
         assertThat(ledModelRepository.count()).isEqualTo(3);
-        assertThat(characterVersionRepository.count()).isEqualTo(3);
-        assertThat(bundleRepository.count()).isEqualTo(1);
-        assertThat(bundleItemRepository.count()).isEqualTo(2);
-        assertThat(subscriptionDetailRepository.count()).isEqualTo(1);
+        assertThat(characterVersionRepository.count()).isEqualTo(10);
+        assertThat(bundleRepository.count()).isEqualTo(2);
+        assertThat(bundleItemRepository.count()).isEqualTo(5);
+        assertThat(subscriptionDetailRepository.count()).isEqualTo(2);
         assertThat(cartRepository.count()).isEqualTo(1);
         assertThat(cartItemRepository.count()).isEqualTo(3);
-        assertThat(orderRepository.count()).isEqualTo(11);
-        assertThat(paymentTransactionRepository.count()).isEqualTo(11);
+        assertThat(orderRepository.count()).isEqualTo(37);
+        assertThat(paymentTransactionRepository.count()).isEqualTo(37);
         assertThat(customerSubscriptionRepository.count()).isEqualTo(1);
         assertThat(ownedCharacterRepository.count()).isEqualTo(1);
     }

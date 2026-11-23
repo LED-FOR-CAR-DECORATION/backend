@@ -203,4 +203,21 @@ class MediaAccessControlServiceTest {
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("Only managers and admins are authorized to upload store product media.");
     }
+
+    @Test
+    @DisplayName("MED-01 [N]: PRODUCT_LED, PRODUCT_BUNDLE, PRODUCT_SUBSCRIPTION allow MANAGER/ADMIN and reject CUSTOMER")
+    void verifyAccess_typedProductPurposes_enforcesManagerOrAdmin() {
+        when(internalEmployeeAccessService.requireActiveEmployeeAccountId("1", Set.of("MANAGER", "ADMIN"))).thenReturn(1L);
+
+        for (MediaPurpose purpose : java.util.List.of(
+                MediaPurpose.PRODUCT_LED,
+                MediaPurpose.PRODUCT_BUNDLE,
+                MediaPurpose.PRODUCT_SUBSCRIPTION)) {
+            assertThatCode(() -> mediaAccessControlService.verifyAccess("1", Set.of("MANAGER"), purpose, null))
+                    .doesNotThrowAnyException();
+            assertThatThrownBy(() -> mediaAccessControlService.verifyAccess("10", Set.of("CUSTOMER"), purpose, null))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("Only managers and admins are authorized to upload store product media.");
+        }
+    }
 }

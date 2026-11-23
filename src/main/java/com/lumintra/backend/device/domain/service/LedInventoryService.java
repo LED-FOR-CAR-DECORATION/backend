@@ -1,11 +1,16 @@
 package com.lumintra.backend.device.domain.service;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Domain boundary exposed by Device for atomic LED hardware inventory management during order lifecycle events.
  */
 public interface LedInventoryService {
+
+    default Optional<Long> findModelIdByLedProductId(Long productId) {
+        return Optional.ofNullable(productId);
+    }
 
     /**
      * Atomically deducts required stock quantities for all specified LED model IDs.

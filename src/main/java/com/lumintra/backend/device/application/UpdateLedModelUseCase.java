@@ -9,9 +9,13 @@ import com.lumintra.backend.device.infrastructure.persistence.repository.LedMode
 import com.lumintra.backend.shared.exception.device.DuplicateLedModelNameException;
 import com.lumintra.backend.shared.exception.device.LedModelDimensionsLockedException;
 import com.lumintra.backend.shared.exception.device.LedModelNotFoundException;
+import com.lumintra.backend.store.domain.event.StoreProductUpdatedEvent;
+import com.lumintra.backend.store.domain.model.ProductStatus;
+import com.lumintra.backend.store.infrastructure.persistence.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +34,8 @@ public class UpdateLedModelUseCase {
     private final LedInstanceRepository ledInstanceRepository;
     private final LedModelMapper ledModelMapper;
     private final ActiveFirmwareSummaryResolver activeFirmwareResolver;
+    private final ProductRepository productRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public LedModelListResponse.LedModelItem execute(Long id, UpdateLedModelRequest request) {
@@ -39,6 +45,7 @@ public class UpdateLedModelUseCase {
                     return new LedModelNotFoundException(id);
                 });
 
+        String previousModelName = entity.getModelName();
         String trimmedName = request.modelName().strip();
         if (ledModelRepository.existsByModelNameIgnoreCaseAndModelIdNot(trimmedName, id)) {
             log.warn("LED model update failed: duplicate modelName [modelId={}] [modelName={}]", id, trimmedName);
@@ -74,9 +81,31 @@ public class UpdateLedModelUseCase {
         entity.updateDetails(trimmedName, reqWidth, reqHeight, specMap, request.stockQuantity());
 
         LedModelEntity saved = ledModelRepository.save(entity);
+        syncLinkedProductNameIfChanged(saved, previousModelName, trimmedName);
+
         log.info("LED model updated successfully [modelId={}] [modelName={}] [status={}] [stock={}]",
                 saved.getModelId(), saved.getModelName(), saved.getStatus(), saved.getStockQuantity());
 
         return ledModelMapper.toItem(saved, activeFirmwareResolver.resolve(saved.getModelId()));
+    }
+
+    private void syncLinkedProductNameIfChanged(
+            LedModelEntity savedModel,
+            String previousModelName,
+            String newModelName) {
+        Long productId = savedModel.getProductId();
+        if (productId == null || Objects.equals(previousModelName, newModelName)) {
+            return;
+        }
+        productRepository.findById(productId).ifPresent(product -> {
+            if (product.getStatus() != ProductStatus.DELETED
+                    && !Objects.equals(product.getProductName(), newModelName)) {
+                product.setProductName(newModelName);
+                productRepository.save(product);
+                eventPublisher.publishEvent(new StoreProductUpdatedEvent(productId));
+                log.info("Synced linked store product name with updated LED model [modelId={}] [productId={}] [productName={}]",
+                        savedModel.getModelId(), productId, newModelName);
+            }
+        });
     }
 }

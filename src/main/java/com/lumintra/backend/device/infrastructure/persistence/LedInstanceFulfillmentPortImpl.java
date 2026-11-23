@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +27,15 @@ public class LedInstanceFulfillmentPortImpl implements LedInstanceFulfillmentPor
 
     private final LedInstanceRepository ledInstanceRepository;
     private final LedModelRepository ledModelRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Long> findModelIdByProductId(Long productId) {
+        if (productId == null) {
+            return Optional.empty();
+        }
+        return ledModelRepository.findByProductId(productId).map(LedModelEntity::getModelId);
+    }
 
     @Override
     @Transactional

@@ -121,9 +121,15 @@ public class LinkOrderFulfillmentDeviceUseCase {
             );
         }
 
+        long expectedModelId = requirement.explicitModelId() != null
+                ? requirement.explicitModelId()
+                : ledInstanceFulfillmentPort
+                        .findModelIdByProductId(requirement.fallbackLedProductId())
+                        .orElse(requirement.fallbackLedProductId());
+
         FulfillmentDeviceSnapshot device = ledInstanceFulfillmentPort.linkAndMarkInTransit(
                 request.serialNumber(),
-                requirement.expectedModelId()
+                expectedModelId
         );
 
         if (orderItemFulfillmentRepository.existsByInstanceId(device.instanceId())) {
@@ -203,7 +209,7 @@ public class LinkOrderFulfillmentDeviceUseCase {
 
     private HardwareItemRequirement resolveItemRequirement(OrderItemEntity orderItem, ProductSnapshot product) {
         if (product.productType() == ProductType.LED) {
-            return new HardwareItemRequirement(product.productId(), orderItem.getQuantity());
+            return new HardwareItemRequirement(null, product.productId(), orderItem.getQuantity());
         }
 
         if (product.productType() == ProductType.BUNDLE) {
@@ -230,7 +236,7 @@ public class LinkOrderFulfillmentDeviceUseCase {
 
             BundleSnapshot.BundleItemSnapshot primaryLed = ledItems.getFirst();
             long requiredCount = (long) primaryLed.quantity() * orderItem.getQuantity();
-            return new HardwareItemRequirement(primaryLed.modelId(), requiredCount);
+            return new HardwareItemRequirement(primaryLed.modelId(), null, requiredCount);
         }
 
         throw new OrderFulfillmentException(
@@ -240,5 +246,5 @@ public class LinkOrderFulfillmentDeviceUseCase {
         );
     }
 
-    private record HardwareItemRequirement(Long expectedModelId, long requiredCount) {}
+    private record HardwareItemRequirement(Long explicitModelId, Long fallbackLedProductId, long requiredCount) {}
 }

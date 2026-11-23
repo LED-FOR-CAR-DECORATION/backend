@@ -73,14 +73,23 @@ public class CreateStoreProductUseCase {
             } else {
                 characters.linkOwnedVersion(request.characterVersionId(), product.getProductId(), designerEmployeeId);
             }
+        } else if (request.ledModelId() != null) {
+            var linked = ledModels.linkExistingToProduct(request.ledModelId(), product.getProductId());
+            var spec = linked.spec() == null ? Map.<String, Object>of() : linked.spec();
+            createdLed =
+                    new CreatedStoreProductResponse.LedDetails(
+                            linked.modelId(),
+                            linked.modelName(),
+                            spec,
+                            linked.stockQuantity());
         } else if (request.ledDetails() != null) {
             var details = request.ledDetails();
             var spec = details.spec() == null ? Map.<String, Object>of() : details.spec();
-            ledModels.createForProduct(
+            long createdModelId = ledModels.createForProduct(
                     product.getProductId(), details.modelName(), spec, details.stockQuantity());
             createdLed =
                     new CreatedStoreProductResponse.LedDetails(
-                            product.getProductId(),
+                            createdModelId,
                             details.modelName(),
                             spec,
                             details.stockQuantity());

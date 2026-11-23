@@ -2,6 +2,7 @@ package com.lumintra.backend.store.infrastructure.persistence.repository;
 
 import com.lumintra.backend.store.api.request.ProductFilterRequest;
 import com.lumintra.backend.store.domain.model.ProductStatus;
+import com.lumintra.backend.store.domain.model.ProductType;
 import com.lumintra.backend.store.infrastructure.persistence.entity.ProductEntity;
 import com.lumintra.backend.store.infrastructure.persistence.entity.TagEntity;
 import jakarta.persistence.criteria.Join;
@@ -49,6 +50,22 @@ public final class ProductSpecifications {
                 predicates.add(cb.lessThanOrEqualTo(root.get("basePrice"), request.maxPrice()));
             }
 
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    public static Specification<ProductEntity> withManagementFilter(
+            ProductType productType,
+            ProductStatus status
+    ) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (productType != null) {
+                predicates.add(cb.equal(root.get("productType"), productType));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }

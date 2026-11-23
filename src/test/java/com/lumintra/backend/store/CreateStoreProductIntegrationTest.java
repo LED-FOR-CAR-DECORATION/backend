@@ -74,6 +74,7 @@ class CreateStoreProductIntegrationTest {
     @Autowired EntityManager em;
     @Autowired ProductRepository products;
     @Autowired CharacterVersionRepository versions;
+    @Autowired LedModelRepository ledModels;
 
     @Test
     void designerDraftUsesZeroPriceAndCanOnlyLinkAnOwnedVersion() {
@@ -118,14 +119,15 @@ class CreateStoreProductIntegrationTest {
                             em.flush();
                             em.clear();
                             var stored = em.find(ProductEntity.class, result.productId());
-                            var model = em.find(LedModelEntity.class, result.productId());
+                            var model = ledModels.findByProductId(result.productId()).orElseThrow();
                             assertThat(stored.getStatus()).isEqualTo(ProductStatus.UNPUBLISHED);
                             assertThat(stored.getTags())
                                     .extracting(TagEntity::getTagId)
                                     .containsExactly(tag.getTagId());
+                            assertThat(model.getProductId()).isEqualTo(result.productId());
                             assertThat(model.getModelName()).isEqualTo("LED board");
                             assertThat(model.getStockQuantity()).isEqualTo(10);
-                            assertThat(result.ledDetails().modelId()).isEqualTo(result.productId());
+                            assertThat(result.ledDetails().modelId()).isEqualTo(model.getModelId());
                             tx.setRollbackOnly();
                         });
     }
@@ -136,7 +138,7 @@ class CreateStoreProductIntegrationTest {
                 .executeWithoutResult(
                         tx -> {
                             var led = useCase.execute(request(ProductType.LED, null, null, null));
-                            assertThat(em.find(LedModelEntity.class, led.productId())).isNull();
+                            assertThat(ledModels.findByProductId(led.productId())).isEmpty();
 
                             var character = CharacterEntity.create(null, "Demo art", null);
                             em.persist(character);
@@ -212,6 +214,84 @@ class CreateStoreProductIntegrationTest {
                 .isInstanceOfSatisfying(
                         StoreProductReferenceException.class,
                         ex -> assertThat(ex.getReason()).isEqualTo(Reason.TAG_NOT_FOUND));
+        assertThat(products.count()).isEqualTo(before);
+    }
+
+    @Test
+    void linksExistingStandaloneLedModelAndRejectsDuplicateLink() {
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(
+                        tx -> {
+                            var standalone = LedModelEntity.createStandalone(
+                                    "Warehouse Matrix 64x64",
+                                    64,
+                                    64,
+                                    Map.of("widthPx", 64, "heightPx", 64),
+                                    25L);
+                            ledModels.saveAndFlush(standalone);
+                            long modelId = standalone.getModelId();
+
+                            var result = useCase.execute(new CreateStoreProductRequest(
+                                    "Store Matrix 64x64",
+                                    ProductType.LED,
+                                    new BigDecimal("1490000.00"),
+                                    "Linked warehouse LED",
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    modelId));
+                            em.flush();
+                            em.clear();
+
+                            var updatedModel = ledModels.findById(modelId).orElseThrow();
+                            assertThat(updatedModel.getProductId()).isEqualTo(result.productId());
+                            assertThat(ledModels.findByProductId(result.productId()))
+                                    .isPresent()
+                                    .get()
+                                    .extracting(LedModelEntity::getModelId)
+                                    .isEqualTo(modelId);
+                            assertThat(result.ledDetails()).isNotNull();
+                            assertThat(result.ledDetails().modelId()).isEqualTo(modelId);
+                            assertThat(result.ledDetails().stockQuantity()).isEqualTo(25L);
+
+                            assertThatThrownBy(() -> useCase.execute(new CreateStoreProductRequest(
+                                    "Duplicate Link",
+                                    ProductType.LED,
+                                    BigDecimal.TEN,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    modelId)))
+                                    .isInstanceOfSatisfying(
+                                            StoreProductReferenceException.class,
+                                            ex -> assertThat(ex.getReason())
+                                                    .isEqualTo(Reason.LED_MODEL_ALREADY_LINKED));
+                            tx.setRollbackOnly();
+                        });
+    }
+
+    @Test
+    void rollsBackProductWhenLedModelIsMissing() {
+        long before = products.count();
+        assertThatThrownBy(() -> useCase.execute(new CreateStoreProductRequest(
+                "Missing LED",
+                ProductType.LED,
+                BigDecimal.TEN,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Long.MAX_VALUE)))
+                .isInstanceOfSatisfying(
+                        StoreProductReferenceException.class,
+                        ex -> assertThat(ex.getReason()).isEqualTo(Reason.LED_MODEL_NOT_FOUND));
         assertThat(products.count()).isEqualTo(before);
     }
 

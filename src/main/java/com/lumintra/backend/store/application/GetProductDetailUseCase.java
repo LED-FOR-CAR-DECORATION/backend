@@ -76,7 +76,7 @@ public class GetProductDetailUseCase {
 
         ProductType productType = product.getProductType();
         if (productType == ProductType.LED) {
-            ledModel = ledModelLookupService.findByModelId(product.getProductId()).orElse(null);
+            ledModel = ledModelLookupService.findByProductId(product.getProductId()).orElse(null);
         } else if (productType == ProductType.CHARACTER) {
             characterVersion = characterLookupService.findDetailByProductId(product.getProductId()).orElse(null);
         } else if (productType == ProductType.BUNDLE) {

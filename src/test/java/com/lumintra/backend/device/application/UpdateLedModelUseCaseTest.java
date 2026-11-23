@@ -10,6 +10,11 @@ import com.lumintra.backend.device.infrastructure.persistence.repository.LedMode
 import com.lumintra.backend.shared.exception.device.DuplicateLedModelNameException;
 import com.lumintra.backend.shared.exception.device.LedModelDimensionsLockedException;
 import com.lumintra.backend.shared.exception.device.LedModelNotFoundException;
+import com.lumintra.backend.store.domain.event.StoreProductUpdatedEvent;
+import com.lumintra.backend.store.domain.model.ProductStatus;
+import com.lumintra.backend.store.domain.model.ProductType;
+import com.lumintra.backend.store.infrastructure.persistence.entity.ProductEntity;
+import com.lumintra.backend.store.infrastructure.persistence.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,15 +22,19 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -42,13 +51,26 @@ class UpdateLedModelUseCaseTest {
     @Mock
     private com.lumintra.backend.device.application.ActiveFirmwareSummaryResolver activeFirmwareResolver;
 
+    @Mock
+    private ProductRepository productRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private LedModelMapper ledModelMapper;
     private UpdateLedModelUseCase useCase;
 
     @BeforeEach
     void setUp() {
         ledModelMapper = new LedModelMapper();
-        useCase = new UpdateLedModelUseCase(ledModelRepository, ledInstanceRepository, ledModelMapper, activeFirmwareResolver);
+        useCase = new UpdateLedModelUseCase(
+                ledModelRepository,
+                ledInstanceRepository,
+                ledModelMapper,
+                activeFirmwareResolver,
+                productRepository,
+                eventPublisher
+        );
     }
 
     private LedModelEntity createSampleEntity(Long id, String name, int width, int height, long stock, LedModelStatus status) {
@@ -310,5 +332,59 @@ class UpdateLedModelUseCaseTest {
         assertThat(attributes.get(0).label()).isEqualTo("C - Connectivity");
         assertThat(attributes.get(1).label()).isEqualTo("A - Voltage");
         assertThat(attributes.get(2).label()).isEqualTo("B - Pitch");
+    }
+
+    @Test
+    @DisplayName("N: Renaming a linked LED model syncs linked Store Product name and publishes cache eviction event")
+    void execute_linkedModelNameChanged_syncsLinkedProductNameAndEvictsCache() {
+        Long modelId = 9L;
+        Long productId = 90L;
+        LedModelEntity existing = LedModelEntity.createCatalogModel(
+                modelId, productId, "Bla Bla", 64, 64, Map.of("widthPx", 64, "heightPx", 64), 10L, LedModelStatus.ACTIVE);
+        ProductEntity linkedProduct = ProductEntity.create(
+                "Bla Bla", ProductType.LED, new BigDecimal("1490000.00"), "desc", null, List.of(), ProductStatus.PUBLISHED, Set.of());
+        linkedProduct.setProductId(productId);
+
+        UpdateLedModelRequest request = new UpdateLedModelRequest(
+                "Lumintra Pro 64x64",
+                10L,
+                new UpdateLedModelRequest.LedSpecRequest(64, 64, List.of())
+        );
+
+        when(ledModelRepository.findById(modelId)).thenReturn(Optional.of(existing));
+        when(ledModelRepository.existsByModelNameIgnoreCaseAndModelIdNot("Lumintra Pro 64x64", modelId)).thenReturn(false);
+        when(ledModelRepository.save(any(LedModelEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(productRepository.findById(productId)).thenReturn(Optional.of(linkedProduct));
+
+        LedModelListResponse.LedModelItem result = useCase.execute(modelId, request);
+
+        assertThat(result.modelName()).isEqualTo("Lumintra Pro 64x64");
+        assertThat(linkedProduct.getProductName()).isEqualTo("Lumintra Pro 64x64");
+        verify(productRepository).save(linkedProduct);
+        verify(eventPublisher).publishEvent(new StoreProductUpdatedEvent(productId));
+    }
+
+    @Test
+    @DisplayName("B: Updating stock/spec without changing modelName does not overwrite linked Store Product name")
+    void execute_linkedModelNameUnchanged_doesNotTouchLinkedProduct() {
+        Long modelId = 10L;
+        Long productId = 91L;
+        LedModelEntity existing = LedModelEntity.createCatalogModel(
+                modelId, productId, "Matrix 64x64", 64, 64, Map.of("widthPx", 64, "heightPx", 64), 10L, LedModelStatus.ACTIVE);
+
+        UpdateLedModelRequest request = new UpdateLedModelRequest(
+                "Matrix 64x64",
+                25L,
+                new UpdateLedModelRequest.LedSpecRequest(64, 64, List.of())
+        );
+
+        when(ledModelRepository.findById(modelId)).thenReturn(Optional.of(existing));
+        when(ledModelRepository.existsByModelNameIgnoreCaseAndModelIdNot("Matrix 64x64", modelId)).thenReturn(false);
+        when(ledModelRepository.save(any(LedModelEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        useCase.execute(modelId, request);
+
+        verifyNoInteractions(productRepository);
+        verify(eventPublisher, never()).publishEvent(any());
     }
 }

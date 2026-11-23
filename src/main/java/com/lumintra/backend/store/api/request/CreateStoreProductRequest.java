@@ -24,7 +24,31 @@ public record CreateStoreProductRequest(
         List<@NotBlank @Size(max = 500) @Pattern(regexp = "https?://\\S+") @URL String> galleryUrls,
         List<@NotNull @Positive Long> tagIds,
         @Positive Long characterVersionId,
-        @Valid LedDetails ledDetails) {
+        @Valid LedDetails ledDetails,
+        @Positive Long ledModelId) {
+
+    public CreateStoreProductRequest(
+            String productName,
+            ProductType productType,
+            BigDecimal basePrice,
+            String description,
+            String thumbnailUrl,
+            List<String> galleryUrls,
+            List<Long> tagIds,
+            Long characterVersionId,
+            LedDetails ledDetails) {
+        this(
+                productName,
+                productType,
+                basePrice,
+                description,
+                thumbnailUrl,
+                galleryUrls,
+                tagIds,
+                characterVersionId,
+                ledDetails,
+                null);
+    }
 
     public CreateStoreProductRequest {
         productName = productName == null ? null : productName.strip();
@@ -33,14 +57,18 @@ public record CreateStoreProductRequest(
     @JsonIgnore
     @AssertTrue(
             message =
-                    "CHARACTER requires characterVersionId and excludes ledDetails. LED excludes"
-                        + " characterVersionId.")
+                    "CHARACTER requires characterVersionId and excludes ledDetails/ledModelId. LED"
+                        + " excludes characterVersionId and cannot specify both ledDetails and"
+                        + " ledModelId.")
     public boolean isLinkValid() {
         return productType == null
                 || (productType == ProductType.CHARACTER
                         && characterVersionId != null
-                        && ledDetails == null)
-                || (productType == ProductType.LED && characterVersionId == null);
+                        && ledDetails == null
+                        && ledModelId == null)
+                || (productType == ProductType.LED
+                        && characterVersionId == null
+                        && !(ledDetails != null && ledModelId != null));
     }
 
     @Schema(description = "Optional LED model to create with the product")

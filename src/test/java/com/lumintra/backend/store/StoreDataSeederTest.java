@@ -105,7 +105,7 @@ class StoreDataSeederTest {
     private ArgumentCaptor<SubscriptionDetailEntity> subscriptionCaptor;
 
     @Test
-    @DisplayName("N: Clean database seeds tags, LED models, characters, bundle, subscription, and evicts store cache")
+    @DisplayName("N: Clean database seeds 12 tags, 3 LED models, 10 characters, bundle, subscription, and evicts store cache")
     void run_cleanDatabase_seedsAllCatalogEntitiesAndEvictsCache() {
         AtomicLong tagIds = new AtomicLong(1L);
         given(tagRepository.findByName(anyString())).willReturn(Optional.empty());
@@ -123,7 +123,9 @@ class StoreDataSeederTest {
             return product;
         });
 
-        given(ledModelLookupService.findByModelId(anyLong())).willReturn(Optional.empty());
+        given(ledModelLookupService.findByProductId(anyLong())).willReturn(Optional.empty());
+        given(ledModelCreationService.createForProduct(anyLong(), anyString(), anyMap(), anyLong()))
+                .willAnswer(inv -> inv.getArgument(0));
 
         AtomicLong versionIds = new AtomicLong(501L);
         given(characterLookupService.findVersionIdByProductId(anyLong())).willReturn(Optional.empty());
@@ -140,26 +142,35 @@ class StoreDataSeederTest {
         });
 
         given(subscriptionDetailRepository.findByProductId(anyLong())).willReturn(Optional.empty());
-        given(subscriptionDetailRepository.findByPlanCode(StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_VIP))
+        given(subscriptionDetailRepository.findByPlanCode(anyString()))
                 .willReturn(Optional.empty());
 
         seeder.run(applicationArguments);
 
-        verify(tagRepository, times(4)).save(any(TagEntity.class));
+        verify(tagRepository, times(12)).save(any(TagEntity.class));
 
-        verify(productRepository, times(8)).save(productCaptor.capture());
+        verify(productRepository, times(17)).save(productCaptor.capture());
         List<ProductEntity> savedProducts = productCaptor.getAllValues();
         assertThat(savedProducts)
                 .extracting(ProductEntity::getProductName)
                 .containsExactly(
                         StoreDataSeeder.PRODUCT_LED_PRO,
                         StoreDataSeeder.PRODUCT_LED_COMPACT,
-                        StoreDataSeeder.PRODUCT_LED_PROTOTYPE,
-                        StoreDataSeeder.PRODUCT_CHAR_CAT,
-                        StoreDataSeeder.PRODUCT_CHAR_DRAGON,
-                        StoreDataSeeder.PRODUCT_CHAR_MASCOT,
+                        StoreDataSeeder.PRODUCT_LED_MINI,
+                        StoreDataSeeder.PRODUCT_CHAR_01,
+                        StoreDataSeeder.PRODUCT_CHAR_02,
+                        StoreDataSeeder.PRODUCT_CHAR_03,
+                        StoreDataSeeder.PRODUCT_CHAR_04,
+                        StoreDataSeeder.PRODUCT_CHAR_05,
+                        StoreDataSeeder.PRODUCT_CHAR_06,
+                        StoreDataSeeder.PRODUCT_CHAR_07,
+                        StoreDataSeeder.PRODUCT_CHAR_08,
+                        StoreDataSeeder.PRODUCT_CHAR_09,
+                        StoreDataSeeder.PRODUCT_CHAR_10,
                         StoreDataSeeder.PRODUCT_BUNDLE_STARTER,
-                        StoreDataSeeder.PRODUCT_SUB_VIP
+                        StoreDataSeeder.PRODUCT_BUNDLE_ANIME_TRIO,
+                        StoreDataSeeder.PRODUCT_SUB_VIP,
+                        StoreDataSeeder.PRODUCT_SUB_COMMISSION_PLUS
                 );
         assertThat(savedProducts)
                 .extracting(ProductEntity::getProductType)
@@ -170,7 +181,16 @@ class StoreDataSeederTest {
                         ProductType.CHARACTER,
                         ProductType.CHARACTER,
                         ProductType.CHARACTER,
+                        ProductType.CHARACTER,
+                        ProductType.CHARACTER,
+                        ProductType.CHARACTER,
+                        ProductType.CHARACTER,
+                        ProductType.CHARACTER,
+                        ProductType.CHARACTER,
+                        ProductType.CHARACTER,
                         ProductType.BUNDLE,
+                        ProductType.BUNDLE,
+                        ProductType.SUBSCRIPTION,
                         ProductType.SUBSCRIPTION
                 );
         assertThat(savedProducts)
@@ -178,10 +198,19 @@ class StoreDataSeederTest {
                 .containsExactly(
                         ProductStatus.PUBLISHED,
                         ProductStatus.PUBLISHED,
-                        ProductStatus.UNPUBLISHED,
                         ProductStatus.PUBLISHED,
                         ProductStatus.PUBLISHED,
-                        ProductStatus.ARCHIVED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
                         ProductStatus.PUBLISHED,
                         ProductStatus.PUBLISHED
                 );
@@ -189,23 +218,29 @@ class StoreDataSeederTest {
         // LED models linked to the 3 seeded LED products (101L, 102L, 103L)
         verify(ledModelCreationService).createForProduct(eq(101L), eq(StoreDataSeeder.PRODUCT_LED_PRO), anyMap(), eq(50L));
         verify(ledModelCreationService).createForProduct(eq(102L), eq(StoreDataSeeder.PRODUCT_LED_COMPACT), anyMap(), eq(30L));
-        verify(ledModelCreationService).createForProduct(eq(103L), eq(StoreDataSeeder.PRODUCT_LED_PROTOTYPE), anyMap(), eq(5L));
+        verify(ledModelCreationService).createForProduct(eq(103L), eq(StoreDataSeeder.PRODUCT_LED_MINI), anyMap(), eq(40L));
 
-        // Character versions linked to the 3 seeded CHARACTER products (104L, 105L, 106L)
-        verify(characterCreationService).createForProduct(
-                eq(104L), eq(StoreDataSeeder.PRODUCT_CHAR_CAT), anyString(), eq(1),
-                anyString(), anyString(), eq(24), eq(80), eq(196608));
-        verify(characterCreationService).createForProduct(
-                eq(105L), eq(StoreDataSeeder.PRODUCT_CHAR_DRAGON), anyString(), eq(1),
-                anyString(), anyString(), eq(30), eq(70), eq(245760));
-        verify(characterCreationService).createForProduct(
-                eq(106L), eq(StoreDataSeeder.PRODUCT_CHAR_MASCOT), anyString(), eq(1),
-                anyString(), anyString(), eq(16), eq(100), eq(131072));
+        // Character versions linked sequentially to products 104L..113L using exact CDN URLs and frame metadata
+        for (int i = 0; i < StoreDataSeeder.CHARACTER_SEEDS.size(); i++) {
+            StoreDataSeeder.CharacterSeedSpec spec = StoreDataSeeder.CHARACTER_SEEDS.get(i);
+            verify(characterCreationService).createForProduct(
+                    eq(104L + i),
+                    eq(spec.productName()),
+                    eq(spec.description()),
+                    eq(1),
+                    eq(spec.previewUrl()),
+                    eq(spec.ledBinaryUrl()),
+                    eq(spec.frameCount()),
+                    eq(spec.frameDelayMs()),
+                    eq(spec.byteSize()));
+        }
 
-        // Bundle links LED Pro (101L) and Cyber Dragon versionId (502L)
-        verify(bundleRepository).save(bundleCaptor.capture());
-        assertThat(bundleCaptor.getValue().getProductId()).isEqualTo(107L);
-        verify(bundleItemRepository, times(2)).save(bundleItemCaptor.capture());
+        // Bundles: Starter Neon Combo (114L: LED Mini 103L + Capybara 502L) and Anime Chibi Trio Combo (115L: Nezuko 505L, Maomao 509L, Sakura Miku 510L)
+        verify(bundleRepository, times(2)).save(bundleCaptor.capture());
+        assertThat(bundleCaptor.getAllValues())
+                .extracting(BundleEntity::getProductId)
+                .containsExactly(114L, 115L);
+        verify(bundleItemRepository, times(5)).save(bundleItemCaptor.capture());
         assertThat(bundleItemCaptor.getAllValues())
                 .extracting(
                         BundleItemEntity::getItemType,
@@ -213,15 +248,21 @@ class StoreDataSeederTest {
                         BundleItemEntity::getVersionId,
                         BundleItemEntity::getQuantity)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(BundleItemType.LED, 101L, null, 1),
-                        org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 502L, 1)
+                        org.assertj.core.groups.Tuple.tuple(BundleItemType.LED, 103L, null, 1),
+                        org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 502L, 1),
+                        org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 505L, 1),
+                        org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 509L, 1),
+                        org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 510L, 1)
                 );
 
-        // Subscription detail links VIP product (108L)
-        verify(subscriptionDetailRepository).save(subscriptionCaptor.capture());
-        SubscriptionDetailEntity savedSub = subscriptionCaptor.getValue();
-        assertThat(savedSub.getProductId()).isEqualTo(108L);
-        assertThat(savedSub.getPlanCode()).isEqualTo(StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_VIP);
+        // Subscription details link VIP All-Access (116L) and Commission VIP (117L)
+        verify(subscriptionDetailRepository, times(2)).save(subscriptionCaptor.capture());
+        assertThat(subscriptionCaptor.getAllValues())
+                .extracting(SubscriptionDetailEntity::getProductId, SubscriptionDetailEntity::getPlanCode)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(116L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_VIP),
+                        org.assertj.core.groups.Tuple.tuple(117L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_COMMISSION_PLUS)
+                );
 
         verify(storeCacheEvictor, times(1)).evictAllProducts();
     }
@@ -247,7 +288,7 @@ class StoreDataSeederTest {
     @DisplayName("B: Existing subscription planCode on another row prevents duplicate subscription detail insertion")
     void run_existingPlanCode_skipsDuplicateSubscriptionDetail() {
         stubExistingCatalog();
-        given(subscriptionDetailRepository.findByProductId(108L)).willReturn(Optional.empty());
+        given(subscriptionDetailRepository.findByProductId(116L)).willReturn(Optional.empty());
         given(subscriptionDetailRepository.findByPlanCode(StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_VIP))
                 .willReturn(Optional.of(mock(SubscriptionDetailEntity.class)));
 
@@ -266,32 +307,44 @@ class StoreDataSeederTest {
 
         stubExistingProduct(StoreDataSeeder.PRODUCT_LED_PRO, 101L, ProductType.LED, ProductStatus.PUBLISHED, "250000.00");
         stubExistingProduct(StoreDataSeeder.PRODUCT_LED_COMPACT, 102L, ProductType.LED, ProductStatus.PUBLISHED, "190000.00");
-        stubExistingProduct(StoreDataSeeder.PRODUCT_LED_PROTOTYPE, 103L, ProductType.LED, ProductStatus.UNPUBLISHED, "299000.00");
-        stubExistingProduct(StoreDataSeeder.PRODUCT_CHAR_CAT, 104L, ProductType.CHARACTER, ProductStatus.PUBLISHED, "50000.00");
-        stubExistingProduct(StoreDataSeeder.PRODUCT_CHAR_DRAGON, 105L, ProductType.CHARACTER, ProductStatus.PUBLISHED, "75000.00");
-        stubExistingProduct(StoreDataSeeder.PRODUCT_CHAR_MASCOT, 106L, ProductType.CHARACTER, ProductStatus.ARCHIVED, "40000.00");
-        stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_STARTER, 107L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "280000.00");
-        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_VIP, 108L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "99000.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_LED_MINI, 103L, ProductType.LED, ProductStatus.PUBLISHED, "145000.00");
 
-        given(ledModelLookupService.findByModelId(101L))
+        for (int i = 0; i < StoreDataSeeder.CHARACTER_SEEDS.size(); i++) {
+            StoreDataSeeder.CharacterSeedSpec spec = StoreDataSeeder.CHARACTER_SEEDS.get(i);
+            long prodId = 104L + i;
+            stubExistingProduct(spec.productName(), prodId, ProductType.CHARACTER, spec.status(), spec.basePrice().toPlainString());
+            given(characterLookupService.findVersionIdByProductId(prodId)).willReturn(Optional.of(501L + i));
+        }
+
+        stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_STARTER, 114L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "159000.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_ANIME_TRIO, 115L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "129000.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_VIP, 116L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "99000.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_COMMISSION_PLUS, 117L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "79000.00");
+
+        given(ledModelLookupService.findByProductId(101L))
                 .willReturn(Optional.of(new LedModelSnapshot(101L, StoreDataSeeder.PRODUCT_LED_PRO, Map.of(), 50L)));
-        given(ledModelLookupService.findByModelId(102L))
+        given(ledModelLookupService.findByProductId(102L))
                 .willReturn(Optional.of(new LedModelSnapshot(102L, StoreDataSeeder.PRODUCT_LED_COMPACT, Map.of(), 30L)));
-        given(ledModelLookupService.findByModelId(103L))
-                .willReturn(Optional.of(new LedModelSnapshot(103L, StoreDataSeeder.PRODUCT_LED_PROTOTYPE, Map.of(), 5L)));
+        given(ledModelLookupService.findByProductId(103L))
+                .willReturn(Optional.of(new LedModelSnapshot(103L, StoreDataSeeder.PRODUCT_LED_MINI, Map.of(), 40L)));
 
-        given(characterLookupService.findVersionIdByProductId(104L)).willReturn(Optional.of(501L));
-        given(characterLookupService.findVersionIdByProductId(105L)).willReturn(Optional.of(502L));
-        given(characterLookupService.findVersionIdByProductId(106L)).willReturn(Optional.of(503L));
-
-        BundleEntity existingBundle = BundleEntity.create(
-                107L, StoreDataSeeder.PRODUCT_BUNDLE_STARTER, "desc",
-                new BigDecimal("325000.00"), new BigDecimal("280000.00"),
+        BundleEntity existingStarterBundle = BundleEntity.create(
+                114L, StoreDataSeeder.PRODUCT_BUNDLE_STARTER, "desc",
+                new BigDecimal("175000.00"), new BigDecimal("159000.00"),
                 "PUBLISHED", Instant.now(), null);
-        ReflectionTestUtils.setField(existingBundle, "bundleId", 900L);
-        given(bundleRepository.findByProductId(107L)).willReturn(Optional.of(existingBundle));
+        ReflectionTestUtils.setField(existingStarterBundle, "bundleId", 900L);
+        given(bundleRepository.findByProductId(114L)).willReturn(Optional.of(existingStarterBundle));
 
-        given(subscriptionDetailRepository.findByProductId(108L))
+        BundleEntity existingAnimeBundle = BundleEntity.create(
+                115L, StoreDataSeeder.PRODUCT_BUNDLE_ANIME_TRIO, "desc",
+                new BigDecimal("154000.00"), new BigDecimal("129000.00"),
+                "PUBLISHED", Instant.now(), null);
+        ReflectionTestUtils.setField(existingAnimeBundle, "bundleId", 901L);
+        given(bundleRepository.findByProductId(115L)).willReturn(Optional.of(existingAnimeBundle));
+
+        given(subscriptionDetailRepository.findByProductId(116L))
+                .willReturn(Optional.of(mock(SubscriptionDetailEntity.class)));
+        given(subscriptionDetailRepository.findByProductId(117L))
                 .willReturn(Optional.of(mock(SubscriptionDetailEntity.class)));
     }
 

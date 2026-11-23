@@ -32,6 +32,24 @@ public class LedModelLookupServiceImpl implements LedModelLookupService {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Long> findProductIdByModelId(Long modelId) {
+        if (modelId == null) {
+            return Optional.empty();
+        }
+        return ledModelRepository.findById(modelId).map(LedModelEntity::getProductId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<LedModelSnapshot> findByProductId(Long productId) {
+        if (productId == null) {
+            return Optional.empty();
+        }
+        return ledModelRepository.findByProductId(productId).map(this::toSnapshot);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<Long, LedModelSnapshot> findByModelIds(Collection<Long> modelIds) {
         if (modelIds == null || modelIds.isEmpty()) {
             return Collections.emptyMap();

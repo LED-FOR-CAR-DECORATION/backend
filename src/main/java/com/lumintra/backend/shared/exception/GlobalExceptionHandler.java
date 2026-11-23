@@ -62,7 +62,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(StoreProductReferenceException.class)
     public ResponseEntity<ErrorResponse> handleStoreProductReference(StoreProductReferenceException ex) {
-        var status = ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
+        var status = (ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
+                        || ex.getReason() == StoreProductReferenceException.Reason.LED_MODEL_ALREADY_LINKED)
                 ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND;
         return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
     }

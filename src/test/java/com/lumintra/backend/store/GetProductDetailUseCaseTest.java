@@ -112,7 +112,7 @@ class GetProductDetailUseCaseTest {
 
         when(productRepository.findWithTagsByProductIdAndStatusIn(5L, PUBLIC_STATUSES))
                 .thenReturn(Optional.of(entity));
-        when(ledModelLookupService.findByModelId(5L)).thenReturn(Optional.of(ledSnapshot));
+        when(ledModelLookupService.findByProductId(5L)).thenReturn(Optional.of(ledSnapshot));
 
         ProductDetailResponse response = getProductDetailUseCase.execute(5L);
 
@@ -334,7 +334,7 @@ class GetProductDetailUseCaseTest {
                 ProductStatus.PUBLISHED, Set.of(), Instant.now());
         when(productRepository.findWithTagsByProductIdAndStatusIn(15L, PUBLIC_STATUSES))
                 .thenReturn(Optional.of(ledWithoutModel));
-        when(ledModelLookupService.findByModelId(15L)).thenReturn(Optional.empty());
+        when(ledModelLookupService.findByProductId(15L)).thenReturn(Optional.empty());
 
         ProductDetailResponse ledResponse = getProductDetailUseCase.execute(15L);
         assertThat(ledResponse.ledDetails()).isNull();
@@ -382,7 +382,7 @@ class GetProductDetailUseCaseTest {
         assertThat(timedResponse.subscriptionDetails().maxMobileProfiles()).isEqualTo(10);
         assertThat(timedResponse.subscriptionDetails().features()).isEmpty();
 
-        verify(ledModelLookupService).findByModelId(15L);
+        verify(ledModelLookupService).findByProductId(15L);
         verify(subscriptionDetailRepository).findByProductId(17L);
         verify(subscriptionDetailRepository).findByProductId(18L);
         verifyNoInteractions(characterLookupService);

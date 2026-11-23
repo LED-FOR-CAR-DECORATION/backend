@@ -85,6 +85,8 @@ class UpdateBundlePersistenceTest {
         when(models.findByModelId(led.getProductId()))
                 .thenReturn(
                         Optional.of(new LedModelSnapshot(led.getProductId(), "LED", Map.of(), 1L)));
+        when(models.findProductIdByModelId(led.getProductId()))
+                .thenReturn(Optional.of(led.getProductId()));
         var product =
                 products.save(
                         ProductEntity.create(

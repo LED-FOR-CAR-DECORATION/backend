@@ -30,6 +30,15 @@ public class LedStockLookupServiceImpl implements LedStockLookupService {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Long> findStockByProductId(Long productId) {
+        if (productId == null) {
+            return Optional.empty();
+        }
+        return ledModelRepository.findByProductId(productId).map(LedModelEntity::getStockQuantity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<Long, Long> findStocksByModelIds(Collection<Long> modelIds) {
         if (modelIds == null || modelIds.isEmpty()) {
             return Collections.emptyMap();
