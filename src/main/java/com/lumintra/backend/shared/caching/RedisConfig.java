@@ -34,6 +34,7 @@ public class RedisConfig implements CachingConfigurer {
                 .withCacheConfiguration("store:products", defaultCacheConfig.entryTtl(Duration.ofMinutes(15)))
                 .withCacheConfiguration("store:product", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)))
                 .withCacheConfiguration("store:tags", defaultCacheConfig.entryTtl(Duration.ofMinutes(60)))
+                .withCacheConfiguration("dashboard:manager:kpi", defaultCacheConfig.entryTtl(Duration.ofSeconds(300)))
                 .build();
     }
 
