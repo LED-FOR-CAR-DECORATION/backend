@@ -39,13 +39,16 @@ class UpdateLedModelUseCaseTest {
     @Mock
     private LedInstanceRepository ledInstanceRepository;
 
+    @Mock
+    private com.lumintra.backend.device.application.ActiveFirmwareSummaryResolver activeFirmwareResolver;
+
     private LedModelMapper ledModelMapper;
     private UpdateLedModelUseCase useCase;
 
     @BeforeEach
     void setUp() {
         ledModelMapper = new LedModelMapper();
-        useCase = new UpdateLedModelUseCase(ledModelRepository, ledInstanceRepository, ledModelMapper);
+        useCase = new UpdateLedModelUseCase(ledModelRepository, ledInstanceRepository, ledModelMapper, activeFirmwareResolver);
     }
 
     private LedModelEntity createSampleEntity(Long id, String name, int width, int height, long stock, LedModelStatus status) {
@@ -81,10 +84,14 @@ class UpdateLedModelUseCaseTest {
         when(ledModelRepository.existsByModelNameIgnoreCaseAndModelIdNot("Matrix P4 64x64 Upgraded", modelId)).thenReturn(false);
         when(ledInstanceRepository.existsByModelId(modelId)).thenReturn(false);
         when(ledModelRepository.save(any(LedModelEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        LedModelListResponse.ActiveFirmwareSummary active = LedModelListResponse.ActiveFirmwareSummary.builder()
+                .firmwareId(12L).version("1.2.0").installedDeviceCount(5).build();
+        when(activeFirmwareResolver.resolve(modelId)).thenReturn(active);
 
         LedModelListResponse.LedModelItem result = useCase.execute(modelId, request);
 
         assertThat(result).isNotNull();
+        assertThat(result.activeFirmware()).isEqualTo(active);
         assertThat(result.modelId()).isEqualTo(modelId);
         assertThat(result.modelName()).isEqualTo("Matrix P4 64x64 Upgraded");
         assertThat(result.stockQuantity()).isEqualTo(25L);

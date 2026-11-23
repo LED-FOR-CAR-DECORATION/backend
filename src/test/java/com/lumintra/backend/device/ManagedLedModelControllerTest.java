@@ -91,6 +91,12 @@ class ManagedLedModelControllerTest {
                                 new LedModelListResponse.SpecAttribute("Voltage", "5V USB-C")
                         ))
                         .build())
+                .activeFirmware(LedModelListResponse.ActiveFirmwareSummary.builder()
+                        .firmwareId(12L)
+                        .version("1.2.0")
+                        .uploadedAt(java.time.Instant.parse("2026-11-20T10:00:00Z"))
+                        .installedDeviceCount(5)
+                        .build())
                 .build();
 
         LedModelListResponse.LedModelItem unlinkedLowStockItem = LedModelListResponse.LedModelItem.builder()
@@ -144,6 +150,11 @@ class ManagedLedModelControllerTest {
                     .andExpect(jsonPath("$.data[1].modelId").value(9))
                     .andExpect(jsonPath("$.data[1].productId").value(nullValue()))
                     .andExpect(jsonPath("$.data[1].isLowStock").value(true))
+                    .andExpect(jsonPath("$.data[0].activeFirmware.firmwareId").value(12))
+                    .andExpect(jsonPath("$.data[0].activeFirmware.version").value("1.2.0"))
+                    .andExpect(jsonPath("$.data[0].activeFirmware.uploadedAt").value("2026-11-20T10:00:00Z"))
+                    .andExpect(jsonPath("$.data[0].activeFirmware.installedDeviceCount").value(5))
+                    .andExpect(jsonPath("$.data[1].activeFirmware").value(nullValue()))
                     .andExpect(jsonPath("$.meta.page").value(0))
                     .andExpect(jsonPath("$.meta.size").value(20))
                     .andExpect(jsonPath("$.meta.totalElements").value(2));
