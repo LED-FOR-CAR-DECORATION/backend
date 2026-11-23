@@ -247,6 +247,16 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("LED_MODEL_DIMENSIONS_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(DeviceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceNotFound(DeviceNotFoundException ex) {
+        return buildErrorResponse("DEVICE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(DeviceNotBoundException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceNotBound(DeviceNotBoundException ex) {
+        return buildErrorResponse("DEVICE_NOT_BOUND", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(DeviceOwnershipMismatchException.class)
     public ResponseEntity<ErrorResponse> handleDeviceOwnershipMismatch(DeviceOwnershipMismatchException ex) {
         return buildErrorResponse("DEVICE_OWNERSHIP_MISMATCH", ex.getMessage(), HttpStatus.FORBIDDEN);

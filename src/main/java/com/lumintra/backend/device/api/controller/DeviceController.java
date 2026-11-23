@@ -1,5 +1,11 @@
 package com.lumintra.backend.device.api.controller;
 
+import org.springframework.web.bind.annotation.RequestParam;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
+import com.lumintra.backend.device.domain.model.FirmwareVersionNumber;
+import com.lumintra.backend.device.application.CheckFirmwareUpdateUseCase;
+import com.lumintra.backend.device.api.response.OtaCheckResponse;
 import com.lumintra.backend.device.api.request.ClaimDeviceRequest;
 import com.lumintra.backend.device.api.request.CustomerDeviceFilterRequest;
 import com.lumintra.backend.device.api.response.ClaimDeviceResponse;
@@ -48,6 +54,7 @@ public class DeviceController {
     private final ClaimDeviceUseCase claimDeviceUseCase;
     private final ListCustomerDevicesUseCase listCustomerDevicesUseCase;
     private final GetCustomerDeviceDetailUseCase getCustomerDeviceDetailUseCase;
+    private final CheckFirmwareUpdateUseCase checkFirmwareUpdateUseCase;
 
     @Operation(
             summary = "Claim an LED device via factory QR code",
@@ -458,6 +465,44 @@ public class DeviceController {
         Long customerId = extractCustomerId(authentication);
         CustomerDeviceDetailResponse response = getCustomerDeviceDetailUseCase.execute(customerId, id);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Check for a firmware update or rollback (DEV-10)",
+            description = "CUSTOMER only, for a BOUND device the caller owns. The current version is the BLE-reported "
+                    + "currentVersion, else the recorded firmware's version, else UNKNOWN. updateAvailable is true when the "
+                    + "device model has an ACTIVE release whose version differs (not just newer); isRollback is true when the "
+                    + "current version is higher than the ACTIVE one or DEPRECATED. Read-only.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OTA check result"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "currentVersion is not MAJOR.MINOR.PATCH, or id is not positive",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Missing or invalid JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403",
+                    description = "Not a CUSTOMER, or DEVICE_OWNERSHIP_MISMATCH",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "DEVICE_NOT_FOUND",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "DEVICE_NOT_BOUND",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @GetMapping("/{id}/ota/check")
+    public ResponseEntity<ApiResponse<OtaCheckResponse>> checkFirmwareUpdate(
+            Authentication authentication,
+            @Parameter(description = "LED device (instance) id", example = "2001", required = true)
+            @PathVariable @Positive(message = "id must be greater than 0") Long id,
+            @Parameter(description = "Version read from the device over BLE (MAJOR.MINOR.PATCH)", example = "1.0.0")
+            @RequestParam(required = false)
+            @Size(max = 32, message = "currentVersion cannot exceed 32 characters")
+            @Pattern(regexp = FirmwareVersionNumber.PATTERN, message = "currentVersion must follow MAJOR.MINOR.PATCH, e.g. 1.0.0")
+            String currentVersion) {
+        Long customerId = extractCustomerId(authentication);
+        return ResponseEntity.ok(ApiResponse.success(checkFirmwareUpdateUseCase.execute(customerId, id, currentVersion)));
     }
 
     private Long extractCustomerId(Authentication authentication) {
