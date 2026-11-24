@@ -30,6 +30,11 @@ public class IamDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(IamDataSeeder.class);
 
+    public static final String SEED_CUSTOMER_2_EMAIL = "minhanh.nguyen@gmail.com";
+    public static final String SEED_CUSTOMER_3_EMAIL = "quocbao.tran@gmail.com";
+    public static final String SEED_CUSTOMER_4_EMAIL = "thaovy.le@gmail.com";
+    private static final String DEFAULT_EXTRA_CUSTOMER_PASSWORD = "Lumintra@123";
+
     private final UserAccountRepository userAccountRepository;
     private final EmployeeRepository employeeRepository;
     private final CustomerRepository customerRepository;
@@ -117,7 +122,13 @@ public class IamDataSeeder implements ApplicationRunner {
     }
 
     private void seedTestAccounts() {
-        seedCustomerAccount(customerEmail, customerPassword, "Test Customer");
+        seedCustomerAccount(customerEmail, customerPassword, "Test Customer", "0901234567");
+        String extraCustomerPassword = (customerPassword != null && !customerPassword.isBlank())
+                ? customerPassword
+                : DEFAULT_EXTRA_CUSTOMER_PASSWORD;
+        seedCustomerAccount(SEED_CUSTOMER_2_EMAIL, extraCustomerPassword, "Nguyễn Minh Anh", "0902345678");
+        seedCustomerAccount(SEED_CUSTOMER_3_EMAIL, extraCustomerPassword, "Trần Quốc Bảo", "0903456789");
+        seedCustomerAccount(SEED_CUSTOMER_4_EMAIL, extraCustomerPassword, "Lê Thảo Vy", "0904567890");
         seedEmployeeAccount(managerEmail, managerPassword, "MANAGER", "Test Manager");
         seedEmployeeAccount(staffEmail, staffPassword, "STAFF", "Test Staff");
         seedEmployeeAccount(designerEmail, designerPassword, "DESIGNER", "Test Designer");
@@ -150,7 +161,7 @@ public class IamDataSeeder implements ApplicationRunner {
         });
     }
 
-    private void seedCustomerAccount(String email, String password, String fullName) {
+    private void seedCustomerAccount(String email, String password, String fullName, String phone) {
         if (email == null || email.isBlank() || password == null || password.isBlank()) return;
 
         userAccountRepository.findByEmail(email).orElseGet(() -> {
@@ -165,10 +176,11 @@ public class IamDataSeeder implements ApplicationRunner {
             CustomerEntity customer = new CustomerEntity();
             customer.setAccount(savedAccount);
             customer.setFullName(fullName);
+            customer.setPhone(phone);
             customer.setCreatedAt(Instant.now());
             customerRepository.save(customer);
 
-            log.info("Seeding test customer account [email={}]", email);
+            log.info("Seeding test customer account [email={}] [fullName={}]", email, fullName);
             return savedAccount;
         });
     }

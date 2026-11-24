@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Seeds representative physical {@link LedInstanceEntity} warehouse, transit, bound, returned,
@@ -40,10 +41,38 @@ public class DeviceDataSeeder implements ApplicationRunner {
     public static final String SEED_SERIAL_BOUND = "LMT-64X64-SEED-0004";
     public static final String SEED_SERIAL_RETURNED = "LMT-64X64-SEED-0005";
     public static final String SEED_SERIAL_DECOMMISSIONED = "LMT-64X64-SEED-0006";
+    public static final String SEED_SERIAL_WARRANTY_CLEAN = "LMT-64X64-SEED-0007";
+    public static final String SEED_SERIAL_WARRANTY_EXPIRED = "LMT-32X64-SEED-0008";
+    public static final String SEED_SERIAL_CUST2_PENDING = "LMT-64X64-SEED-0009";
+    public static final String SEED_SERIAL_CUST2_APPROVED = "LMT-32X64-SEED-0010";
+    public static final String SEED_SERIAL_CUST3_COMPLETED = "LMT-64X64-SEED-0011";
+    public static final String SEED_SERIAL_CUST4_REJECTED = "LMT-32X64-SEED-0012";
+    public static final String SEED_SERIAL_CUST4_PENDING = "LMT-64X64-SEED-0013";
 
     private static final String SEED_ORDER_SHIPPING_SUFFIX = "SEED0004";
     private static final String SEED_ORDER_DELIVERED_SUFFIX = "SEED0005";
     private static final String SEED_ORDER_COMPLETED_SUFFIX = "SEED0007";
+    private static final String SEED_ORDER_WARRANTY_CLEAN_SUFFIX = "SEED0012";
+    private static final String SEED_ORDER_WARRANTY_EXPIRED_SUFFIX = "SEED0013";
+    private static final String SEED_ORDER_CUST2_PENDING_SUFFIX = "SEED0014";
+    private static final String SEED_ORDER_CUST2_APPROVED_SUFFIX = "SEED0015";
+    private static final String SEED_ORDER_CUST3_COMPLETED_SUFFIX = "SEED0016";
+    private static final String SEED_ORDER_CUST4_REJECTED_SUFFIX = "SEED0017";
+    private static final String SEED_ORDER_CUST4_PENDING_SUFFIX = "SEED0018";
+
+    private static final String SEED_CUSTOMER_2_EMAIL = "minhanh.nguyen@gmail.com";
+    private static final String SEED_CUSTOMER_3_EMAIL = "quocbao.tran@gmail.com";
+    private static final String SEED_CUSTOMER_4_EMAIL = "thaovy.le@gmail.com";
+
+    private static final Set<String> LEGACY_CUSTOM_DEVICE_NAMES = Set.of(
+            "Civic - Đèn kính sau LED",
+            "Wave Alpha - Bảng LED mini",
+            "Mazda 3 - Đèn kính sau",
+            "Bàn làm việc Gaming RGB",
+            "Quầy thu ngân Cafe Lumintra",
+            "SH 150i - Biển LED sau xe",
+            "VF e34 - Bảng LED chào mừng"
+    );
 
     private final LedModelRepository ledModelRepository;
     private final LedInstanceRepository ledInstanceRepository;
@@ -141,7 +170,127 @@ public class DeviceDataSeeder implements ApplicationRunner {
                 null
         ), null);
 
+        seededCount += seedWarrantyBoundDevices(primaryModel, secondaryModel, customer, now);
+
         log.info("LED instance seed verification complete [seededCount={}]", seededCount);
+    }
+
+    private int seedWarrantyBoundDevices(
+            LedModelEntity primaryModel,
+            LedModelEntity secondaryModel,
+            CustomerProfileSnapshot primaryCustomer,
+            Instant now) {
+        int seeded = 0;
+
+        if (primaryCustomer != null) {
+            seeded += seedBoundDevice(
+                    primaryModel.getModelId(),
+                    SEED_SERIAL_WARRANTY_CLEAN,
+                    "AA:BB:CC:11:22:07",
+                    primaryCustomer.customerId(),
+                    primaryModel.getModelName(),
+                    now.minus(35, ChronoUnit.DAYS),
+                    now.minus(10, ChronoUnit.DAYS),
+                    SEED_ORDER_WARRANTY_CLEAN_SUFFIX
+            );
+            seeded += seedBoundDevice(
+                    secondaryModel.getModelId(),
+                    SEED_SERIAL_WARRANTY_EXPIRED,
+                    "AA:BB:CC:11:22:08",
+                    primaryCustomer.customerId(),
+                    secondaryModel.getModelName(),
+                    now.minus(230, ChronoUnit.DAYS),
+                    now.minus(200, ChronoUnit.DAYS),
+                    SEED_ORDER_WARRANTY_EXPIRED_SUFFIX
+            );
+        }
+
+        CustomerProfileSnapshot customer2 = customerLookupService.findProfileByEmail(SEED_CUSTOMER_2_EMAIL).orElse(null);
+        if (customer2 != null) {
+            seeded += seedBoundDevice(
+                    primaryModel.getModelId(),
+                    SEED_SERIAL_CUST2_PENDING,
+                    "AA:BB:CC:11:22:09",
+                    customer2.customerId(),
+                    primaryModel.getModelName(),
+                    now.minus(40, ChronoUnit.DAYS),
+                    now.minus(15, ChronoUnit.DAYS),
+                    SEED_ORDER_CUST2_PENDING_SUFFIX
+            );
+            seeded += seedBoundDevice(
+                    secondaryModel.getModelId(),
+                    SEED_SERIAL_CUST2_APPROVED,
+                    "AA:BB:CC:11:22:10",
+                    customer2.customerId(),
+                    secondaryModel.getModelName(),
+                    now.minus(50, ChronoUnit.DAYS),
+                    now.minus(25, ChronoUnit.DAYS),
+                    SEED_ORDER_CUST2_APPROVED_SUFFIX
+            );
+        }
+
+        CustomerProfileSnapshot customer3 = customerLookupService.findProfileByEmail(SEED_CUSTOMER_3_EMAIL).orElse(null);
+        if (customer3 != null) {
+            seeded += seedBoundDevice(
+                    primaryModel.getModelId(),
+                    SEED_SERIAL_CUST3_COMPLETED,
+                    "AA:BB:CC:11:22:11",
+                    customer3.customerId(),
+                    primaryModel.getModelName(),
+                    now.minus(65, ChronoUnit.DAYS),
+                    now.minus(40, ChronoUnit.DAYS),
+                    SEED_ORDER_CUST3_COMPLETED_SUFFIX
+            );
+        }
+
+        CustomerProfileSnapshot customer4 = customerLookupService.findProfileByEmail(SEED_CUSTOMER_4_EMAIL).orElse(null);
+        if (customer4 != null) {
+            seeded += seedBoundDevice(
+                    secondaryModel.getModelId(),
+                    SEED_SERIAL_CUST4_REJECTED,
+                    "AA:BB:CC:11:22:12",
+                    customer4.customerId(),
+                    secondaryModel.getModelName(),
+                    now.minus(35, ChronoUnit.DAYS),
+                    now.minus(12, ChronoUnit.DAYS),
+                    SEED_ORDER_CUST4_REJECTED_SUFFIX
+            );
+            seeded += seedBoundDevice(
+                    primaryModel.getModelId(),
+                    SEED_SERIAL_CUST4_PENDING,
+                    "AA:BB:CC:11:22:13",
+                    customer4.customerId(),
+                    primaryModel.getModelName(),
+                    now.minus(30, ChronoUnit.DAYS),
+                    now.minus(7, ChronoUnit.DAYS),
+                    SEED_ORDER_CUST4_PENDING_SUFFIX
+            );
+        }
+
+        return seeded;
+    }
+
+    private int seedBoundDevice(
+            Long modelId,
+            String serialNumber,
+            String macAddress,
+            Long customerId,
+            String deviceName,
+            Instant manufacturedAt,
+            Instant boundAt,
+            String orderSuffix) {
+        return seedIfAbsent(LedInstanceEntity.createWithState(
+                modelId,
+                serialNumber,
+                macAddress,
+                "REV_1_0",
+                customerId,
+                deviceName,
+                LedInstanceStatus.BOUND,
+                manufacturedAt,
+                boundAt,
+                boundAt.plus(180, ChronoUnit.DAYS)
+        ), orderSuffix);
     }
 
     private CustomerProfileSnapshot resolveCustomer() {
@@ -155,12 +304,18 @@ public class DeviceDataSeeder implements ApplicationRunner {
 
     private int seedIfAbsent(LedInstanceEntity candidate, String orderTransactionSuffix) {
         if (ledInstanceRepository.existsBySerialNumber(candidate.getSerialNumber())) {
-            if (orderTransactionSuffix != null && orderFulfillmentLookupService != null) {
-                ledInstanceRepository.findBySerialNumber(candidate.getSerialNumber())
-                        .map(LedInstanceEntity::getInstanceId)
-                        .ifPresent(id -> orderFulfillmentLookupService
-                                .seedOrderFulfillmentIfPresent(orderTransactionSuffix, id));
-            }
+            ledInstanceRepository.findBySerialNumber(candidate.getSerialNumber()).ifPresent(existing -> {
+                if (candidate.getDeviceName() != null
+                        && existing.getDeviceName() != null
+                        && LEGACY_CUSTOM_DEVICE_NAMES.contains(existing.getDeviceName())) {
+                    existing.setDeviceName(candidate.getDeviceName());
+                    ledInstanceRepository.save(existing);
+                }
+                if (orderTransactionSuffix != null && orderFulfillmentLookupService != null) {
+                    orderFulfillmentLookupService.seedOrderFulfillmentIfPresent(
+                            orderTransactionSuffix, existing.getInstanceId());
+                }
+            });
             return 0;
         }
         LedInstanceEntity saved = ledInstanceRepository.save(candidate);

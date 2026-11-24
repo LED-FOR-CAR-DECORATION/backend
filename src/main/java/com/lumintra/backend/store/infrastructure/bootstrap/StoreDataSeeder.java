@@ -30,14 +30,15 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Seeds representative store tags, products, hardware models, character versions, bundles,
- * and subscription plans before {@code CommerceDataSeeder} runs.
+ * Seeds representative store tags, LED hardware products, 10 character products,
+ * bundle combos, and subscription plans before {@code CommerceDataSeeder} runs.
  */
 @Component
 @Order(2)
@@ -50,16 +51,174 @@ public class StoreDataSeeder implements ApplicationRunner {
     public static final String TAG_CYBERPUNK = "cyberpunk";
     public static final String TAG_BUNDLE = "bundle";
     public static final String TAG_SUBSCRIPTION = "subscription";
+    public static final String TAG_PIXEL_ART = "pixel-art";
+    public static final String TAG_ANIMAL = "animal";
+    public static final String TAG_ANIME = "anime";
+    public static final String TAG_ANIMATED = "animated";
+    public static final String TAG_CUTE = "cute";
+    public static final String TAG_ZEN = "zen";
+    public static final String TAG_HALLOWEEN = "halloween";
+    public static final String TAG_STATIC = "static";
 
     public static final String PRODUCT_LED_PRO = "Lumintra Matrix 64x64 Pro";
-    public static final String PRODUCT_LED_COMPACT = "Lumintra Matrix 32x64 Compact";
-    public static final String PRODUCT_LED_PROTOTYPE = "Lumintra Matrix 64x64 Prototype";
-    public static final String PRODUCT_CHAR_CAT = "Cyberpunk Cat";
-    public static final String PRODUCT_CHAR_DRAGON = "Cyber Dragon";
-    public static final String PRODUCT_CHAR_MASCOT = "Lumintra Classic Mascot";
+    public static final String PRODUCT_LED_COMPACT = "Lumintra Matrix 64x32 Compact";
+    public static final String PRODUCT_LED_MINI = "Lumintra Matrix 32x16 Mini";
+
+    public static final String PRODUCT_CHAR_01 = "Heo Hồng Pixel Retro";
+    public static final String PRODUCT_CHAR_02 = "Capybara Ôm Táo Đỏ";
+    public static final String PRODUCT_CHAR_03 = "Capybara Nhâm Nhi Táo";
+    public static final String PRODUCT_CHAR_04 = "Cô Nàng Tinh Nghịch";
+    public static final String PRODUCT_CHAR_05 = "Nezuko Demon Slayer";
+    public static final String PRODUCT_CHAR_06 = "Ống Trúc Thiền Shishi-odoshi";
+    public static final String PRODUCT_CHAR_07 = "Thiếu Nữ Kimono Viết Haiku";
+    public static final String PRODUCT_CHAR_08 = "Lâu Đài Ma Ám Halloween";
+    public static final String PRODUCT_CHAR_09 = "Maomao Chibi — Dược Sư";
+    public static final String PRODUCT_CHAR_10 = "Sakura Miku Pastel";
+
     public static final String PRODUCT_BUNDLE_STARTER = "Starter Neon Combo";
+    public static final String PRODUCT_BUNDLE_ANIME_TRIO = "Anime Chibi Trio Combo";
     public static final String PRODUCT_SUB_VIP = "Lumintra All-Access VIP Pass";
+    public static final String PRODUCT_SUB_COMMISSION_PLUS = "Lumintra Commission VIP Pass";
     public static final String SUBSCRIPTION_PLAN_CODE_VIP = "VIP_LIFETIME";
+    public static final String SUBSCRIPTION_PLAN_CODE_COMMISSION_PLUS = "VIP_COMMISSION";
+
+    private static final List<TagSeedSpec> TAG_SEEDS = List.of(
+            new TagSeedSpec(TAG_MATRIX, "Màn hình LED ma trận phần cứng"),
+            new TagSeedSpec(TAG_CYBERPUNK, "Phong cách cyberpunk & ánh sáng neon"),
+            new TagSeedSpec(TAG_BUNDLE, "Gói combo phần cứng và nội dung pixel art"),
+            new TagSeedSpec(TAG_SUBSCRIPTION, "Gói hội viên mở khóa quyền lợi"),
+            new TagSeedSpec(TAG_PIXEL_ART, "Tranh & hoạt ảnh Pixel Art thủ công"),
+            new TagSeedSpec(TAG_ANIMAL, "Thú cưng & động vật đáng yêu"),
+            new TagSeedSpec(TAG_ANIME, "Nhân vật Anime & Chibi nổi tiếng"),
+            new TagSeedSpec(TAG_ANIMATED, "Hoạt ảnh GIF nhiều khung hình sống động"),
+            new TagSeedSpec(TAG_CUTE, "Phong cách dễ thương, pastel & thư giãn"),
+            new TagSeedSpec(TAG_ZEN, "Không gian Nhật Bản & thiên nhiên yên bình"),
+            new TagSeedSpec(TAG_HALLOWEEN, "Chủ đề lễ hội & Halloween huyền bí"),
+            new TagSeedSpec(TAG_STATIC, "Ảnh pixel tĩnh sắc nét độ tương phản cao")
+    );
+
+    public static final List<CharacterSeedSpec> CHARACTER_SEEDS = List.of(
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_01,
+                    new BigDecimal("25000.00"),
+                    "Tranh pixel chú heo hồng má phấn đáng yêu theo phong cách retro 16x16 trên nền trời xanh cỏ non.",
+                    "https://cdn.lumintra.shop/characters/1/Con_lon.jpg",
+                    "https://cdn.lumintra.shop/characters/1/con-lon-v1.bin",
+                    1,
+                    0,
+                    98131,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_ANIMAL, TAG_CUTE, TAG_STATIC)
+            ),
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_02,
+                    new BigDecimal("30000.00"),
+                    "Chú chuột lang nước Capybara thư giãn ôm trái táo đỏ rực rỡ, sắc nét trên màn hình LED ô tô.",
+                    "https://cdn.lumintra.shop/characters/2/Capypara.jpg",
+                    "https://cdn.lumintra.shop/characters/2/capypara-v1.bin",
+                    1,
+                    0,
+                    77093,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_ANIMAL, TAG_CUTE, TAG_STATIC)
+            ),
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_03,
+                    new BigDecimal("49000.00"),
+                    "Hoạt ảnh GIF 9 khung hình chú Capybara gặm táo đỏ nhịp nhàng, mang lại cảm giác thư thái khi lái xe.",
+                    "https://cdn.lumintra.shop/characters/3/Capybara%20apple-1.gif",
+                    "https://cdn.lumintra.shop/characters/3/capybara-apple-v1.bin",
+                    9,
+                    260,
+                    43811,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_ANIMAL, TAG_CUTE, TAG_ANIMATED)
+            ),
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_04,
+                    new BigDecimal("69000.00"),
+                    "Chân dung hoạt ảnh pixel 16 khung hình thiếu nữ tóc nâu ánh mắt tinh nghịch với biểu cảm nháy mắt sinh động.",
+                    "https://cdn.lumintra.shop/characters/4/mischievous%20girl-2.gif",
+                    "https://cdn.lumintra.shop/characters/4/mischievous-girl-v1.bin",
+                    16,
+                    500,
+                    263429,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_ANIME, TAG_ANIMATED)
+            ),
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_05,
+                    new BigDecimal("99000.00"),
+                    "Hoạt ảnh pixel cao cấp 37 khung hình siêu mượt lấy cảm hứng từ Nezuko (Thanh Gươm Diệt Quỷ) cùng hiệu ứng ánh sáng huyền ảo.",
+                    "https://cdn.lumintra.shop/characters/5/Nezuko%20Demon%20slayer.gif",
+                    "https://cdn.lumintra.shop/characters/5/nezuko-demon-slayer-v1.bin",
+                    37,
+                    50,
+                    777900,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_ANIME, TAG_ANIMATED, TAG_CYBERPUNK)
+            ),
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_06,
+                    new BigDecimal("59000.00"),
+                    "Cảnh suối nước chảy qua ống trúc Shishi-odoshi và thảm rêu xanh Nhật Bản 16 khung hình tạo cảm giác tĩnh tại.",
+                    "https://cdn.lumintra.shop/characters/6/Bamboo.gif",
+                    "https://cdn.lumintra.shop/characters/6/bamboo-v1.bin",
+                    16,
+                    150,
+                    258032,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_ZEN, TAG_ANIMATED)
+            ),
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_07,
+                    new BigDecimal("55000.00"),
+                    "Hoạt ảnh cô gái mặc kimono đỏ ngồi viết thơ Haiku bên khung cửa sổ nhìn ra đỉnh núi Phú Sĩ thanh bình.",
+                    "https://cdn.lumintra.shop/characters/7/Haiku%20Day.gif",
+                    "https://cdn.lumintra.shop/characters/7/haiku-day-v1.bin",
+                    4,
+                    300,
+                    48715,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_ANIME, TAG_ZEN, TAG_ANIMATED)
+            ),
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_08,
+                    new BigDecimal("55000.00"),
+                    "Khung cảnh đêm Halloween cổ điển với tòa lâu đài ánh cam ma mị, đèn bí ngô rực sáng và dơi bay lượn.",
+                    "https://cdn.lumintra.shop/characters/8/Haunted2026%20Halloween-Mansion.gif",
+                    "https://cdn.lumintra.shop/characters/8/haunted-halloween-mansion-v1.bin",
+                    4,
+                    200,
+                    76109,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_HALLOWEEN, TAG_ANIMATED)
+            ),
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_09,
+                    new BigDecimal("65000.00"),
+                    "Chân dung chibi Maomao (Dược Sư Tự Sự) với mái tóc xanh lục bảo đặc trưng và hoạt ảnh chớp mắt long lanh.",
+                    "https://cdn.lumintra.shop/characters/9/Maomao.gif",
+                    "https://cdn.lumintra.shop/characters/9/maomao-v1.bin",
+                    6,
+                    230,
+                    58806,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_ANIME, TAG_CUTE, TAG_ANIMATED)
+            ),
+            new CharacterSeedSpec(
+                    PRODUCT_CHAR_10,
+                    new BigDecimal("59000.00"),
+                    "Hoạt ảnh pixel Sakura Miku tông hồng anh đào rạng rỡ kết hợp phụ kiện trái cherry nổi bật trên nền trời xanh.",
+                    "https://cdn.lumintra.shop/characters/10/Sakura%20Miku.gif",
+                    "https://cdn.lumintra.shop/characters/10/sakura-miku-v1.bin",
+                    2,
+                    210,
+                    27548,
+                    ProductStatus.PUBLISHED,
+                    List.of(TAG_PIXEL_ART, TAG_ANIME, TAG_CUTE, TAG_ANIMATED)
+            )
+    );
 
     private final TagRepository tagRepository;
     private final ProductRepository productRepository;
@@ -78,20 +237,20 @@ public class StoreDataSeeder implements ApplicationRunner {
         log.info("Checking database for base Store catalog seed data...");
         AtomicBoolean seededAny = new AtomicBoolean(false);
 
-        TagEntity matrixTag = ensureTag(TAG_MATRIX, "LED matrix hardware panels", seededAny);
-        TagEntity cyberpunkTag = ensureTag(TAG_CYBERPUNK, "Cyberpunk and neon pixel animations", seededAny);
-        TagEntity bundleTag = ensureTag(TAG_BUNDLE, "Hardware and character combo packages", seededAny);
-        TagEntity subscriptionTag = ensureTag(TAG_SUBSCRIPTION, "All-access membership plans", seededAny);
+        Map<String, TagEntity> tagsByName = seedTags(seededAny);
+        TagEntity matrixTag = tagsByName.get(TAG_MATRIX);
+        TagEntity cyberpunkTag = tagsByName.get(TAG_CYBERPUNK);
+        TagEntity bundleTag = tagsByName.get(TAG_BUNDLE);
+        TagEntity subscriptionTag = tagsByName.get(TAG_SUBSCRIPTION);
+        TagEntity animeTag = tagsByName.get(TAG_ANIME);
+        TagEntity cuteTag = tagsByName.get(TAG_CUTE);
 
-        ProductEntity ledPro = seedLedProduct(
+        seedLedProduct(
                 PRODUCT_LED_PRO,
                 new BigDecimal("250000.00"),
-                "Flagship 64x64 full-color windshield LED matrix panel with BLE and Wi-Fi control.",
-                "https://cdn.lumintra.com/products/matrix-64x64-pro.png",
-                List.of(
-                        "https://cdn.lumintra.com/products/matrix-64x64-pro-1.png",
-                        "https://cdn.lumintra.com/products/matrix-64x64-pro-2.png"
-                ),
+                "Màn hình LED ma trận 64x64 full-color cao cấp, điều khiển qua BLE và Wi-Fi.",
+                "https://cdn.lumintra.shop/store/products/led/Led_64_64.webp",
+                List.of("https://cdn.lumintra.shop/store/products/led/Led_64_64.webp"),
                 ProductStatus.PUBLISHED,
                 Set.of(matrixTag),
                 buildLedSpec("64x64", "192x192x18mm", "P3", "5V USB-C", "BLE + Wi-Fi", 1200),
@@ -102,84 +261,137 @@ public class StoreDataSeeder implements ApplicationRunner {
         seedLedProduct(
                 PRODUCT_LED_COMPACT,
                 new BigDecimal("190000.00"),
-                "Compact 32x64 rear-window LED matrix display for quick emoji and text alerts.",
-                "https://cdn.lumintra.com/products/matrix-32x64-compact.png",
-                List.of("https://cdn.lumintra.com/products/matrix-32x64-compact-1.png"),
+                "Màn hình LED ma trận 64x32 gọn nhẹ cho kính sau ô tô và góc bàn làm việc.",
+                "https://cdn.lumintra.shop/store/products/led/Led_64_32.webp",
+                List.of("https://cdn.lumintra.shop/store/products/led/Led_64_32.webp"),
                 ProductStatus.PUBLISHED,
                 Set.of(matrixTag),
-                buildLedSpec("32x64", "96x192x18mm", "P3", "5V USB-C", "BLE + Wi-Fi", 1000),
+                buildLedSpec("64x32", "192x96x18mm", "P3", "5V USB-C", "BLE + Wi-Fi", 1000),
                 30L,
                 seededAny
         );
 
-        seedLedProduct(
-                PRODUCT_LED_PROTOTYPE,
-                new BigDecimal("299000.00"),
-                "Upcoming high-brightness prototype panel staged as unpublished.",
-                "https://cdn.lumintra.com/products/matrix-64x64-prototype.png",
-                List.of(),
-                ProductStatus.UNPUBLISHED,
+        long ledMiniModelId = seedLedProduct(
+                PRODUCT_LED_MINI,
+                new BigDecimal("145000.00"),
+                "Màn hình LED ma trận 32x16 nhỏ gọn, dễ lắp đặt cho xe máy và bàn học.",
+                "https://cdn.lumintra.shop/store/products/led/Led_32_16.webp",
+                List.of("https://cdn.lumintra.shop/store/products/led/Led_32_16.webp"),
+                ProductStatus.PUBLISHED,
                 Set.of(matrixTag),
-                buildLedSpec("64x64", "192x192x16mm", "P2.5", "5V USB-C", "BLE + Wi-Fi", 1500),
-                5L,
+                buildLedSpec("32x16", "96x48x16mm", "P3", "5V USB-C", "BLE", 900),
+                40L,
                 seededAny
         );
 
-        seedCharacterProduct(
-                PRODUCT_CHAR_CAT,
-                new BigDecimal("50000.00"),
-                "Animated neon pixel cat with holographic visor glow.",
-                "https://cdn.lumintra.com/characters/cyberpunk-cat-preview.gif",
-                "https://cdn.lumintra.com/characters/cyberpunk-cat-v1.bin",
-                24,
-                80,
-                196608,
-                ProductStatus.PUBLISHED,
-                Set.of(cyberpunkTag),
-                seededAny
-        );
+        Map<String, Long> seededCharacterVersions = seedCharacterProducts(tagsByName, seededAny);
+        Long capybaraVersionId = seededCharacterVersions.get(PRODUCT_CHAR_02);
+        Long nezukoVersionId = seededCharacterVersions.get(PRODUCT_CHAR_05);
+        Long maomaoVersionId = seededCharacterVersions.get(PRODUCT_CHAR_09);
+        Long sakuraMikuVersionId = seededCharacterVersions.get(PRODUCT_CHAR_10);
 
-        long dragonVersionId = seedCharacterProduct(
-                PRODUCT_CHAR_DRAGON,
-                new BigDecimal("75000.00"),
-                "Animated neon fire dragon optimized for 64x64 panels.",
-                "https://cdn.lumintra.com/characters/cyber-dragon-preview.gif",
-                "https://cdn.lumintra.com/characters/cyber-dragon-v1.bin",
-                30,
-                70,
-                245760,
-                ProductStatus.PUBLISHED,
-                Set.of(cyberpunkTag),
-                seededAny
-        );
-
-        seedCharacterProduct(
-                PRODUCT_CHAR_MASCOT,
-                new BigDecimal("40000.00"),
-                "Classic Lumintra starter mascot animation from the legacy launch wave.",
-                "https://cdn.lumintra.com/characters/classic-mascot-preview.gif",
-                "https://cdn.lumintra.com/characters/classic-mascot-v1.bin",
-                16,
-                100,
-                131072,
-                ProductStatus.ARCHIVED,
-                Set.of(cyberpunkTag),
-                seededAny
-        );
-
-        seedBundleProduct(
-                ledPro.getProductId(),
-                dragonVersionId,
+        seedStarterBundleProduct(
+                ledMiniModelId,
+                capybaraVersionId,
                 Set.of(matrixTag, cyberpunkTag, bundleTag),
                 seededAny
         );
 
-        seedSubscriptionProduct(Set.of(subscriptionTag), seededAny);
+        seedAnimeTrioBundleProduct(
+                nezukoVersionId,
+                maomaoVersionId,
+                sakuraMikuVersionId,
+                Set.of(animeTag, cuteTag, bundleTag),
+                seededAny
+        );
+
+        seedSubscriptionProduct(
+                PRODUCT_SUB_VIP,
+                SUBSCRIPTION_PLAN_CODE_VIP,
+                new BigDecimal("99000.00"),
+                "Gói hội viên sở hữu toàn bộ nhân vật trên cửa hàng, kèm ưu đãi thiết kế và sao lưu đám mây.",
+                "https://cdn.lumintra.shop/store/products/subcription/All_Character.png",
+                true,
+                null,
+                true,
+                3,
+                10,
+                Map.of(
+                        "commissionPriorityQueue", true,
+                        "commissionDiscountPercent", 10,
+                        "mobileCloudBackup", true
+                ),
+                "Sở hữu toàn bộ nhân vật trên cửa hàng, 3 lượt chỉnh sửa commission miễn phí và 10 slot thiết bị",
+                Set.of(subscriptionTag),
+                seededAny
+        );
+
+        seedSubscriptionProduct(
+                PRODUCT_SUB_COMMISSION_PLUS,
+                SUBSCRIPTION_PLAN_CODE_COMMISSION_PLUS,
+                new BigDecimal("79000.00"),
+                "Gói đặc quyền thêm lượt yêu cầu thiết kế nhân vật (Commission) và ưu tiên hàng đợi xử lý.",
+                "https://cdn.lumintra.shop/store/products/subcription/Vip_Commission.png",
+                false,
+                30,
+                false,
+                5,
+                5,
+                Map.of(
+                        "extraCommissionRequests", 3,
+                        "commissionPriorityQueue", true,
+                        "commissionDiscountPercent", 15
+                ),
+                "Thêm 3 lượt yêu cầu thiết kế character, ưu tiên xử lý và giảm 15% phí commission trong 30 ngày",
+                Set.of(subscriptionTag),
+                seededAny
+        );
 
         if (seededAny.get()) {
             storeCacheEvictor.evictAllProducts();
         }
         log.info("Store catalog seed data verification complete.");
+    }
+
+    private Map<String, TagEntity> seedTags(AtomicBoolean seededAny) {
+        Map<String, TagEntity> tagsByName = new LinkedHashMap<>();
+        for (TagSeedSpec spec : TAG_SEEDS) {
+            tagsByName.put(spec.name(), ensureTag(spec.name(), spec.description(), seededAny));
+        }
+        return tagsByName;
+    }
+
+    private Map<String, Long> seedCharacterProducts(Map<String, TagEntity> tagsByName, AtomicBoolean seededAny) {
+        Map<String, Long> versionIdsByProductName = new LinkedHashMap<>();
+        for (CharacterSeedSpec spec : CHARACTER_SEEDS) {
+            Set<TagEntity> tags = resolveTags(spec.tagNames(), tagsByName);
+            long versionId = seedCharacterProduct(
+                    spec.productName(),
+                    spec.basePrice(),
+                    spec.description(),
+                    spec.previewUrl(),
+                    spec.ledBinaryUrl(),
+                    spec.frameCount(),
+                    spec.frameDelayMs(),
+                    spec.byteSize(),
+                    spec.status(),
+                    tags,
+                    seededAny
+            );
+            versionIdsByProductName.put(spec.productName(), versionId);
+        }
+        return versionIdsByProductName;
+    }
+
+    private Set<TagEntity> resolveTags(List<String> tagNames, Map<String, TagEntity> tagsByName) {
+        Set<TagEntity> resolved = new LinkedHashSet<>();
+        for (String tagName : tagNames) {
+            TagEntity tag = tagsByName.get(tagName);
+            if (tag != null) {
+                resolved.add(tag);
+            }
+        }
+        return resolved;
     }
 
     private TagEntity ensureTag(String name, String description, AtomicBoolean seededAny) {
@@ -191,7 +403,7 @@ public class StoreDataSeeder implements ApplicationRunner {
         });
     }
 
-    private ProductEntity seedLedProduct(
+    private long seedLedProduct(
             String productName,
             BigDecimal basePrice,
             String description,
@@ -214,20 +426,23 @@ public class StoreDataSeeder implements ApplicationRunner {
                 seededAny
         );
 
-        if (ledModelLookupService.findByModelId(product.getProductId()).isEmpty()) {
-            ledModelCreationService.createForProduct(product.getProductId(), productName, spec, stockQuantity);
-            seededAny.set(true);
-            log.info("Seeded LED hardware model [modelId={}] [stockQuantity={}]",
-                    product.getProductId(), stockQuantity);
-        }
-        return product;
+        return ledModelLookupService.findByProductId(product.getProductId())
+                .map(snapshot -> snapshot.modelId())
+                .orElseGet(() -> {
+                    long modelId = ledModelCreationService.createForProduct(
+                            product.getProductId(), productName, spec, stockQuantity);
+                    seededAny.set(true);
+                    log.info("Seeded LED hardware model [modelId={}] [productId={}] [stockQuantity={}]",
+                            modelId, product.getProductId(), stockQuantity);
+                    return modelId;
+                });
     }
 
     private long seedCharacterProduct(
             String productName,
             BigDecimal basePrice,
             String description,
-            String previewGifUrl,
+            String previewUrl,
             String ledBinaryUrl,
             int frameCount,
             int frameDelayMs,
@@ -240,8 +455,8 @@ public class StoreDataSeeder implements ApplicationRunner {
                 ProductType.CHARACTER,
                 basePrice,
                 description,
-                previewGifUrl,
-                List.of(previewGifUrl),
+                previewUrl,
+                List.of(previewUrl),
                 status,
                 tags,
                 seededAny
@@ -253,7 +468,7 @@ public class StoreDataSeeder implements ApplicationRunner {
                     productName,
                     description,
                     1,
-                    previewGifUrl,
+                    previewUrl,
                     ledBinaryUrl,
                     frameCount,
                     frameDelayMs,
@@ -266,18 +481,18 @@ public class StoreDataSeeder implements ApplicationRunner {
         });
     }
 
-    private void seedBundleProduct(
-            Long ledModelId,
-            Long characterVersionId,
+    private void seedStarterBundleProduct(
+            Long ledMiniModelId,
+            Long capybaraVersionId,
             Set<TagEntity> tags,
             AtomicBoolean seededAny) {
         ProductEntity product = findOrCreateProduct(
                 PRODUCT_BUNDLE_STARTER,
                 ProductType.BUNDLE,
-                new BigDecimal("280000.00"),
-                "64x64 LED Matrix panel paired with the animated Cyber Dragon pack.",
-                "https://cdn.lumintra.com/products/starter-neon-combo.png",
-                List.of("https://cdn.lumintra.com/products/starter-neon-combo-1.png"),
+                new BigDecimal("159000.00"),
+                "Combo màn hình LED Matrix 32x16 Mini kết hợp cùng nhân vật pixel Capybara Ôm Táo Đỏ.",
+                "https://cdn.lumintra.shop/store/products/bundle/Combo1.png",
+                List.of("https://cdn.lumintra.shop/store/products/bundle/Combo1.png"),
                 ProductStatus.PUBLISHED,
                 tags,
                 seededAny
@@ -287,56 +502,104 @@ public class StoreDataSeeder implements ApplicationRunner {
             BundleEntity bundle = bundleRepository.save(BundleEntity.create(
                     product.getProductId(),
                     PRODUCT_BUNDLE_STARTER,
-                    "64x64 LED Matrix panel paired with Cyber Dragon animation",
-                    new BigDecimal("325000.00"),
-                    new BigDecimal("280000.00"),
+                    "Combo 1 LED 32x16 Mini và nhân vật Capybara Ôm Táo Đỏ",
+                    new BigDecimal("175000.00"),
+                    new BigDecimal("159000.00"),
                     ProductStatus.PUBLISHED.name(),
                     Instant.now().minus(7, ChronoUnit.DAYS),
                     null
             ));
-            bundleItemRepository.save(BundleItemEntity.createLedItem(bundle, ledModelId, 1));
-            bundleItemRepository.save(BundleItemEntity.createCharacterItem(bundle, characterVersionId, 1));
+            bundleItemRepository.save(BundleItemEntity.createLedItem(bundle, ledMiniModelId, 1));
+            bundleItemRepository.save(BundleItemEntity.createCharacterItem(bundle, capybaraVersionId, 1));
             seededAny.set(true);
             log.info("Seeded bundle product [productId={}] [bundleId={}]",
                     product.getProductId(), bundle.getBundleId());
         }
     }
 
-    private void seedSubscriptionProduct(Set<TagEntity> tags, AtomicBoolean seededAny) {
+    private void seedAnimeTrioBundleProduct(
+            Long nezukoVersionId,
+            Long maomaoVersionId,
+            Long sakuraMikuVersionId,
+            Set<TagEntity> tags,
+            AtomicBoolean seededAny) {
         ProductEntity product = findOrCreateProduct(
-                PRODUCT_SUB_VIP,
+                PRODUCT_BUNDLE_ANIME_TRIO,
+                ProductType.BUNDLE,
+                new BigDecimal("129000.00"),
+                "Combo 3 nhân vật Anime Pixel Art: Nezuko Demon Slayer, Maomao Chibi — Dược Sư và Sakura Miku Pastel.",
+                "https://cdn.lumintra.shop/store/products/bundle/Combo2.png",
+                List.of("https://cdn.lumintra.shop/store/products/bundle/Combo2.png"),
+                ProductStatus.PUBLISHED,
+                tags,
+                seededAny
+        );
+
+        if (bundleRepository.findByProductId(product.getProductId()).isEmpty()) {
+            BundleEntity bundle = bundleRepository.save(BundleEntity.create(
+                    product.getProductId(),
+                    PRODUCT_BUNDLE_ANIME_TRIO,
+                    "Combo 3 nhân vật: Nezuko Demon Slayer, Maomao Chibi — Dược Sư, Sakura Miku Pastel",
+                    new BigDecimal("154000.00"),
+                    new BigDecimal("129000.00"),
+                    ProductStatus.PUBLISHED.name(),
+                    Instant.now().minus(5, ChronoUnit.DAYS),
+                    null
+            ));
+            bundleItemRepository.save(BundleItemEntity.createCharacterItem(bundle, nezukoVersionId, 1));
+            bundleItemRepository.save(BundleItemEntity.createCharacterItem(bundle, maomaoVersionId, 1));
+            bundleItemRepository.save(BundleItemEntity.createCharacterItem(bundle, sakuraMikuVersionId, 1));
+            seededAny.set(true);
+            log.info("Seeded bundle product [productId={}] [bundleId={}]",
+                    product.getProductId(), bundle.getBundleId());
+        }
+    }
+
+    private void seedSubscriptionProduct(
+            String productName,
+            String planCode,
+            BigDecimal price,
+            String description,
+            String thumbnailUrl,
+            boolean isLifetime,
+            Integer durationDays,
+            boolean unlocksAllCharacters,
+            int freeCommissionRevisions,
+            int maxMobileSlots,
+            Map<String, Object> benefitFeatures,
+            String benefitSummary,
+            Set<TagEntity> tags,
+            AtomicBoolean seededAny) {
+        ProductEntity product = findOrCreateProduct(
+                productName,
                 ProductType.SUBSCRIPTION,
-                new BigDecimal("99000.00"),
-                "Lifetime all-access pass across catalog characters, commissions, and mobile slots.",
-                "https://cdn.lumintra.com/products/vip-lifetime-pass.png",
-                List.of(),
+                price,
+                description,
+                thumbnailUrl,
+                List.of(thumbnailUrl),
                 ProductStatus.PUBLISHED,
                 tags,
                 seededAny
         );
 
         boolean detailMissing = subscriptionDetailRepository.findByProductId(product.getProductId()).isEmpty()
-                && subscriptionDetailRepository.findByPlanCode(SUBSCRIPTION_PLAN_CODE_VIP).isEmpty();
+                && subscriptionDetailRepository.findByPlanCode(planCode).isEmpty();
         if (detailMissing) {
             subscriptionDetailRepository.save(SubscriptionDetailEntity.create(
                     product.getProductId(),
-                    SUBSCRIPTION_PLAN_CODE_VIP,
-                    PRODUCT_SUB_VIP,
-                    true,
-                    null,
-                    true,
-                    3,
-                    10,
-                    Map.of(
-                            "commissionPriorityQueue", true,
-                            "commissionDiscountPercent", 10,
-                            "mobileCloudBackup", true
-                    ),
-                    "Unlimited catalog characters, 3 free commission revisions, and 10 mobile saved profiles"
+                    planCode,
+                    productName,
+                    isLifetime,
+                    durationDays,
+                    unlocksAllCharacters,
+                    freeCommissionRevisions,
+                    maxMobileSlots,
+                    benefitFeatures,
+                    benefitSummary
             ));
             seededAny.set(true);
             log.info("Seeded subscription detail [productId={}] [planCode={}]",
-                    product.getProductId(), SUBSCRIPTION_PLAN_CODE_VIP);
+                    product.getProductId(), planCode);
         }
     }
 
@@ -384,4 +647,19 @@ public class StoreDataSeeder implements ApplicationRunner {
         spec.put("brightnessNits", brightnessNits);
         return spec;
     }
+
+    public record TagSeedSpec(String name, String description) {}
+
+    public record CharacterSeedSpec(
+            String productName,
+            BigDecimal basePrice,
+            String description,
+            String previewUrl,
+            String ledBinaryUrl,
+            int frameCount,
+            int frameDelayMs,
+            int byteSize,
+            ProductStatus status,
+            List<String> tagNames
+    ) {}
 }

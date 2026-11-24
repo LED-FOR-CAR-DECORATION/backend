@@ -22,6 +22,8 @@ public interface LedModelRepository extends JpaRepository<LedModelEntity, Long>,
     @Query("SELECT m FROM LedModelEntity m WHERE m.modelId = :modelId")
     Optional<LedModelEntity> findByIdForUpdate(@Param("modelId") Long modelId);
 
+    Optional<LedModelEntity> findByProductId(Long productId);
+
     boolean existsByModelNameIgnoreCaseAndModelIdNot(String modelName, Long modelId);
 
     @Modifying

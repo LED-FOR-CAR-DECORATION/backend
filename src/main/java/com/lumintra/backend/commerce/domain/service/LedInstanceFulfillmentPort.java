@@ -2,11 +2,17 @@ package com.lumintra.backend.commerce.domain.service;
 
 import com.lumintra.backend.commerce.domain.model.FulfillmentDeviceSnapshot;
 
+import java.util.Optional;
+
 /**
  * Domain port for verifying LED hardware units and transitioning their inventory status
  * during order packaging and fulfillment.
  */
 public interface LedInstanceFulfillmentPort {
+
+    default Optional<Long> findModelIdByProductId(Long productId) {
+        return Optional.ofNullable(productId);
+    }
 
     /**
      * Resolves the physical LED instance by serial number, validates that

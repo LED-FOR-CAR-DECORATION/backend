@@ -122,7 +122,7 @@ public class UpdateBundleUseCase {
         var type = item.modelId() == null ? ProductType.CHARACTER : ProductType.LED;
         var productId =
                 type == ProductType.LED
-                        ? models.findByModelId(item.modelId()).map(model -> model.modelId())
+                        ? models.findProductIdByModelId(item.modelId())
                         : versions.findById(item.versionId())
                                 .map(version -> version.getProductId());
         return productId

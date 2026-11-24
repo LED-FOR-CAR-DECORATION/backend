@@ -31,9 +31,24 @@ public enum MediaPurpose {
     CHARACTER_ASSET,
 
     /**
-     * Allowed only for MANAGER, ADMIN (product thumbnails and store catalog galleries).
+     * Allowed only for MANAGER, ADMIN (legacy/generic store product media).
      */
-    STORE_PRODUCT;
+    STORE_PRODUCT,
+
+    /**
+     * Allowed only for MANAGER, ADMIN (LED hardware model & product images under store/products/led/).
+     */
+    PRODUCT_LED,
+
+    /**
+     * Allowed only for MANAGER, ADMIN (bundle combo images under store/products/bundle/).
+     */
+    PRODUCT_BUNDLE,
+
+    /**
+     * Allowed only for MANAGER, ADMIN (subscription plan images under store/products/subscription/).
+     */
+    PRODUCT_SUBSCRIPTION;
 
     /**
      * Private purposes are stored in the private bucket and are only ever served through short-lived
@@ -43,7 +58,7 @@ public enum MediaPurpose {
     public boolean isPrivate() {
         return switch (this) {
             case COMMISSION_REFERENCE, COMMISSION_CHAT, COMMISSION_DRAFT, WARRANTY_EVIDENCE -> true;
-            case CHARACTER_ASSET, STORE_PRODUCT -> false;
+            case CHARACTER_ASSET, STORE_PRODUCT, PRODUCT_LED, PRODUCT_BUNDLE, PRODUCT_SUBSCRIPTION -> false;
         };
     }
 }

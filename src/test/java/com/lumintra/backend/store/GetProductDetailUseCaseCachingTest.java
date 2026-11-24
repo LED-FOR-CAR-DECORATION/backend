@@ -122,7 +122,7 @@ class GetProductDetailUseCaseCachingTest {
 
         when(productRepository.findWithTagsByProductIdAndStatusIn(eq(5L), any(Collection.class)))
                 .thenReturn(Optional.of(sampleLedEntity));
-        when(ledModelLookupService.findByModelId(5L))
+        when(ledModelLookupService.findByProductId(5L))
                 .thenReturn(Optional.of(new LedModelSnapshot(5L, "Matrix 64x64", Map.of("dimensions", "64x64"), 10L)));
     }
 
@@ -134,7 +134,7 @@ class GetProductDetailUseCaseCachingTest {
         assertThat(response).isNotNull();
         assertThat(response.productId()).isEqualTo(5L);
         verify(productRepository, times(1)).findWithTagsByProductIdAndStatusIn(eq(5L), any());
-        verify(ledModelLookupService, times(1)).findByModelId(5L);
+        verify(ledModelLookupService, times(1)).findByProductId(5L);
 
         Cache cache = cacheManager.getCache(StoreCacheNames.PRODUCT);
         assertThat(cache).isNotNull();
@@ -149,7 +149,7 @@ class GetProductDetailUseCaseCachingTest {
 
         assertThat(second).isEqualTo(first);
         verify(productRepository, times(1)).findWithTagsByProductIdAndStatusIn(eq(5L), any());
-        verify(ledModelLookupService, times(1)).findByModelId(5L);
+        verify(ledModelLookupService, times(1)).findByProductId(5L);
     }
 
     @Test

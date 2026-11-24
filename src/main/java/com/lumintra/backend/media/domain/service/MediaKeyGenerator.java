@@ -44,6 +44,9 @@ public class MediaKeyGenerator {
             case WARRANTY_EVIDENCE -> "warranty/" + targetId + "/";
             case CHARACTER_ASSET -> "characters/" + userId + "/";
             case STORE_PRODUCT -> "store/products/";
+            case PRODUCT_LED -> "store/products/led/";
+            case PRODUCT_BUNDLE -> "store/products/bundle/";
+            case PRODUCT_SUBSCRIPTION -> "store/products/subscription/";
         };
     }
 

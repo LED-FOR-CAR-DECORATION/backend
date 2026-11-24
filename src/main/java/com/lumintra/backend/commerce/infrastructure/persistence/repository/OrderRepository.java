@@ -45,4 +45,15 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long>, JpaSp
             @Param("allowedStatuses") Collection<OrderStatus> allowedStatuses,
             @Param("targetStatus") OrderStatus targetStatus,
             @Param("updatedAt") Instant updatedAt);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE "order"
+            SET created_at = :createdAt,
+                updated_at = :createdAt
+            WHERE order_id = :orderId
+            """, nativeQuery = true)
+    int updateTimestampsForSeed(
+            @Param("orderId") Long orderId,
+            @Param("createdAt") Instant createdAt);
 }

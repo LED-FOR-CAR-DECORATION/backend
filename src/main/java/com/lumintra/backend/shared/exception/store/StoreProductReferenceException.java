@@ -4,7 +4,9 @@ public class StoreProductReferenceException extends RuntimeException {
     public enum Reason {
         TAG_NOT_FOUND,
         CHARACTER_VERSION_NOT_FOUND,
-        CHARACTER_VERSION_ALREADY_LINKED
+        CHARACTER_VERSION_ALREADY_LINKED,
+        LED_MODEL_NOT_FOUND,
+        LED_MODEL_ALREADY_LINKED
     }
 
     private final Reason reason;

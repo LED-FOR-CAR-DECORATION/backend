@@ -62,7 +62,7 @@ class DefaultProductAvailabilityAdapterTest {
     @Test
     @DisplayName("hasSufficientLedStock checks stock >= requestedQuantity via LedStockLookupService")
     void hasSufficientLedStock_evaluatesBoundaryCorrectly() {
-        when(ledStockLookupService.findStockByModelId(12L)).thenReturn(Optional.of(5L));
+        when(ledStockLookupService.findStockByProductId(12L)).thenReturn(Optional.of(5L));
 
         assertThat(adapter.hasSufficientLedStock(12L, 5)).isTrue();
         assertThat(adapter.hasSufficientLedStock(12L, 6)).isFalse();
