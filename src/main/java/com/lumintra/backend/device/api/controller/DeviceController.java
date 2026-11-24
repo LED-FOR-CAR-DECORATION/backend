@@ -1,5 +1,9 @@
 package com.lumintra.backend.device.api.controller;
 
+import org.springframework.http.HttpStatus;
+import com.lumintra.backend.device.application.CreateOtaSessionUseCase;
+import com.lumintra.backend.device.api.response.OtaSessionResponse;
+import com.lumintra.backend.device.api.request.CreateOtaSessionRequest;
 import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Pattern;
@@ -55,6 +59,7 @@ public class DeviceController {
     private final ListCustomerDevicesUseCase listCustomerDevicesUseCase;
     private final GetCustomerDeviceDetailUseCase getCustomerDeviceDetailUseCase;
     private final CheckFirmwareUpdateUseCase checkFirmwareUpdateUseCase;
+    private final CreateOtaSessionUseCase createOtaSessionUseCase;
 
     @Operation(
             summary = "Claim an LED device via factory QR code",
@@ -503,6 +508,44 @@ public class DeviceController {
             String currentVersion) {
         Long customerId = extractCustomerId(authentication);
         return ResponseEntity.ok(ApiResponse.success(checkFirmwareUpdateUseCase.execute(customerId, id, currentVersion)));
+    }
+
+    @Operation(
+            summary = "Create a one-time OTA download session (DEV-21)",
+            description = "CUSTOMER only, for a BOUND device the caller owns. firmwareId must be the device model's ACTIVE "
+                    + "release and nonce the 32-hex value the device returned from get_ota_info. Returns a single-use "
+                    + "64-hex token valid for 10 minutes; the app passes it to the device (ota_start), which then downloads "
+                    + "the firmware itself. Issuing a session revokes the device's previous open session. The token is "
+                    + "shown only in this response.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Session created"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "VALIDATION_FAILED: firmwareId missing or nonce not 32 lowercase hex characters",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Missing or invalid JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403",
+                    description = "Not a CUSTOMER, or DEVICE_OWNERSHIP_MISMATCH",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "LED_INSTANCE_NOT_FOUND or FIRMWARE_NOT_FOUND",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "DEVICE_NOT_BOUND or FIRMWARE_NOT_ACTIVE",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @PostMapping("/{id}/ota/sessions")
+    public ResponseEntity<ApiResponse<OtaSessionResponse>> createOtaSession(
+            Authentication authentication,
+            @Parameter(description = "LED device (instance) id", example = "2001", required = true)
+            @PathVariable @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody CreateOtaSessionRequest request) {
+        Long customerId = extractCustomerId(authentication);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(createOtaSessionUseCase.execute(customerId, id, request)));
     }
 
     private Long extractCustomerId(Authentication authentication) {

@@ -4,7 +4,9 @@ import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstance
 import com.lumintra.backend.device.domain.model.LedInstanceStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -20,6 +22,11 @@ import java.util.Optional;
 public interface LedInstanceRepository extends JpaRepository<LedInstanceEntity, Long>, JpaSpecificationExecutor<LedInstanceEntity> {
 
     boolean existsBySerialNumber(String serialNumber);
+
+    /** Row lock so concurrent OTA session requests for one device are serialised. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM LedInstanceEntity i WHERE i.instanceId = :instanceId")
+    Optional<LedInstanceEntity> findByIdForUpdate(@Param("instanceId") Long instanceId);
 
     boolean existsByMacAddress(String macAddress);
 

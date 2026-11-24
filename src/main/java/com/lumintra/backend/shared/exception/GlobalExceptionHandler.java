@@ -216,6 +216,16 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("FIRMWARE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(OtaSessionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleOtaSessionNotFound(OtaSessionNotFoundException ex) {
+        return buildErrorResponse("OTA_SESSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(FirmwareNotActiveException.class)
+    public ResponseEntity<ErrorResponse> handleFirmwareNotActive(FirmwareNotActiveException ex) {
+        return buildErrorResponse("FIRMWARE_NOT_ACTIVE", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(FirmwareAlreadyDeprecatedException.class)
     public ResponseEntity<ErrorResponse> handleFirmwareAlreadyDeprecated(FirmwareAlreadyDeprecatedException ex) {
         return buildErrorResponse("FIRMWARE_ALREADY_DEPRECATED", ex.getMessage(), HttpStatus.CONFLICT);
