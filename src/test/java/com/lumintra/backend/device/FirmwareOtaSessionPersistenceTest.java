@@ -76,7 +76,7 @@ class FirmwareOtaSessionPersistenceTest {
     @DisplayName("DEV-21 Persistence [N]: The device row lock query loads the device")
     void findByIdForUpdate_loadsDevice() {
         LedInstanceEntity device = instanceRepository.save(LedInstanceEntity.createWithState(
-                1L, "SN-LOCK", "AA:BB:CC:00:00:99", null, 55L, "Car", LedInstanceStatus.BOUND,
+                1L, "SN-LOCK", "AA:BB:CC:00:00:99", 55L, "Car", LedInstanceStatus.BOUND,
                 Instant.now(), Instant.now(), Instant.now()));
 
         assertThat(instanceRepository.findByIdForUpdate(device.getInstanceId())).get()
