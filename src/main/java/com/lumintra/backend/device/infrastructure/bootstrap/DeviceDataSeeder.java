@@ -312,6 +312,31 @@ public class DeviceDataSeeder implements ApplicationRunner {
         ), orderSuffix);
     }
 
+    private String sanitizeModelPrefix(String modelName) {
+        if (modelName == null || modelName.isBlank()) {
+            return "LED";
+        }
+        String clean = modelName.replaceAll("[^a-zA-Z0-9]", "-")
+                .replaceAll("-+", "-")
+                .toUpperCase(java.util.Locale.ROOT);
+        if (clean.startsWith("-")) {
+            clean = clean.substring(1);
+        }
+        if (clean.endsWith("-")) {
+            clean = clean.substring(0, clean.length() - 1);
+        }
+        return clean.length() > 20 ? clean.substring(0, 20) : clean;
+    }
+
+    private String generateMacAddress(Long modelId, int instanceIndex) {
+        long mid = modelId != null ? modelId : 0L;
+        int b1 = (int) ((mid >> 8) & 0xFF);
+        int b2 = (int) (mid & 0xFF);
+        int b3 = (instanceIndex >> 8) & 0xFF;
+        int b4 = instanceIndex & 0xFF;
+        return String.format("A2:B0:%02X:%02X:%02X:%02X", b1, b2, b3, b4);
+    }
+
     private CustomerProfileSnapshot resolveCustomer() {
         if (customerEmail != null && !customerEmail.isBlank()) {
             return customerLookupService.findProfileByEmail(customerEmail.strip())
