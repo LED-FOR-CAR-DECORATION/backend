@@ -87,6 +87,15 @@ public class FirmwareOtaSessionEntity {
         return session;
     }
 
+    /** Records the first manifest fetch (DEV-22); returns true when this call was the first. */
+    public boolean markManifestFetched(Instant at) {
+        if (manifestFetchedAt != null) {
+            return false;
+        }
+        manifestFetchedAt = at;
+        return true;
+    }
+
     public void revoke() {
         this.status = OtaSessionStatus.REVOKED;
     }
