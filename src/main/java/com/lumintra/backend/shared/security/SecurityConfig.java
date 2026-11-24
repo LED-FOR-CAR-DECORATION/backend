@@ -67,6 +67,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/api/commissions/pricing",
                                 "/api/firmware/downloads/*/manifest",
+                                "/api/firmware/downloads/*/binary",
                                 "/ws/**"
                         ).permitAll()
                         .requestMatchers(
