@@ -72,7 +72,6 @@ class SubmitWarrantyClaimUseCaseTest {
                 101L,
                 SERIAL,
                 MAC,
-                "REV-A",
                 ownerId,
                 "Xe Wave Alpha",
                 LedInstanceStatus.BOUND,
@@ -112,7 +111,7 @@ class SubmitWarrantyClaimUseCaseTest {
                 CUSTOMER_ID,
                 55L,
                 SERIAL,
-                "Màn hình LED bị chớp nháy sau 15 phút.",
+                "MÃ n hÃ¬nh LED bá»‹ chá»›p nhÃ¡y sau 15 phÃºt.",
                 evidenceUrls
         );
         try {
@@ -129,7 +128,7 @@ class SubmitWarrantyClaimUseCaseTest {
         when(warrantyTicketRepository.save(any(WarrantyTicketEntity.class))).thenReturn(savedTicket);
 
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình LED bị chớp nháy sau 15 phút.",
+                "MÃ n hÃ¬nh LED bá»‹ chá»›p nhÃ¡y sau 15 phÃºt.",
                 evidenceUrls
         );
 
@@ -144,7 +143,7 @@ class SubmitWarrantyClaimUseCaseTest {
         assertThat(response.deviceSerialNumber()).isEqualTo(SERIAL);
         assertThat(response.deviceName()).isEqualTo("Xe Wave Alpha");
         assertThat(response.status()).isEqualTo(WarrantyTicketStatus.PENDING);
-        assertThat(response.issueDescription()).isEqualTo("Màn hình LED bị chớp nháy sau 15 phút.");
+        assertThat(response.issueDescription()).isEqualTo("MÃ n hÃ¬nh LED bá»‹ chá»›p nhÃ¡y sau 15 phÃºt.");
         assertThat(response.evidenceMediaUrls()).containsExactlyElementsOf(evidenceUrls);
         assertThat(response.resolutionNotes()).isNull();
 
@@ -169,7 +168,7 @@ class SubmitWarrantyClaimUseCaseTest {
                 CUSTOMER_ID,
                 null,
                 SERIAL,
-                "Màn hình LED không lên nguồn khi cắm tẩu sạc.",
+                "MÃ n hÃ¬nh LED khÃ´ng lÃªn nguá»“n khi cáº¯m táº©u sáº¡c.",
                 null
         );
         try {
@@ -186,7 +185,7 @@ class SubmitWarrantyClaimUseCaseTest {
         when(warrantyTicketRepository.save(any(WarrantyTicketEntity.class))).thenReturn(savedTicket);
 
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình LED không lên nguồn khi cắm tẩu sạc.",
+                "MÃ n hÃ¬nh LED khÃ´ng lÃªn nguá»“n khi cáº¯m táº©u sáº¡c.",
                 null
         );
 
@@ -205,7 +204,7 @@ class SubmitWarrantyClaimUseCaseTest {
     @DisplayName("execute: when customerId is null, throws InsufficientAuthenticationException")
     void execute_whenNullCustomerId_throwsInsufficientAuthenticationException() {
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình hỏng",
+                "MÃ n hÃ¬nh há»ng",
                 null
         );
 
@@ -218,7 +217,7 @@ class SubmitWarrantyClaimUseCaseTest {
     @DisplayName("execute: when deviceId is null, throws LedInstanceNotFoundException")
     void execute_whenNullDeviceId_throwsLedInstanceNotFoundException() {
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình hỏng",
+                "MÃ n hÃ¬nh há»ng",
                 null
         );
 
@@ -233,7 +232,7 @@ class SubmitWarrantyClaimUseCaseTest {
         when(ledInstanceRepository.findById(DEVICE_ID)).thenReturn(Optional.empty());
 
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình LED bị chớp nháy sau 15 phút.",
+                "MÃ n hÃ¬nh LED bá»‹ chá»›p nhÃ¡y sau 15 phÃºt.",
                 null
         );
 
@@ -250,7 +249,7 @@ class SubmitWarrantyClaimUseCaseTest {
         when(ledInstanceRepository.findById(DEVICE_ID)).thenReturn(Optional.of(instance));
 
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình LED bị chớp nháy sau 15 phút.",
+                "MÃ n hÃ¬nh LED bá»‹ chá»›p nhÃ¡y sau 15 phÃºt.",
                 null
         );
 
@@ -266,7 +265,7 @@ class SubmitWarrantyClaimUseCaseTest {
         when(ledInstanceRepository.findById(DEVICE_ID)).thenReturn(Optional.of(instance));
 
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình LED bị chớp nháy sau 15 phút.",
+                "MÃ n hÃ¬nh LED bá»‹ chá»›p nhÃ¡y sau 15 phÃºt.",
                 null
         );
 
@@ -286,7 +285,7 @@ class SubmitWarrantyClaimUseCaseTest {
         when(ledInstanceRepository.findById(DEVICE_ID)).thenReturn(Optional.of(instance));
 
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình LED bị chớp nháy sau 15 phút.",
+                "MÃ n hÃ¬nh LED bá»‹ chá»›p nhÃ¡y sau 15 phÃºt.",
                 null
         );
 
@@ -307,7 +306,7 @@ class SubmitWarrantyClaimUseCaseTest {
         when(warrantyTicketRepository.existsByDeviceSerialNumberAndStatusIn(eq(SERIAL), any())).thenReturn(true);
 
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình LED bị chớp nháy sau 15 phút.",
+                "MÃ n hÃ¬nh LED bá»‹ chá»›p nhÃ¡y sau 15 phÃºt.",
                 null
         );
 
@@ -325,7 +324,7 @@ class SubmitWarrantyClaimUseCaseTest {
                 .when(mediaReferenceValidator).requireOwnedObjectKey(eq("https://malicious.site/hack.jpg"), eq(MediaPurpose.WARRANTY_EVIDENCE), any());
 
         SubmitWarrantyClaimRequest request = new SubmitWarrantyClaimRequest(
-                "Màn hình LED bị chớp nháy sau 15 phút.",
+                "MÃ n hÃ¬nh LED bá»‹ chá»›p nhÃ¡y sau 15 phÃºt.",
                 List.of("https://malicious.site/hack.jpg")
         );
 

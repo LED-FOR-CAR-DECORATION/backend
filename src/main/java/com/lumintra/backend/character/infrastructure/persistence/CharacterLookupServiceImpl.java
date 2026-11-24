@@ -65,6 +65,23 @@ public class CharacterLookupServiceImpl implements CharacterLookupService {
 
     @Override
     @Transactional(readOnly = true)
+    public Map<Long, CharacterVersionSnapshot> findDetailsByProductIds(Collection<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<CharacterVersionEntity> versions =
+                characterVersionRepository.findWithCharacterByProductIdInOrderByIsCurrentDescVersionNumberDesc(productIds);
+        Map<Long, CharacterVersionSnapshot> result = new HashMap<>();
+        for (CharacterVersionEntity version : versions) {
+            if (version.getProductId() != null) {
+                result.putIfAbsent(version.getProductId(), toSnapshot(version));
+            }
+        }
+        return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<Long, CharacterVersionSnapshot> findDetailsByVersionIds(Collection<Long> versionIds) {
         if (versionIds == null || versionIds.isEmpty()) {
             return Collections.emptyMap();

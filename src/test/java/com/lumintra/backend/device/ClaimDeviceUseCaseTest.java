@@ -259,7 +259,6 @@ class ClaimDeviceUseCaseTest {
                 MODEL_ID,
                 SERIAL_NUMBER,
                 MAC_ADDRESS,
-                "REV_1_0",
                 null,
                 null,
                 status,

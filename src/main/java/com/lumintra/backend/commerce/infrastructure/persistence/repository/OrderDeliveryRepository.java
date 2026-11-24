@@ -40,9 +40,12 @@ public interface OrderDeliveryRepository extends JpaRepository<OrderDeliveryEnti
                 d.trackingUrl = :trackingUrl,
                 d.carrierFee = :carrierFee,
                 d.deliveryStatus = :targetStatus,
+                d.failureReason = null,
+                d.deliveryAttemptCount = d.deliveryAttemptCount + 1,
                 d.updatedAt = :updatedAt
             WHERE d.order.orderId = :orderId
               AND d.deliveryStatus IN :eligibleStatuses
+              AND d.deliveryAttemptCount < :maxAttempts
             """)
     int updateDispatchInfoIfEligible(
             @Param("orderId") Long orderId,
@@ -51,6 +54,7 @@ public interface OrderDeliveryRepository extends JpaRepository<OrderDeliveryEnti
             @Param("trackingNumber") String trackingNumber,
             @Param("trackingUrl") String trackingUrl,
             @Param("carrierFee") BigDecimal carrierFee,
+            @Param("maxAttempts") int maxAttempts,
             @Param("updatedAt") Instant updatedAt);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -60,6 +64,7 @@ public interface OrderDeliveryRepository extends JpaRepository<OrderDeliveryEnti
                 d.trackingUrl = COALESCE(:trackingUrl, d.trackingUrl),
                 d.carrierFee = COALESCE(:carrierFee, d.carrierFee),
                 d.deliveredAt = COALESCE(:deliveredAt, d.deliveredAt),
+                d.failureReason = COALESCE(:failureReason, d.failureReason),
                 d.updatedAt = :updatedAt
             WHERE d.deliveryId = :deliveryId
               AND d.deliveryStatus IN :allowedStatuses
@@ -71,5 +76,24 @@ public interface OrderDeliveryRepository extends JpaRepository<OrderDeliveryEnti
             @Param("trackingUrl") String trackingUrl,
             @Param("carrierFee") BigDecimal carrierFee,
             @Param("deliveredAt") Instant deliveredAt,
+            @Param("failureReason") String failureReason,
+            @Param("updatedAt") Instant updatedAt);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE OrderDeliveryEntity d
+            SET d.deliveryStatus = com.lumintra.backend.commerce.domain.model.DeliveryStatus.RETURNED,
+                d.failureReason = COALESCE(:failureReason, d.failureReason),
+                d.updatedAt = :updatedAt
+            WHERE d.order.orderId = :orderId
+              AND d.deliveryStatus IN (
+                  com.lumintra.backend.commerce.domain.model.DeliveryStatus.FAILED,
+                  com.lumintra.backend.commerce.domain.model.DeliveryStatus.RETURNED,
+                  com.lumintra.backend.commerce.domain.model.DeliveryStatus.PENDING
+              )
+            """)
+    int markReturnedOnRefund(
+            @Param("orderId") Long orderId,
+            @Param("failureReason") String failureReason,
             @Param("updatedAt") Instant updatedAt);
 }

@@ -9,5 +9,17 @@ public record LowStockLedRow(
         Integer widthPx,
         Integer heightPx,
         Long stockQuantity,
-        BigDecimal basePrice
-) {}
+        BigDecimal basePrice,
+        Long reservedQuantity
+) {
+    public LowStockLedRow(
+            Long modelId,
+            Long productId,
+            String modelName,
+            Integer widthPx,
+            Integer heightPx,
+            Long stockQuantity,
+            BigDecimal basePrice) {
+        this(modelId, productId, modelName, widthPx, heightPx, stockQuantity, basePrice, 0L);
+    }
+}

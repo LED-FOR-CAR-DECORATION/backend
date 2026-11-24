@@ -1,10 +1,13 @@
 package com.lumintra.backend.device.api.controller;
 
 import com.lumintra.backend.device.api.request.LedInstanceFilterRequest;
+import com.lumintra.backend.device.api.request.StockInLedInstancesRequest;
 import com.lumintra.backend.device.api.response.LedInstanceDetailResponse;
 import com.lumintra.backend.device.api.response.LedInstanceListResponse;
+import com.lumintra.backend.device.api.response.StockInLedInstancesResponse;
 import com.lumintra.backend.device.application.GetLedInstanceDetailUseCase;
 import com.lumintra.backend.device.application.ListLedInstancesUseCase;
+import com.lumintra.backend.device.application.StockInLedInstancesUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -26,6 +30,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,6 +48,7 @@ public class ManagedLedInstanceController {
 
     private final ListLedInstancesUseCase listLedInstancesUseCase;
     private final GetLedInstanceDetailUseCase getLedInstanceDetailUseCase;
+    private final StockInLedInstancesUseCase stockInLedInstancesUseCase;
 
     @Operation(
             summary = "List and track LED hardware instances",
@@ -283,6 +290,67 @@ public class ManagedLedInstanceController {
         requireAuthenticated(authentication);
         LedInstanceDetailResponse response = getLedInstanceDetailUseCase.execute(id);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Stock in physical LED hardware instances",
+            description = "Registers one or more physical ESP32 LED units (serial number & MAC address) into warehouse stock (IN_STOCK) for a given LED model and increments the model's available stock quantity accordingly. Restricted to ADMIN and MANAGER roles."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "LED hardware instances stocked in successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: invalid serial number, MAC address, or empty batch",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing or invalid JWT authentication token",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: caller does not hold ADMIN or MANAGER role",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Not Found: target LED model does not exist",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Conflict: duplicate serial number/MAC address or target LED model is deprecated",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PostMapping
+    public ResponseEntity<ApiResponse<StockInLedInstancesResponse>> stockInLedInstances(
+            Authentication authentication,
+            @Valid @RequestBody StockInLedInstancesRequest request) {
+        requireAuthenticated(authentication);
+        StockInLedInstancesResponse response = stockInLedInstancesUseCase.execute(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
     private void requireAuthenticated(Authentication authentication) {

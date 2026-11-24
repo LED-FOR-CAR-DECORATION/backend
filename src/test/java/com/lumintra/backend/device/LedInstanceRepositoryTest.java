@@ -53,7 +53,6 @@ class LedInstanceRepositoryTest {
                 101L,
                 "SN-REPO-0000",
                 "AA:BB:CC:00:01:00",
-                "REV_1_0",
                 42L,
                 "Legacy Unset Bound Timestamp",
                 LedInstanceStatus.RETURNED,
@@ -66,7 +65,6 @@ class LedInstanceRepositoryTest {
                 101L,
                 "SN-REPO-0001",
                 "AA:BB:CC:00:01:01",
-                "REV_1_0",
                 42L,
                 "Older Rear Matrix",
                 LedInstanceStatus.BOUND,
@@ -79,7 +77,6 @@ class LedInstanceRepositoryTest {
                 101L,
                 "SN-REPO-0002",
                 "AA:BB:CC:00:01:02",
-                "REV_1_0",
                 42L,
                 "Newer Front Matrix A",
                 LedInstanceStatus.BOUND,
@@ -92,7 +89,6 @@ class LedInstanceRepositoryTest {
                 102L,
                 "SN-REPO-0003",
                 "AA:BB:CC:00:01:03",
-                "REV_1_0",
                 42L,
                 "Newer Front Matrix B",
                 LedInstanceStatus.BOUND,
@@ -105,7 +101,6 @@ class LedInstanceRepositoryTest {
                 101L,
                 "SN-REPO-0004",
                 "AA:BB:CC:00:01:04",
-                "REV_1_0",
                 99L,
                 "Other Customer Device",
                 LedInstanceStatus.BOUND,
@@ -118,7 +113,6 @@ class LedInstanceRepositoryTest {
                 101L,
                 "SN-REPO-0005",
                 "AA:BB:CC:00:01:05",
-                "REV_1_0",
                 manufacturedAt
         ));
 

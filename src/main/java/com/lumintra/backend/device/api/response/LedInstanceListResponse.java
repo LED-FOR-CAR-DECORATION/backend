@@ -39,9 +39,6 @@ public record LedInstanceListResponse(
             @Schema(description = "Uppercase colon-separated ESP32 MAC address", example = "AA:BB:CC:11:22:01", requiredMode = Schema.RequiredMode.REQUIRED)
             String macAddress,
 
-            @Schema(description = "PCB hardware revision stamped at provisioning", example = "REV_1_0", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-            String hardwareRevision,
-
             @Schema(description = "Customer-assigned display name once claimed", example = "Windshield Pro", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
             String deviceName,
 

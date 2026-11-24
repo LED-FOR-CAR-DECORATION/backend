@@ -143,7 +143,6 @@ class OrderFulfillmentLookupServiceImplTest {
                 101L,
                 "LMT-64X64-7777",
                 "AA:BB:CC:77:77:01",
-                "REV_1_0",
                 null,
                 null,
                 LedInstanceStatus.IN_TRANSIT,

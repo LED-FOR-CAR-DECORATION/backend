@@ -75,7 +75,6 @@ class GetLedInstanceDetailUseCaseTest {
                 101L,
                 "LMT-64X64-0001",
                 "AA:BB:CC:11:22:01",
-                "REV_1_0",
                 Instant.parse("2026-10-15T06:00:00Z")
         );
         ReflectionTestUtils.setField(entity, "instanceId", 1L);
@@ -122,7 +121,6 @@ class GetLedInstanceDetailUseCaseTest {
                 101L,
                 "LMT-64X64-0002",
                 "AA:BB:CC:11:22:02",
-                "REV_2_0",
                 42L,
                 "Front Grille",
                 LedInstanceStatus.BOUND,
@@ -161,7 +159,6 @@ class GetLedInstanceDetailUseCaseTest {
                 999L,
                 "LMT-64X64-0003",
                 "AA:BB:CC:11:22:03",
-                "REV_1_0",
                 77L,
                 null,
                 LedInstanceStatus.RETURNED,

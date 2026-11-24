@@ -175,6 +175,7 @@ class DispatchOrderUseCaseTest {
                 eq("24ABCD"),
                 eq("https://expressstg.ahamove.com/s/24ABCD"),
                 eq(new BigDecimal("33000.00")),
+                eq(OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS),
                 any(Instant.class)))
                 .thenReturn(1);
 
@@ -330,7 +331,7 @@ class DispatchOrderUseCaseTest {
                 .thenReturn(new CarrierDispatchResult("TRACK-OK", "https://expressstg.ahamove.com/s/TRACK-OK", new BigDecimal("35000"), "ASSIGNING"));
         when(orderRepository.updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PROCESSING), eq(OrderStatus.SHIPPING), any(Instant.class)))
                 .thenReturn(1);
-        when(orderDeliveryRepository.updateDispatchInfoIfEligible(eq(orderId), any(), eq(DeliveryStatus.ASSIGNED), eq("TRACK-OK"), eq("https://expressstg.ahamove.com/s/TRACK-OK"), eq(new BigDecimal("35000")), any(Instant.class)))
+        when(orderDeliveryRepository.updateDispatchInfoIfEligible(eq(orderId), any(), eq(DeliveryStatus.ASSIGNED), eq("TRACK-OK"), eq("https://expressstg.ahamove.com/s/TRACK-OK"), eq(new BigDecimal("35000")), eq(OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS), any(Instant.class)))
                 .thenReturn(1);
 
         DispatchOrderResponse response = useCase.execute("7", orderId, new DispatchOrderRequest("SGN-BIKE", null, null));
@@ -339,5 +340,22 @@ class DispatchOrderUseCaseTest {
         assertThat(response.orderId()).isEqualTo(orderId);
         assertThat(response.orderStatus()).isEqualTo(OrderStatus.SHIPPING);
         assertThat(response.trackingNumber()).isEqualTo("TRACK-OK");
+    }
+
+    @Test
+    @DisplayName("COM-13: Rejects dispatch when delivery has reached max 2 redelivery attempts (3 total attempts)")
+    void execute_maxDeliveryAttemptsReached_throwsOrderStatusTransitionException() {
+        Long orderId = 109L;
+        OrderEntity order = sampleOrder(orderId, OrderStatus.PROCESSING, OrderType.PHYSICAL);
+        OrderDeliveryEntity delivery = sampleDelivery(order, DeliveryStatus.FAILED);
+        delivery.setDeliveryAttemptCount(OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS);
+
+        when(internalEmployeeAccessService.requireActiveEmployeeAccountId("7", ALLOWED_ROLES)).thenReturn(7L);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderDeliveryRepository.findByOrder_OrderId(orderId)).thenReturn(Optional.of(delivery));
+
+        assertThatThrownBy(() -> useCase.execute("7", orderId, new DispatchOrderRequest("SGN-BIKE", null, null)))
+                .isInstanceOf(OrderStatusTransitionException.class)
+                .hasMessageContaining("maximum number of redelivery attempts");
     }
 }

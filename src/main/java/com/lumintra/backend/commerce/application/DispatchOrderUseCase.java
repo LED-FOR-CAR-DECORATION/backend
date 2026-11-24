@@ -90,6 +90,7 @@ public class DispatchOrderUseCase {
                 });
 
         delivery.validateReadyForDispatch();
+        delivery.validateRedeliveryAllowed();
 
         long requiredLedUnits = linkOrderFulfillmentDeviceUseCase.calculateTotalRequiredLedUnits(orderId);
         if (requiredLedUnits > 0) {
@@ -135,6 +136,7 @@ public class DispatchOrderUseCase {
                     dispatchResult.trackingNumber(),
                     dispatchResult.trackingUrl(),
                     dispatchResult.carrierFee(),
+                    OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS,
                     updatedAt
             );
             if (deliveryUpdated == 0) {

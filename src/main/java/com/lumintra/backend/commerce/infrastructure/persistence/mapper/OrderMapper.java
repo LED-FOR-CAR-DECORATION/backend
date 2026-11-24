@@ -235,6 +235,9 @@ public class OrderMapper {
                 .trackingNumber(delivery.getTrackingNumber())
                 .trackingUrl(delivery.getTrackingUrl())
                 .estimatedDeliveryAt(delivery.getEstimatedDeliveryAt())
+                .failureReason(delivery.getFailureReason())
+                .deliveryAttemptCount(delivery.getDeliveryAttemptCount())
+                .maxDeliveryAttempts(OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS)
                 .build();
     }
 
@@ -351,7 +354,7 @@ public class OrderMapper {
                 .build();
     }
 
-    private StaffOrderDetailResponse.DeliveryDetail toStaffDeliveryDetail(OrderDeliveryEntity delivery) {
+    public StaffOrderDetailResponse.DeliveryDetail toStaffDeliveryDetail(OrderDeliveryEntity delivery) {
         if (delivery == null) {
             return null;
         }
@@ -369,6 +372,9 @@ public class OrderMapper {
                 .carrierFee(delivery.getCarrierFee())
                 .estimatedDeliveryAt(delivery.getEstimatedDeliveryAt())
                 .deliveredAt(delivery.getDeliveredAt())
+                .failureReason(delivery.getFailureReason())
+                .deliveryAttemptCount(delivery.getDeliveryAttemptCount())
+                .maxDeliveryAttempts(OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS)
                 .build();
     }
 

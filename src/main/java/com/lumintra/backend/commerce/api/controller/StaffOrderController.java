@@ -2,6 +2,7 @@ package com.lumintra.backend.commerce.api.controller;
 
 import com.lumintra.backend.commerce.api.request.DispatchOrderRequest;
 import com.lumintra.backend.commerce.api.request.StaffOrderFilterRequest;
+import com.lumintra.backend.commerce.api.request.UpdateStaffOrderDeliveryAddressRequest;
 import com.lumintra.backend.commerce.api.request.UpdateStaffOrderStatusRequest;
 import com.lumintra.backend.commerce.api.response.DispatchOrderResponse;
 import com.lumintra.backend.commerce.api.response.StaffOrderDetailResponse;
@@ -10,6 +11,7 @@ import com.lumintra.backend.commerce.api.response.StaffOrderStatusResponse;
 import com.lumintra.backend.commerce.application.DispatchOrderUseCase;
 import com.lumintra.backend.commerce.application.GetStaffOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListStaffOrdersUseCase;
+import com.lumintra.backend.commerce.application.UpdateStaffOrderDeliveryAddressUseCase;
 import com.lumintra.backend.commerce.application.UpdateStaffOrderStatusUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
@@ -52,6 +54,7 @@ public class StaffOrderController {
     private final ListStaffOrdersUseCase listStaffOrdersUseCase;
     private final GetStaffOrderDetailUseCase getStaffOrderDetailUseCase;
     private final UpdateStaffOrderStatusUseCase updateStaffOrderStatusUseCase;
+    private final UpdateStaffOrderDeliveryAddressUseCase updateStaffOrderDeliveryAddressUseCase;
     private final DispatchOrderUseCase dispatchOrderUseCase;
 
     @Operation(
@@ -220,7 +223,7 @@ public class StaffOrderController {
 
     @Operation(
             summary = "Update order fulfillment status",
-            description = "Manually transitions an order across staff-permitted lifecycle transitions: PENDING_PAYMENT -> CANCELED (accepts CANCELLED alias and restores LED hardware stocks) and DELIVERY_FAILED -> PROCESSING."
+            description = "Manually transitions an order across staff-permitted lifecycle transitions: PENDING_PAYMENT -> CANCELED (accepts CANCELLED alias and restores LED hardware stocks), DELIVERY_FAILED -> PROCESSING (when redelivery attempts remain, max 2 redeliveries), and DELIVERY_FAILED -> REFUNDED (restores LED stocks, releases linked LED instances back to IN_STOCK, revokes owned characters, and marks delivery RETURNED)."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {
@@ -317,6 +320,24 @@ public class StaffOrderController {
             @Valid @RequestBody UpdateStaffOrderStatusRequest request) {
         String subject = extractAuthenticatedSubject(authentication);
         StaffOrderStatusResponse response = updateStaffOrderStatusUseCase.execute(subject, id, request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    @PatchMapping("/{id}/delivery-address")
+    @Operation(
+            summary = "Update order delivery contact and address",
+            description = "Allows staff to update recipient name, phone number, street address, and optional WGS84 coordinates for orders in PENDING_PAYMENT, PROCESSING, PARTIALLY_FULFILLED, or DELIVERY_FAILED status without an active shipment."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<ApiResponse<StaffOrderDetailResponse.DeliveryDetail>> updateDeliveryAddress(
+            Authentication authentication,
+            @Parameter(description = "Numeric purchase order identifier", example = "102")
+            @PathVariable @Positive(message = "id must be greater than 0") Long id,
+            @Valid @RequestBody UpdateStaffOrderDeliveryAddressRequest request) {
+        String subject = extractAuthenticatedSubject(authentication);
+        StaffOrderDetailResponse.DeliveryDetail response =
+                updateStaffOrderDeliveryAddressUseCase.execute(subject, id, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

@@ -3,6 +3,7 @@ package com.lumintra.backend.dashboard.infrastructure.persistence.mapper;
 import com.lumintra.backend.dashboard.api.response.ManagerKpiOverviewResponse;
 import com.lumintra.backend.dashboard.api.response.ManagerKpiOverviewResponse.*;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.CategoryRevenueRow;
+import com.lumintra.backend.dashboard.infrastructure.persistence.repository.DailyRevenueRow;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.LowStockLedRow;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.TopProductRow;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.WarrantyAlertRow;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.YearMonth;
 import java.util.*;
 
 @Component
@@ -20,6 +22,8 @@ public class ManagerDashboardMapper {
     private static final String COLOR_BUNDLE = "#F59E0B";
     private static final String COLOR_CHARACTER = "#8B5CF6";
     private static final String COLOR_SUBSCRIPTION = "#EC4899";
+
+    private static final long DEFAULT_LOW_STOCK_THRESHOLD = 10L;
 
     public ManagerKpiOverviewResponse toResponse(
             BigDecimal totalRevenue,
@@ -37,6 +41,88 @@ public class ManagerDashboardMapper {
             List<TopProductRow> topProductRows,
             List<LowStockLedRow> lowStockLedRows,
             List<WarrantyAlertRow> warrantyAlertRows) {
+        return toResponse(
+                totalRevenue,
+                growthPercent,
+                revenuePeriod,
+                pendingCharactersCount,
+                pendingCommissionsCount,
+                pendingWarrantyClaimsCount,
+                lowStockModelsCount,
+                activeBundlesCount,
+                activeSubscriptionsCount,
+                activePriceConfigsCount,
+                orderCategoryRows,
+                commissionRow,
+                topProductRows,
+                lowStockLedRows,
+                warrantyAlertRows,
+                DEFAULT_LOW_STOCK_THRESHOLD,
+                Collections.emptyMap()
+        );
+    }
+
+    public ManagerKpiOverviewResponse toResponse(
+            BigDecimal totalRevenue,
+            double growthPercent,
+            String revenuePeriod,
+            long pendingCharactersCount,
+            long pendingCommissionsCount,
+            long pendingWarrantyClaimsCount,
+            long lowStockModelsCount,
+            long activeBundlesCount,
+            long activeSubscriptionsCount,
+            long activePriceConfigsCount,
+            List<CategoryRevenueRow> orderCategoryRows,
+            CategoryRevenueRow commissionRow,
+            List<TopProductRow> topProductRows,
+            List<LowStockLedRow> lowStockLedRows,
+            List<WarrantyAlertRow> warrantyAlertRows,
+            long lowStockThreshold,
+            Map<Long, Long> previousProductUnits) {
+        return toResponse(
+                totalRevenue,
+                growthPercent,
+                revenuePeriod,
+                pendingCharactersCount,
+                pendingCommissionsCount,
+                pendingWarrantyClaimsCount,
+                lowStockModelsCount,
+                activeBundlesCount,
+                activeSubscriptionsCount,
+                activePriceConfigsCount,
+                orderCategoryRows,
+                commissionRow,
+                topProductRows,
+                lowStockLedRows,
+                warrantyAlertRows,
+                lowStockThreshold,
+                previousProductUnits,
+                null,
+                Collections.emptyList()
+        );
+    }
+
+    public ManagerKpiOverviewResponse toResponse(
+            BigDecimal totalRevenue,
+            double growthPercent,
+            String revenuePeriod,
+            long pendingCharactersCount,
+            long pendingCommissionsCount,
+            long pendingWarrantyClaimsCount,
+            long lowStockModelsCount,
+            long activeBundlesCount,
+            long activeSubscriptionsCount,
+            long activePriceConfigsCount,
+            List<CategoryRevenueRow> orderCategoryRows,
+            CategoryRevenueRow commissionRow,
+            List<TopProductRow> topProductRows,
+            List<LowStockLedRow> lowStockLedRows,
+            List<WarrantyAlertRow> warrantyAlertRows,
+            long lowStockThreshold,
+            Map<Long, Long> previousProductUnits,
+            YearMonth reportingMonth,
+            List<DailyRevenueRow> dailyRevenueRows) {
 
         KpiSummary summary = new KpiSummary(
                 totalRevenue,
@@ -52,11 +138,47 @@ public class ManagerDashboardMapper {
         );
 
         List<RevenueCategoryItem> categories = buildCategoryBreakdown(totalRevenue, orderCategoryRows, commissionRow);
-        List<TopProductItem> topProducts = buildTopProducts(topProductRows);
-        List<LowStockLedItem> lowStockLeds = buildLowStockLeds(lowStockLedRows);
+        List<TopProductItem> topProducts = buildTopProducts(
+                topProductRows,
+                lowStockThreshold,
+                previousProductUnits != null ? previousProductUnits : Collections.emptyMap());
+        List<LowStockLedItem> lowStockLeds = buildLowStockLeds(lowStockLedRows, lowStockThreshold);
         List<WarrantyAlertItem> warrantyAlerts = buildWarrantyAlerts(warrantyAlertRows);
+        List<DailyRevenuePoint> dailyRevenue = buildDailyRevenueSeries(reportingMonth, dailyRevenueRows);
 
-        return new ManagerKpiOverviewResponse(summary, categories, topProducts, lowStockLeds, warrantyAlerts);
+        return new ManagerKpiOverviewResponse(
+                summary,
+                categories,
+                topProducts,
+                lowStockLeds,
+                warrantyAlerts,
+                dailyRevenue
+        );
+    }
+
+    private List<DailyRevenuePoint> buildDailyRevenueSeries(
+            YearMonth reportingMonth,
+            List<DailyRevenueRow> rows) {
+        if (reportingMonth == null) {
+            return Collections.emptyList();
+        }
+        Map<Integer, DailyRevenueRow> byDay = new HashMap<>();
+        if (rows != null) {
+            for (DailyRevenueRow row : rows) {
+                if (row != null) {
+                    byDay.put(row.day(), row);
+                }
+            }
+        }
+        int daysInMonth = reportingMonth.lengthOfMonth();
+        List<DailyRevenuePoint> points = new ArrayList<>(daysInMonth);
+        for (int day = 1; day <= daysInMonth; day++) {
+            DailyRevenueRow row = byDay.get(day);
+            BigDecimal revenue = row != null && row.revenue() != null ? row.revenue() : BigDecimal.ZERO;
+            long count = row != null ? row.orderCount() : 0L;
+            points.add(new DailyRevenuePoint(day, reportingMonth.atDay(day).toString(), revenue, count));
+        }
+        return points;
     }
 
     private List<WarrantyAlertItem> buildWarrantyAlerts(List<WarrantyAlertRow> rows) {
@@ -136,7 +258,10 @@ public class ManagerDashboardMapper {
         return result;
     }
 
-    private List<TopProductItem> buildTopProducts(List<TopProductRow> topProductRows) {
+    private List<TopProductItem> buildTopProducts(
+            List<TopProductRow> topProductRows,
+            long lowStockThreshold,
+            Map<Long, Long> previousProductUnits) {
         if (topProductRows == null || topProductRows.isEmpty()) {
             return Collections.emptyList();
         }
@@ -152,6 +277,16 @@ public class ManagerDashboardMapper {
                 default -> "HARDWARE";
             };
 
+            String thumbnail = (row.thumbnailUrl() != null && !row.thumbnailUrl().isBlank())
+                    ? row.thumbnailUrl()
+                    : null;
+
+            long prevUnits = row.productId() != null
+                    ? previousProductUnits.getOrDefault(row.productId(), 0L)
+                    : 0L;
+            String trend = resolveTrend(row.totalUnits(), prevUnits);
+            String stockStatus = resolveTopProductStockStatus(row, lowStockThreshold);
+
             items.add(new TopProductItem(
                     row.productId() != null ? row.productId().toString() : String.valueOf(rank),
                     row.productName() != null ? row.productName() : "Sản phẩm #" + rank,
@@ -159,15 +294,51 @@ public class ManagerDashboardMapper {
                     row.totalUnits(),
                     row.totalRevenue() != null ? row.totalRevenue() : BigDecimal.ZERO,
                     rank++,
-                    row.thumbnailUrl() != null ? row.thumbnailUrl() : "https://cdn.lumintra.com/placeholder.png",
-                    "up",
-                    "In stock"
+                    thumbnail,
+                    trend,
+                    stockStatus
             ));
         }
         return items;
     }
 
-    private List<LowStockLedItem> buildLowStockLeds(List<LowStockLedRow> lowStockLedRows) {
+    private static String resolveTrend(long currentUnits, long previousUnits) {
+        if (currentUnits > previousUnits) {
+            return "up";
+        }
+        if (currentUnits < previousUnits) {
+            return "down";
+        }
+        return "stable";
+    }
+
+    private static String resolveTopProductStockStatus(TopProductRow row, long lowStockThreshold) {
+        if (row.productStatus() != null && !"PUBLISHED".equalsIgnoreCase(row.productStatus())) {
+            return "Out of stock";
+        }
+
+        String productType = row.productType() != null ? row.productType().toUpperCase(Locale.ROOT) : "";
+        if ("LED".equals(productType)) {
+            if ("OUT_OF_STOCK".equalsIgnoreCase(row.ledModelStatus())
+                    || "DEPRECATED".equalsIgnoreCase(row.ledModelStatus())
+                    || row.availableStock() == null
+                    || row.availableStock() <= 0L) {
+                return "Out of stock";
+            }
+            return row.availableStock() < lowStockThreshold ? "Low stock" : "In stock";
+        }
+
+        if ("BUNDLE".equals(productType) && row.availableStock() != null) {
+            if (row.availableStock() <= 0L) {
+                return "Out of stock";
+            }
+            return row.availableStock() < lowStockThreshold ? "Low stock" : "In stock";
+        }
+
+        return "In stock";
+    }
+
+    private List<LowStockLedItem> buildLowStockLeds(List<LowStockLedRow> lowStockLedRows, long lowStockThreshold) {
         if (lowStockLedRows == null || lowStockLedRows.isEmpty()) {
             return Collections.emptyList();
         }
@@ -191,14 +362,16 @@ public class ManagerDashboardMapper {
             String productId = row.productId() != null ? row.productId().toString()
                     : (row.modelId() != null ? row.modelId().toString() : "0");
 
+            long reserved = row.reservedQuantity() != null ? row.reservedQuantity() : 0L;
+
             items.add(new LowStockLedItem(
                     productId,
                     row.modelName() != null ? row.modelName() : "LED-" + dimensions,
                     row.modelName() != null ? row.modelName() : "LED Ma Trận " + dimensions,
                     dimensions,
                     currentStock,
-                    10L,
-                    0L,
+                    lowStockThreshold,
+                    reserved,
                     row.basePrice() != null ? row.basePrice() : BigDecimal.ZERO,
                     urgency
             ));

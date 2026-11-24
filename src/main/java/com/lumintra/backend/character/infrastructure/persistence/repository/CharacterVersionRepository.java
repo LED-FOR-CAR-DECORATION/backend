@@ -27,6 +27,9 @@ public interface CharacterVersionRepository extends JpaRepository<CharacterVersi
     List<CharacterVersionEntity> findByProductIdInOrderByIsCurrentDescVersionNumberDesc(Collection<Long> productIds);
 
     @EntityGraph(attributePaths = "character")
+    List<CharacterVersionEntity> findWithCharacterByProductIdInOrderByIsCurrentDescVersionNumberDesc(Collection<Long> productIds);
+
+    @EntityGraph(attributePaths = "character")
     Optional<CharacterVersionEntity> findWithCharacterFirstByProductIdAndIsCurrentTrue(Long productId);
 
     @EntityGraph(attributePaths = "character")

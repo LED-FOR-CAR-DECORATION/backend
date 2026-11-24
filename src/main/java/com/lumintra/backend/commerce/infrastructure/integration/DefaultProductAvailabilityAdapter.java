@@ -1,6 +1,7 @@
 package com.lumintra.backend.commerce.infrastructure.integration;
 
 import com.lumintra.backend.character.domain.service.CharacterLookupService;
+import com.lumintra.backend.commerce.application.CustomerSubscriptionEntitlementService;
 import com.lumintra.backend.commerce.domain.model.AvailabilityCheckResult;
 import com.lumintra.backend.commerce.domain.model.BundleCheckoutInspection;
 import com.lumintra.backend.commerce.domain.service.ProductAvailabilityPort;
@@ -37,6 +38,7 @@ public class DefaultProductAvailabilityAdapter implements ProductAvailabilityPor
     private final BundleLookupService bundleLookupService;
     private final OwnedCharacterRepository ownedCharacterRepository;
     private final CustomerSubscriptionRepository customerSubscriptionRepository;
+    private final CustomerSubscriptionEntitlementService customerSubscriptionEntitlementService;
 
     @Override
     public boolean hasSufficientLedStock(Long productId, int requestedQuantity) {
@@ -55,9 +57,10 @@ public class DefaultProductAvailabilityAdapter implements ProductAvailabilityPor
         }
 
         if (productType == ProductType.CHARACTER) {
-            return characterLookupService.findVersionIdByProductId(productId)
+            boolean directlyOwned = characterLookupService.findVersionIdByProductId(productId)
                     .map(versionId -> ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(customerId, versionId))
                     .orElse(false);
+            return directlyOwned || customerSubscriptionEntitlementService.hasActiveAllAccessCharacters(customerId);
         }
 
         if (productType == ProductType.SUBSCRIPTION) {
@@ -107,7 +110,8 @@ public class DefaultProductAvailabilityAdapter implements ProductAvailabilityPor
 
         if (!versionIds.isEmpty()
                 && customerId != null
-                && ownedCharacterRepository.existsByCustomerIdAndVersionIdInAndIsRevokedFalse(customerId, versionIds)) {
+                && (ownedCharacterRepository.existsByCustomerIdAndVersionIdInAndIsRevokedFalse(customerId, versionIds)
+                        || customerSubscriptionEntitlementService.hasActiveAllAccessCharacters(customerId))) {
             return BundleCheckoutInspection.unavailable(AvailabilityCheckResult.REASON_ALREADY_OWNED);
         }
 

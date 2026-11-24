@@ -2,6 +2,7 @@ package com.lumintra.backend.dashboard.application;
 
 import com.lumintra.backend.dashboard.api.request.ManagerDashboardFilterRequest;
 import com.lumintra.backend.dashboard.api.response.ManagerKpiOverviewResponse;
+import com.lumintra.backend.dashboard.infrastructure.caching.DashboardCacheNames;
 import com.lumintra.backend.dashboard.infrastructure.persistence.mapper.ManagerDashboardMapper;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.CategoryRevenueRow;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.LowStockLedRow;
@@ -15,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
@@ -22,6 +25,7 @@ import java.time.Instant;
 import java.time.YearMonth;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -92,10 +96,12 @@ class GetManagerDashboardKpiUseCaseTest {
                 .thenReturn(new CategoryRevenueRow("COMMISSION", new BigDecimal("250000000"), 45L));
 
         List<TopProductRow> topRows = List.of(
-                new TopProductRow(1L, "LED P4", "LED", "https://cdn.com/led.png", 120L, new BigDecimal("600000000"))
+                new TopProductRow(1L, "LED P4", "LED", "https://cdn.com/led.png", 120L, new BigDecimal("600000000"), "PUBLISHED", 4L, "ACTIVE")
         );
         when(analyticsRepository.findTopSellingProducts(any(Instant.class), any(Instant.class), eq(5)))
                 .thenReturn(topRows);
+        when(analyticsRepository.findProductUnitsSoldMap(any(Instant.class), any(Instant.class), eq(List.of(1L))))
+                .thenReturn(Map.of(1L, 150L));
 
         ManagerKpiOverviewResponse response = useCase.execute(subject, request);
 
@@ -115,6 +121,8 @@ class GetManagerDashboardKpiUseCaseTest {
 
         assertThat(response.revenueByCategory()).hasSize(5);
         assertThat(response.topSellingProducts()).hasSize(1);
+        assertThat(response.topSellingProducts().get(0).trend()).isEqualTo("down");
+        assertThat(response.topSellingProducts().get(0).stockStatus()).isEqualTo("Low stock");
         assertThat(response.lowStockLeds()).hasSize(2);
         assertThat(response.lowStockLeds().get(1).urgency()).isEqualTo("CRITICAL");
     }
@@ -278,5 +286,58 @@ class GetManagerDashboardKpiUseCaseTest {
                 .hasMessageContaining("Authorized internal role is required.");
 
         verifyNoInteractions(analyticsRepository);
+    }
+
+    @Test
+    @DisplayName("MGT-01 UseCase UTCID08 [A]: Suspended employee cannot bypass DB auth check via warm Redis cache")
+    void execute_suspendedEmployeeWithWarmCache_stillThrowsAccessDenied() {
+        CacheManager cacheManager = mock(CacheManager.class);
+        GetManagerDashboardKpiUseCase cachedUseCase =
+                new GetManagerDashboardKpiUseCase(internalEmployeeAccessService, analyticsRepository, mapper, cacheManager);
+
+        String subject = "999";
+        ManagerDashboardFilterRequest request = new ManagerDashboardFilterRequest("2026-11", "2026-10");
+        doThrow(new AccessDeniedException("Active internal account is required."))
+                .when(internalEmployeeAccessService).requireActiveEmployeeAccountId(eq(subject), eq(Set.of("MANAGER", "ADMIN")));
+
+        assertThatThrownBy(() -> cachedUseCase.execute(subject, request))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verifyNoInteractions(cacheManager);
+        verifyNoInteractions(analyticsRepository);
+    }
+
+    @Test
+    @DisplayName("MGT-01 UseCase UTCID09 [N]: refresh=true bypasses cache, queries DB fresh, and repopulates cache")
+    void execute_refreshTrue_bypassesCacheAndUpdatesIt() {
+        CacheManager cacheManager = mock(CacheManager.class);
+        Cache cache = mock(Cache.class);
+        when(cacheManager.getCache(DashboardCacheNames.MANAGER_KPI)).thenReturn(cache);
+
+        GetManagerDashboardKpiUseCase cachedUseCase =
+                new GetManagerDashboardKpiUseCase(internalEmployeeAccessService, analyticsRepository, mapper, cacheManager);
+
+        String subject = "101";
+        ManagerDashboardFilterRequest request = new ManagerDashboardFilterRequest("2026-05", "2026-04");
+        when(internalEmployeeAccessService.requireActiveEmployeeAccountId(eq(subject), eq(Set.of("MANAGER", "ADMIN"))))
+                .thenReturn(101L);
+        when(analyticsRepository.calculateOrderRevenue(any(Instant.class), any(Instant.class)))
+                .thenReturn(new BigDecimal("2000000"), new BigDecimal("1000000"));
+        when(analyticsRepository.calculateCommissionRevenue(any(Instant.class), any(Instant.class)))
+                .thenReturn(BigDecimal.ZERO, BigDecimal.ZERO);
+        when(analyticsRepository.countActiveBundles()).thenReturn(2L);
+        when(analyticsRepository.findLowStockModels(10L)).thenReturn(Collections.emptyList());
+        when(analyticsRepository.calculateOrderItemCategoryRevenues(any(Instant.class), any(Instant.class)))
+                .thenReturn(Collections.emptyList());
+        when(analyticsRepository.calculateCommissionCategoryRevenue(any(Instant.class), any(Instant.class)))
+                .thenReturn(new CategoryRevenueRow("COMMISSION", BigDecimal.ZERO, 0L));
+        when(analyticsRepository.findTopSellingProducts(any(Instant.class), any(Instant.class), eq(5)))
+                .thenReturn(Collections.emptyList());
+
+        ManagerKpiOverviewResponse response = cachedUseCase.execute(subject, request, true);
+
+        assertThat(response.kpiSummary().activeBundlesCount()).isEqualTo(2L);
+        verify(cache, never()).get(any(), eq(ManagerKpiOverviewResponse.class));
+        verify(cache).put("2026-05:2026-04", response);
     }
 }

@@ -136,7 +136,6 @@ class WarrantyDataSeederTest {
                 1L,
                 serial,
                 "AA:BB:CC:11:22:" + instanceId,
-                "REV_1_0",
                 customerId,
                 "Device " + serial,
                 LedInstanceStatus.BOUND,

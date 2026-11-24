@@ -2,11 +2,14 @@ package com.lumintra.backend.device;
 
 import com.lumintra.backend.device.api.controller.ManagedLedInstanceController;
 import com.lumintra.backend.device.api.request.LedInstanceFilterRequest;
+import com.lumintra.backend.device.api.request.StockInLedInstancesRequest;
 import com.lumintra.backend.device.api.response.LedInstanceDetailResponse;
 import com.lumintra.backend.device.api.response.LedInstanceListResponse;
 import com.lumintra.backend.device.api.response.LedModelListResponse;
+import com.lumintra.backend.device.api.response.StockInLedInstancesResponse;
 import com.lumintra.backend.device.application.GetLedInstanceDetailUseCase;
 import com.lumintra.backend.device.application.ListLedInstancesUseCase;
+import com.lumintra.backend.device.application.StockInLedInstancesUseCase;
 import com.lumintra.backend.device.domain.model.LedInstanceStatus;
 import com.lumintra.backend.device.domain.model.LedModelStatus;
 import com.lumintra.backend.device.domain.model.WarrantyStatus;
@@ -37,8 +40,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.http.MediaType;
 
 @WebMvcTest(controllers = ManagedLedInstanceController.class)
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class})
@@ -56,6 +61,9 @@ class ManagedLedInstanceControllerTest {
     private GetLedInstanceDetailUseCase getLedInstanceDetailUseCase;
 
     @MockitoBean
+    private StockInLedInstancesUseCase stockInLedInstancesUseCase;
+
+    @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
@@ -71,7 +79,6 @@ class ManagedLedInstanceControllerTest {
                 .modelName("Lumintra Matrix 64x64 Pro")
                 .serialNumber("LMT-64X64-0001")
                 .macAddress("AA:BB:CC:11:22:01")
-                .hardwareRevision("REV_1_0")
                 .deviceName(null)
                 .status(LedInstanceStatus.IN_STOCK)
                 .fulfillment(null)
@@ -90,7 +97,6 @@ class ManagedLedInstanceControllerTest {
                 .modelName("Lumintra Matrix 64x64 Pro")
                 .serialNumber("LMT-64X64-0002")
                 .macAddress("AA:BB:CC:11:22:02")
-                .hardwareRevision("REV_1_0")
                 .deviceName("Windshield Pro")
                 .status(LedInstanceStatus.BOUND)
                 .fulfillment(new LedInstanceListResponse.FulfillmentInfo(55L, 102L))
@@ -263,7 +269,6 @@ class ManagedLedInstanceControllerTest {
                         .build())
                 .serialNumber("LMT-64X64-0001")
                 .macAddress("AA:BB:CC:11:22:01")
-                .hardwareRevision("REV_1_0")
                 .currentFirmwareId(null)
                 .deviceName(null)
                 .status(LedInstanceStatus.IN_STOCK)
@@ -295,7 +300,6 @@ class ManagedLedInstanceControllerTest {
                         .build())
                 .serialNumber("LMT-64X64-0002")
                 .macAddress("AA:BB:CC:11:22:02")
-                .hardwareRevision("REV_1_0")
                 .currentFirmwareId(12L)
                 .deviceName("Windshield Pro")
                 .status(LedInstanceStatus.BOUND)
@@ -415,5 +419,64 @@ class ManagedLedInstanceControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.user("7").roles("ADMIN")))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
+
+    @Test
+    @DisplayName("STOCK-IN API-01 [N]: MANAGER receives 201 Created when stocking in LED instances")
+    void stockInLedInstances_manager_returns201() throws Exception {
+        StockInLedInstancesResponse response = StockInLedInstancesResponse.builder()
+                .modelId(1L)
+                .modelName("Lumintra Matrix 64x64 Pro")
+                .importedCount(1)
+                .stockQuantity(11L)
+                .modelStatus(LedModelStatus.ACTIVE)
+                .items(List.of(sampleResponse().items().get(0)))
+                .build();
+        when(stockInLedInstancesUseCase.execute(any(StockInLedInstancesRequest.class))).thenReturn(response);
+
+        String body = """
+                {
+                  "modelId": 1,
+                  "items": [
+                    {
+                      "serialNumber": "LMT-64X64-0011",
+                      "macAddress": "AA:BB:CC:11:22:99"
+                    }
+                  ]
+                }
+                """;
+
+        mockMvc.perform(post(PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.importedCount").value(1))
+                .andExpect(jsonPath("$.data.stockQuantity").value(11));
+    }
+
+    @Test
+    @DisplayName("STOCK-IN API-02 [A]: STAFF receives 403 FORBIDDEN on stock-in endpoint")
+    void stockInLedInstances_staff_returns403() throws Exception {
+        String body = """
+                {
+                  "modelId": 1,
+                  "items": [
+                    {
+                      "serialNumber": "LMT-64X64-0011",
+                      "macAddress": "AA:BB:CC:11:22:99"
+                    }
+                  ]
+                }
+                """;
+
+        mockMvc.perform(post(PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(stockInLedInstancesUseCase);
     }
 }

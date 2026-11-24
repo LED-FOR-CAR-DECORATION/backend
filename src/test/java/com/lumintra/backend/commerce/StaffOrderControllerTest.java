@@ -11,6 +11,7 @@ import com.lumintra.backend.commerce.api.response.StaffOrderStatusResponse;
 import com.lumintra.backend.commerce.application.DispatchOrderUseCase;
 import com.lumintra.backend.commerce.application.GetStaffOrderDetailUseCase;
 import com.lumintra.backend.commerce.application.ListStaffOrdersUseCase;
+import com.lumintra.backend.commerce.application.UpdateStaffOrderDeliveryAddressUseCase;
 import com.lumintra.backend.commerce.application.UpdateStaffOrderStatusUseCase;
 import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
@@ -74,6 +75,9 @@ class StaffOrderControllerTest {
 
     @MockitoBean
     private UpdateStaffOrderStatusUseCase updateStaffOrderStatusUseCase;
+
+    @MockitoBean
+    private UpdateStaffOrderDeliveryAddressUseCase updateStaffOrderDeliveryAddressUseCase;
 
     @MockitoBean
     private DispatchOrderUseCase dispatchOrderUseCase;
@@ -737,5 +741,49 @@ class StaffOrderControllerTest {
                         .content("{\"serviceId\":\"SGN-BIKE\"}"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/management/staff/orders/{id}/delivery-address updates delivery info for STAFF and rejects CUSTOMER")
+    void updateDeliveryAddress_staffAuthorizedAndCustomerForbidden() throws Exception {
+        StaffOrderDetailResponse.DeliveryDetail updated = StaffOrderDetailResponse.DeliveryDetail.builder()
+                .carrier("AHAMOVE")
+                .recipientName("Nguyen Van Moi")
+                .recipientPhone("0912345678")
+                .fullAddress("123 Le Loi, District 1, HCMC")
+                .latitude(new BigDecimal("10.7768890"))
+                .longitude(new BigDecimal("106.7008060"))
+                .deliveryStatus(DeliveryStatus.PENDING)
+                .deliveryAttemptCount(0)
+                .maxDeliveryAttempts(3)
+                .build();
+
+        when(updateStaffOrderDeliveryAddressUseCase.execute(eq("7"), eq(102L), any()))
+                .thenReturn(updated);
+
+        String payload = """
+                {
+                  "recipientName": "Nguyen Van Moi",
+                  "recipientPhone": "0912345678",
+                  "fullAddress": "123 Le Loi, District 1, HCMC",
+                  "latitude": 10.7768890,
+                  "longitude": 106.7008060
+                }
+                """;
+
+        mockMvc.perform(patch(PATH + "/102/delivery-address")
+                        .with(SecurityMockMvcRequestPostProcessors.user("7").roles("STAFF"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recipientName").value("Nguyen Van Moi"))
+                .andExpect(jsonPath("$.data.recipientPhone").value("0912345678"))
+                .andExpect(jsonPath("$.data.fullAddress").value("123 Le Loi, District 1, HCMC"));
+
+        mockMvc.perform(patch(PATH + "/102/delivery-address")
+                        .with(SecurityMockMvcRequestPostProcessors.user("15").roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
     }
 }
