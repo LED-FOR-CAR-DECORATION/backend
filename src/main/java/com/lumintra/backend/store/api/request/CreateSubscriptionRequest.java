@@ -16,10 +16,34 @@ public record CreateSubscriptionRequest(
         @NotNull @DecimalMin("0") @Digits(integer = 10, fraction = 2) BigDecimal basePrice,
         String description,
         @Size(max = 500) @URL @Pattern(regexp = "https?://\\S+") String thumbnailUrl,
+        List<@NotBlank @Size(max = 500) @Pattern(regexp = "https?://\\S+") @URL String> galleryUrls,
         @JsonProperty("isLifetime") @NotNull Boolean lifetime,
         @Positive Integer durationDays,
         @NotNull Boolean allAccessCharacters,
         List<@NotNull @Positive Long> tagIds) {
+    public CreateSubscriptionRequest(
+            String planName,
+            String planCode,
+            BigDecimal basePrice,
+            String description,
+            String thumbnailUrl,
+            Boolean lifetime,
+            Integer durationDays,
+            Boolean allAccessCharacters,
+            List<Long> tagIds) {
+        this(
+                planName,
+                planCode,
+                basePrice,
+                description,
+                thumbnailUrl,
+                null,
+                lifetime,
+                durationDays,
+                allAccessCharacters,
+                tagIds);
+    }
+
     public CreateSubscriptionRequest {
         planName = planName == null ? null : planName.strip();
         planCode = planCode == null ? null : planCode.strip();

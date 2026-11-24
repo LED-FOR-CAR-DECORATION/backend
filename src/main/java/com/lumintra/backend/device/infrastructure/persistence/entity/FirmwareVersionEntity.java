@@ -92,6 +92,19 @@ public class FirmwareVersionEntity {
         this.status = FirmwareStatus.SUPERSEDED;
     }
 
+    /** Withdraws a faulty release for good (BR-FL4-05); the row and the stored binary are kept. */
+    public void deprecate(Long employeeId, String reason, Instant at) {
+        this.status = FirmwareStatus.DEPRECATED;
+        this.deprecatedByEmployeeId = employeeId;
+        this.deprecationReason = reason;
+        this.deprecatedAt = at;
+    }
+
+    /** Rolls a model back to this previously SUPERSEDED release. */
+    public void reactivate() {
+        this.status = FirmwareStatus.ACTIVE;
+    }
+
     public static FirmwareVersionEntity create(
             Long modelId,
             String version,

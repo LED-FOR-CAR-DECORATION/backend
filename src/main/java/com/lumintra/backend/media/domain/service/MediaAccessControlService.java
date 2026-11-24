@@ -84,7 +84,7 @@ public class MediaAccessControlService {
                     internalEmployeeAccessService.requireActiveEmployeeAccountId(subject, Set.of("MANAGER", "ADMIN"));
                 }
             }
-            case STORE_PRODUCT -> {
+            case STORE_PRODUCT, PRODUCT_LED, PRODUCT_BUNDLE, PRODUCT_SUBSCRIPTION -> {
                 if (!hasAnyRole(roles, "MANAGER", "ADMIN")) {
                     throw new AccessDeniedException("Only managers and admins are authorized to upload store product media.");
                 }

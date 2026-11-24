@@ -43,7 +43,7 @@ public class DefaultProductAvailabilityAdapter implements ProductAvailabilityPor
         if (productId == null || requestedQuantity <= 0) {
             return false;
         }
-        return ledStockLookupService.findStockByModelId(productId)
+        return ledStockLookupService.findStockByProductId(productId)
                 .map(stock -> stock >= requestedQuantity)
                 .orElse(false);
     }

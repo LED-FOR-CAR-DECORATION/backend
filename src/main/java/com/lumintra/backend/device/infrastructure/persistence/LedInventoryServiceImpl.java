@@ -1,6 +1,7 @@
 package com.lumintra.backend.device.infrastructure.persistence;
 
 import com.lumintra.backend.device.domain.service.LedInventoryService;
+import com.lumintra.backend.device.infrastructure.persistence.entity.LedModelEntity;
 import com.lumintra.backend.device.infrastructure.persistence.repository.LedModelRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 
 @Service
@@ -18,6 +20,15 @@ public class LedInventoryServiceImpl implements LedInventoryService {
     private static final Logger log = LoggerFactory.getLogger(LedInventoryServiceImpl.class);
 
     private final LedModelRepository ledModelRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Long> findModelIdByLedProductId(Long productId) {
+        if (productId == null) {
+            return Optional.empty();
+        }
+        return ledModelRepository.findByProductId(productId).map(LedModelEntity::getModelId);
+    }
 
     @Override
     @Transactional

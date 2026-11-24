@@ -131,7 +131,10 @@ public class UpdateStaffOrderStatusUseCase {
             }
 
             if (product.productType() == ProductType.LED) {
-                quantitiesByModelId.merge(product.productId(), (long) item.getQuantity(), Math::addExact);
+                long modelId = ledInventoryService
+                        .findModelIdByLedProductId(product.productId())
+                        .orElse(product.productId());
+                quantitiesByModelId.merge(modelId, (long) item.getQuantity(), Math::addExact);
             } else if (product.productType() == ProductType.BUNDLE) {
                 Optional<BundleSnapshot> bundleOpt = bundleCache.computeIfAbsent(
                         product.productId(),

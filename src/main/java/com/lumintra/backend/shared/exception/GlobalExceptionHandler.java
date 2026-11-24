@@ -63,7 +63,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(StoreProductReferenceException.class)
     public ResponseEntity<ErrorResponse> handleStoreProductReference(StoreProductReferenceException ex) {
-        var status = ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
+        var status = (ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
+                        || ex.getReason() == StoreProductReferenceException.Reason.LED_MODEL_ALREADY_LINKED)
                 ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND;
         return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
     }
@@ -210,6 +211,21 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("FIRMWARE_VERSION_CONFLICT", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(FirmwareNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleFirmwareNotFound(FirmwareNotFoundException ex) {
+        return buildErrorResponse("FIRMWARE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(FirmwareNotActiveException.class)
+    public ResponseEntity<ErrorResponse> handleFirmwareNotActive(FirmwareNotActiveException ex) {
+        return buildErrorResponse("FIRMWARE_NOT_ACTIVE", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(FirmwareAlreadyDeprecatedException.class)
+    public ResponseEntity<ErrorResponse> handleFirmwareAlreadyDeprecated(FirmwareAlreadyDeprecatedException ex) {
+        return buildErrorResponse("FIRMWARE_ALREADY_DEPRECATED", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(
             org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
@@ -235,6 +251,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(LedModelDimensionsLockedException.class)
     public ResponseEntity<ErrorResponse> handleLedModelDimensionsLocked(LedModelDimensionsLockedException ex) {
         return buildErrorResponse("LED_MODEL_DIMENSIONS_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(DeviceNotBoundException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceNotBound(DeviceNotBoundException ex) {
+        return buildErrorResponse("DEVICE_NOT_BOUND", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(DeviceOwnershipMismatchException.class)

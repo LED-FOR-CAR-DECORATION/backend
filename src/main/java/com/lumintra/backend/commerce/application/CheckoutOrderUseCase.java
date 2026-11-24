@@ -100,8 +100,9 @@ public class CheckoutOrderUseCase {
                 ? resolveShippingAddress(customerId, request)
                 : null;
 
-        if (!inspection.requiredLedStocks().isEmpty()
-                && !ledInventoryService.deductStocksIfAvailable(inspection.requiredLedStocks())) {
+        Map<Long, Long> requiredLedStocks = resolveLedModelStockRequirements(inspection);
+        if (!requiredLedStocks.isEmpty()
+                && !ledInventoryService.deductStocksIfAvailable(requiredLedStocks)) {
             throw new InsufficientStockException("Insufficient LED hardware stock for one or more selected items.");
         }
 
@@ -160,7 +161,8 @@ public class CheckoutOrderUseCase {
             List<CartItemEntity> selectedItems,
             Map<Long, ProductSnapshot> productsById) {
         boolean hasPhysicalGoods = false;
-        Map<Long, Long> requiredLedStocks = new HashMap<>();
+        Map<Long, Long> requiredLedStocksFromBundles = new HashMap<>();
+        Map<Long, Long> requiredLedQuantitiesByProductId = new HashMap<>();
         Set<ProductType> distinctProductTypes = EnumSet.noneOf(ProductType.class);
         BigDecimal subtotal = BigDecimal.ZERO;
 
@@ -182,7 +184,7 @@ public class CheckoutOrderUseCase {
                 }
             } else if (type == ProductType.LED) {
                 hasPhysicalGoods = true;
-                requiredLedStocks.merge(product.productId(), (long) cartItem.getQuantity(), Long::sum);
+                requiredLedQuantitiesByProductId.merge(product.productId(), (long) cartItem.getQuantity(), Long::sum);
             } else if (type == ProductType.BUNDLE) {
                 BundleCheckoutInspection bundleInspection = productAvailabilityPort.inspectBundleForCheckout(customerId,
                         product.productId(), cartItem.getQuantity());
@@ -192,7 +194,7 @@ public class CheckoutOrderUseCase {
                 if (bundleInspection.containsPhysicalLed()) {
                     hasPhysicalGoods = true;
                     bundleInspection.requiredLedStocksByModelId()
-                            .forEach((modelId, qty) -> requiredLedStocks.merge(modelId, qty, Long::sum));
+                            .forEach((modelId, qty) -> requiredLedStocksFromBundles.merge(modelId, qty, Long::sum));
                 }
             } else {
                 throw new ProductNotAvailableException("Unsupported product type in cart.");
@@ -203,8 +205,28 @@ public class CheckoutOrderUseCase {
         }
 
         OrderType orderType = resolveOrderType(distinctProductTypes);
-        return new CheckoutInspection(hasPhysicalGoods, requiredLedStocks, orderType,
-                subtotal.setScale(2, RoundingMode.HALF_UP));
+        return new CheckoutInspection(
+                hasPhysicalGoods,
+                requiredLedStocksFromBundles,
+                requiredLedQuantitiesByProductId,
+                orderType,
+                subtotal.setScale(2, RoundingMode.HALF_UP)
+        );
+    }
+
+    private Map<Long, Long> resolveLedModelStockRequirements(CheckoutInspection inspection) {
+        if (inspection.requiredLedStocksFromBundles().isEmpty()
+                && inspection.requiredLedQuantitiesByProductId().isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Long> resolved = new HashMap<>(inspection.requiredLedStocksFromBundles());
+        inspection.requiredLedQuantitiesByProductId().forEach((productId, qty) -> {
+            long modelId = ledInventoryService
+                    .findModelIdByLedProductId(productId)
+                    .orElse(productId);
+            resolved.merge(modelId, qty, Long::sum);
+        });
+        return resolved;
     }
 
     private RuntimeException translateBundleFailure(String reason) {
@@ -262,7 +284,8 @@ public class CheckoutOrderUseCase {
 
     private record CheckoutInspection(
             boolean hasPhysicalGoods,
-            Map<Long, Long> requiredLedStocks,
+            Map<Long, Long> requiredLedStocksFromBundles,
+            Map<Long, Long> requiredLedQuantitiesByProductId,
             OrderType orderType,
             BigDecimal subtotal) {
     }

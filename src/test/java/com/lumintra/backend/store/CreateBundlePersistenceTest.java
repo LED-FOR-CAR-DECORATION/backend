@@ -97,6 +97,20 @@ class CreateBundlePersistenceTest {
         assertThat(bundles.count()).isZero();
     }
 
+    @Test
+    void createsBundleWhenLedModelIdDiffersFromProductId() {
+        var led = insertLed();
+        long distinctModelId = led.getProductId() + 5000L;
+        when(models.findProductIdByModelId(distinctModelId))
+                .thenReturn(Optional.of(led.getProductId()));
+
+        var result = useCase.execute(request(distinctModelId, "19.99"));
+        assertThat(result.originalPrice()).isEqualByComparingTo("20.00");
+        assertThat(bundleItemRepository.findAllByBundle_BundleId(result.bundleId()))
+                .extracting(BundleItemEntity::getModelId)
+                .containsExactly(distinctModelId);
+    }
+
     private ProductEntity insertLed() {
         var led =
                 products.save(
@@ -112,6 +126,8 @@ class CreateBundlePersistenceTest {
         when(models.findByModelId(led.getProductId()))
                 .thenReturn(
                         Optional.of(new LedModelSnapshot(led.getProductId(), "LED", Map.of(), 1L)));
+        when(models.findProductIdByModelId(led.getProductId()))
+                .thenReturn(Optional.of(led.getProductId()));
         return led;
     }
 

@@ -60,6 +60,22 @@ class MediaKeyGeneratorTest {
     }
 
     @Test
+    @DisplayName("MED-01 [N]: PRODUCT_LED, PRODUCT_BUNDLE, and PRODUCT_SUBSCRIPTION produce type-scoped store/products folders")
+    void generateObjectKey_typedProductPurposes_shouldFormatCorrectly() {
+        String ledKey = generator.generateObjectKey(MediaPurpose.PRODUCT_LED, "42", null, "led_64.webp");
+        assertThat(ledKey).startsWith("store/products/led/");
+        assertThat(ledKey).endsWith("-led_64.webp");
+
+        String bundleKey = generator.generateObjectKey(MediaPurpose.PRODUCT_BUNDLE, "42", null, "starter.png");
+        assertThat(bundleKey).startsWith("store/products/bundle/");
+        assertThat(bundleKey).endsWith("-starter.png");
+
+        String subKey = generator.generateObjectKey(MediaPurpose.PRODUCT_SUBSCRIPTION, "42", null, "vip.png");
+        assertThat(subKey).startsWith("store/products/subscription/");
+        assertThat(subKey).endsWith("-vip.png");
+    }
+
+    @Test
     @DisplayName("MED-01 [A]: Path traversal attempts are sanitized")
     void sanitizeFileName_whenPathTraversal_shouldNeutralize() {
         String malicious = "../../../etc/passwd.png";

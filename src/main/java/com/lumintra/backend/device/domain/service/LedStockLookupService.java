@@ -8,5 +8,9 @@ public interface LedStockLookupService {
 
     Optional<Long> findStockByModelId(Long modelId);
 
+    default Optional<Long> findStockByProductId(Long productId) {
+        return findStockByModelId(productId);
+    }
+
     Map<Long, Long> findStocksByModelIds(Collection<Long> modelIds);
 }

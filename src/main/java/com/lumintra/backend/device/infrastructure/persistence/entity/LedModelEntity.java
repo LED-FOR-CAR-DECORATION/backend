@@ -81,6 +81,11 @@ public class LedModelEntity {
         return createInternal(productId, productId, modelName, null, null, spec, stockQuantity, null);
     }
 
+    public static LedModelEntity createLinked(
+            Long productId, String modelName, Map<String, Object> spec, Long stockQuantity) {
+        return createInternal(null, productId, modelName, null, null, spec, stockQuantity, null);
+    }
+
     public static LedModelEntity createCatalogModel(
             Long modelId,
             Long productId,
