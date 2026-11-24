@@ -10,12 +10,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.regex.Pattern;
 
 // Add log statements at start and end of request
 @Component
 public class RequestLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
+    /** OTA download tokens travel in the path (DEV-22/23) and are credentials, so they are masked. */
+    private static final Pattern OTA_TOKEN_PATH = Pattern.compile("(/api/firmware/downloads/)[^/]+");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -23,7 +26,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
         long startTime = System.currentTimeMillis();
 
-        log.info("HTTP request started [method={}] [path={}]", request.getMethod(), request.getRequestURI());
+        log.info("HTTP request started [method={}] [path={}]", request.getMethod(), maskSensitivePath(request.getRequestURI()));
 
         try {
             filterChain.doFilter(request, response);
@@ -31,5 +34,9 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             long duration = System.currentTimeMillis() - startTime;
             log.info("HTTP request completed [status={}] [duration={}ms]", response.getStatus(), duration);
         }
+    }
+
+    static String maskSensitivePath(String uri) {
+        return uri == null ? null : OTA_TOKEN_PATH.matcher(uri).replaceFirst("$1***");
     }
 }
