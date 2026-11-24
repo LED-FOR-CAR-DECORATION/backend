@@ -52,22 +52,22 @@ class LedInstanceSpecificationsPersistenceTest {
         repository.deleteAllInBatch();
 
         LedInstanceEntity inStock = repository.saveAndFlush(LedInstanceEntity.createInStock(
-                101L, "LMT-64X64-0001", "aa:bb:cc:11:22:01", "REV_1_0", Instant.now()));
+                101L, "LMT-64X64-0001", "aa:bb:cc:11:22:01", Instant.now()));
 
         LedInstanceEntity inTransit = repository.saveAndFlush(LedInstanceEntity.createWithState(
-                102L, "LMT-32X64-0002", "AA:BB:CC:11:22:02", "REV_1_0",
+                102L, "LMT-32X64-0002", "AA:BB:CC:11:22:02",
                 null, null, LedInstanceStatus.IN_TRANSIT, Instant.now(), null, null));
 
         LedInstanceEntity bound = repository.saveAndFlush(LedInstanceEntity.createWithState(
-                101L, "LMT-64X64-0003", "AA:BB:CC:11:22:03", "REV_1_0",
+                101L, "LMT-64X64-0003", "AA:BB:CC:11:22:03",
                 42L, "Car Matrix", LedInstanceStatus.BOUND, Instant.now(), Instant.now(), Instant.now().plusSeconds(86400)));
 
         LedInstanceEntity returned = repository.saveAndFlush(LedInstanceEntity.createWithState(
-                101L, "LMT-64%PRO_0004", "AA:BB:CC:99:88:04", "REV_1_0",
+                101L, "LMT-64%PRO_0004", "AA:BB:CC:99:88:04",
                 null, null, LedInstanceStatus.RETURNED, Instant.now(), null, null));
 
         LedInstanceEntity decommissioned = repository.saveAndFlush(LedInstanceEntity.createWithState(
-                102L, "LMT-32X64-0005", "DD:EE:FF:00:11:05", "REV_1_0",
+                102L, "LMT-32X64-0005", "DD:EE:FF:00:11:05",
                 null, null, LedInstanceStatus.DECOMMISSIONED, Instant.now(), null, null));
 
         inStockId = inStock.getInstanceId();

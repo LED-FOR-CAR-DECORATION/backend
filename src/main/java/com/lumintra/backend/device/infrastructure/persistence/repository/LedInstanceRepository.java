@@ -38,6 +38,10 @@ public interface LedInstanceRepository extends JpaRepository<LedInstanceEntity, 
 
     List<LedInstanceEntity> findBySerialNumberIn(Collection<String> serialNumbers);
 
+    List<LedInstanceEntity> findByMacAddressIn(Collection<String> macAddresses);
+
+    long countByModelIdAndStatus(Long modelId, LedInstanceStatus status);
+
     @Query(
             value = "SELECT i FROM LedInstanceEntity i WHERE i.ownerCustomerId = :customerId ORDER BY i.boundAt DESC NULLS LAST, i.instanceId DESC",
             countQuery = "SELECT COUNT(i) FROM LedInstanceEntity i WHERE i.ownerCustomerId = :customerId"

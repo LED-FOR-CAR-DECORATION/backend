@@ -56,7 +56,6 @@ class GetCustomerDeviceWarrantyUseCaseTest {
                 101L,
                 SERIAL,
                 MAC,
-                "REV-A",
                 ownerId,
                 "Xe Wave Alpha",
                 LedInstanceStatus.BOUND,
@@ -131,9 +130,9 @@ class GetCustomerDeviceWarrantyUseCaseTest {
                 101L,
                 SERIAL,
                 WarrantyTicketStatus.APPROVED,
-                "Màn hình LED chớp nháy sau 15 phút.",
+                "MÃ n hÃ¬nh LED chá»›p nhÃ¡y sau 15 phÃºt.",
                 List.of("https://cdn.lumintra.shop/warranty/10/img-01.jpg"),
-                "Yêu cầu hợp lệ, vui lòng mang đến cửa hàng.",
+                "YÃªu cáº§u há»£p lá»‡, vui lÃ²ng mang Ä‘áº¿n cá»­a hÃ ng.",
                 now.minus(2, ChronoUnit.DAYS),
                 now.minus(1, ChronoUnit.DAYS)
         );
@@ -141,9 +140,9 @@ class GetCustomerDeviceWarrantyUseCaseTest {
                 99L,
                 SERIAL,
                 WarrantyTicketStatus.COMPLETED,
-                "Đứt cáp nguồn USB.",
+                "Äá»©t cÃ¡p nguá»“n USB.",
                 List.of(),
-                "Đã thay cáp mới.",
+                "ÄÃ£ thay cÃ¡p má»›i.",
                 now.minus(20, ChronoUnit.DAYS),
                 now.minus(18, ChronoUnit.DAYS)
         );
@@ -167,7 +166,7 @@ class GetCustomerDeviceWarrantyUseCaseTest {
         assertThat(response.activeTicket().ticketId()).isEqualTo(101L);
         assertThat(response.activeTicket().status()).isEqualTo(WarrantyTicketStatus.APPROVED);
         assertThat(response.activeTicket().evidenceMediaUrls()).containsExactly("https://cdn.lumintra.shop/warranty/10/img-01.jpg");
-        assertThat(response.activeTicket().resolutionNotes()).isEqualTo("Yêu cầu hợp lệ, vui lòng mang đến cửa hàng.");
+        assertThat(response.activeTicket().resolutionNotes()).isEqualTo("YÃªu cáº§u há»£p lá»‡, vui lÃ²ng mang Ä‘áº¿n cá»­a hÃ ng.");
 
         // Ticket history check
         assertThat(response.ticketHistory()).hasSize(2);
@@ -298,9 +297,9 @@ class GetCustomerDeviceWarrantyUseCaseTest {
                 102L,
                 SERIAL,
                 WarrantyTicketStatus.REJECTED,
-                "Thiết bị rơi nước.",
+                "Thiáº¿t bá»‹ rÆ¡i nÆ°á»›c.",
                 List.of(),
-                "Từ chối do lỗi người dùng.",
+                "Tá»« chá»‘i do lá»—i ngÆ°á»i dÃ¹ng.",
                 now.minus(5, ChronoUnit.DAYS),
                 now.minus(4, ChronoUnit.DAYS)
         );
@@ -308,9 +307,9 @@ class GetCustomerDeviceWarrantyUseCaseTest {
                 101L,
                 SERIAL,
                 WarrantyTicketStatus.COMPLETED,
-                "Hỏng cổng USB.",
+                "Há»ng cá»•ng USB.",
                 List.of(),
-                "Đã sửa chữa xong.",
+                "ÄÃ£ sá»­a chá»¯a xong.",
                 now.minus(15, ChronoUnit.DAYS),
                 now.minus(14, ChronoUnit.DAYS)
         );
@@ -339,7 +338,7 @@ class GetCustomerDeviceWarrantyUseCaseTest {
                 201L,
                 SERIAL,
                 WarrantyTicketStatus.PENDING,
-                "Ticket mới nhất",
+                "Ticket má»›i nháº¥t",
                 List.of("https://cdn.lumintra.shop/warranty/10/p1.jpg", "https://cdn.lumintra.shop/warranty/10/p2.jpg"),
                 null,
                 now.minus(1, ChronoUnit.HOURS),
@@ -349,7 +348,7 @@ class GetCustomerDeviceWarrantyUseCaseTest {
                 200L,
                 SERIAL,
                 WarrantyTicketStatus.APPROVED,
-                "Ticket cũ hơn",
+                "Ticket cÅ© hÆ¡n",
                 List.of(),
                 "Approved notes",
                 now.minus(5, ChronoUnit.DAYS),

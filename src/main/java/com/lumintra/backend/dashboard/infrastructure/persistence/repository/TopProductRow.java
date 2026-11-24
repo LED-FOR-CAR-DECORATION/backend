@@ -8,5 +8,18 @@ public record TopProductRow(
         String productType,
         String thumbnailUrl,
         long totalUnits,
-        BigDecimal totalRevenue
-) {}
+        BigDecimal totalRevenue,
+        String productStatus,
+        Long availableStock,
+        String ledModelStatus
+) {
+    public TopProductRow(
+            Long productId,
+            String productName,
+            String productType,
+            String thumbnailUrl,
+            long totalUnits,
+            BigDecimal totalRevenue) {
+        this(productId, productName, productType, thumbnailUrl, totalUnits, totalRevenue, "PUBLISHED", null, null);
+    }
+}

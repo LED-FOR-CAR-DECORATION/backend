@@ -254,7 +254,7 @@ public class StoreDataSeeder implements ApplicationRunner {
                 ProductStatus.PUBLISHED,
                 Set.of(matrixTag),
                 buildLedSpec("64x64", "192x192x18mm", "P3", "5V USB-C", "BLE + Wi-Fi", 1200),
-                50L,
+                10L,
                 seededAny
         );
 
@@ -267,7 +267,7 @@ public class StoreDataSeeder implements ApplicationRunner {
                 ProductStatus.PUBLISHED,
                 Set.of(matrixTag),
                 buildLedSpec("64x32", "192x96x18mm", "P3", "5V USB-C", "BLE + Wi-Fi", 1000),
-                30L,
+                10L,
                 seededAny
         );
 
@@ -280,11 +280,12 @@ public class StoreDataSeeder implements ApplicationRunner {
                 ProductStatus.PUBLISHED,
                 Set.of(matrixTag),
                 buildLedSpec("32x16", "96x48x16mm", "P3", "5V USB-C", "BLE", 900),
-                40L,
+                10L,
                 seededAny
         );
 
         Map<String, Long> seededCharacterVersions = seedCharacterProducts(tagsByName, seededAny);
+        Long heoHongVersionId = seededCharacterVersions.get(PRODUCT_CHAR_01);
         Long capybaraVersionId = seededCharacterVersions.get(PRODUCT_CHAR_02);
         Long nezukoVersionId = seededCharacterVersions.get(PRODUCT_CHAR_05);
         Long maomaoVersionId = seededCharacterVersions.get(PRODUCT_CHAR_09);
@@ -292,6 +293,7 @@ public class StoreDataSeeder implements ApplicationRunner {
 
         seedStarterBundleProduct(
                 ledMiniModelId,
+                heoHongVersionId,
                 capybaraVersionId,
                 Set.of(matrixTag, cyberpunkTag, bundleTag),
                 seededAny
@@ -308,7 +310,7 @@ public class StoreDataSeeder implements ApplicationRunner {
         seedSubscriptionProduct(
                 PRODUCT_SUB_VIP,
                 SUBSCRIPTION_PLAN_CODE_VIP,
-                new BigDecimal("99000.00"),
+                new BigDecimal("999999.00"),
                 "Gói hội viên sở hữu toàn bộ nhân vật trên cửa hàng, kèm ưu đãi thiết kế và sao lưu đám mây.",
                 "https://cdn.lumintra.shop/store/products/subcription/All_Character.png",
                 true,
@@ -483,14 +485,15 @@ public class StoreDataSeeder implements ApplicationRunner {
 
     private void seedStarterBundleProduct(
             Long ledMiniModelId,
+            Long heoHongVersionId,
             Long capybaraVersionId,
             Set<TagEntity> tags,
             AtomicBoolean seededAny) {
         ProductEntity product = findOrCreateProduct(
                 PRODUCT_BUNDLE_STARTER,
                 ProductType.BUNDLE,
-                new BigDecimal("159000.00"),
-                "Combo màn hình LED Matrix 32x16 Mini kết hợp cùng nhân vật pixel Capybara Ôm Táo Đỏ.",
+                new BigDecimal("169000.00"),
+                "Combo màn hình LED Matrix 32x16 Mini kết hợp cùng cặp nhân vật pixel Heo Hồng Pixel Retro và Capybara Ôm Táo Đỏ.",
                 "https://cdn.lumintra.shop/store/products/bundle/Combo1.png",
                 List.of("https://cdn.lumintra.shop/store/products/bundle/Combo1.png"),
                 ProductStatus.PUBLISHED,
@@ -502,14 +505,15 @@ public class StoreDataSeeder implements ApplicationRunner {
             BundleEntity bundle = bundleRepository.save(BundleEntity.create(
                     product.getProductId(),
                     PRODUCT_BUNDLE_STARTER,
-                    "Combo 1 LED 32x16 Mini và nhân vật Capybara Ôm Táo Đỏ",
-                    new BigDecimal("175000.00"),
-                    new BigDecimal("159000.00"),
+                    "Combo 1 LED 32x16 Mini, Heo Hồng Pixel Retro và Capybara Ôm Táo Đỏ",
+                    new BigDecimal("200000.00"),
+                    new BigDecimal("169000.00"),
                     ProductStatus.PUBLISHED.name(),
                     Instant.now().minus(7, ChronoUnit.DAYS),
                     null
             ));
             bundleItemRepository.save(BundleItemEntity.createLedItem(bundle, ledMiniModelId, 1));
+            bundleItemRepository.save(BundleItemEntity.createCharacterItem(bundle, heoHongVersionId, 1));
             bundleItemRepository.save(BundleItemEntity.createCharacterItem(bundle, capybaraVersionId, 1));
             seededAny.set(true);
             log.info("Seeded bundle product [productId={}] [bundleId={}]",

@@ -32,14 +32,35 @@ public record AhamoveWebhookRequest(
         @JsonProperty("complete_time")
         BigDecimal completeTime,
 
-        List<PathPoint> path
+        List<PathPoint> path,
+
+        @JsonProperty("cancel_comment")
+        String cancelComment
 ) {
     private static final Pattern STOP_SUFFIX_PATTERN = Pattern.compile("-\\d+$");
 
+    public AhamoveWebhookRequest(
+            String orderId,
+            String status,
+            String subStatus,
+            String sharedLink,
+            BigDecimal totalFee,
+            BigDecimal totalPay,
+            BigDecimal completeTime,
+            List<PathPoint> path) {
+        this(orderId, status, subStatus, sharedLink, totalFee, totalPay, completeTime, path, null);
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record PathPoint(
-            String status
-    ) {}
+            String status,
+            @JsonProperty("fail_comment")
+            String failComment
+    ) {
+        public PathPoint(String status) {
+            this(status, null);
+        }
+    }
 
     public String rawTrackingNumber() {
         if (orderId == null || orderId.isBlank()) {
@@ -77,5 +98,27 @@ public record AhamoveWebhookRequest(
             return totalPay;
         }
         return null;
+    }
+
+    public String resolvedFailureReason() {
+        if (cancelComment != null && !cancelComment.isBlank()) {
+            String trimmed = cancelComment.trim();
+            return trimmed.length() > 500 ? trimmed.substring(0, 500) : trimmed;
+        }
+        if (path != null) {
+            for (PathPoint point : path) {
+                if (point != null && point.failComment() != null && !point.failComment().isBlank()) {
+                    String trimmed = point.failComment().trim();
+                    return trimmed.length() > 500 ? trimmed.substring(0, 500) : trimmed;
+                }
+            }
+        }
+        if (subStatus != null && !subStatus.isBlank()) {
+            return "AhaMove: " + subStatus.trim();
+        }
+        if (status != null && !status.isBlank()) {
+            return "AhaMove: " + status.trim();
+        }
+        return "AhaMove delivery failed";
     }
 }

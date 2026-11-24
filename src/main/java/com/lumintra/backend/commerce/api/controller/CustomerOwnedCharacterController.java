@@ -1,6 +1,8 @@
 package com.lumintra.backend.commerce.api.controller;
 
+import com.lumintra.backend.commerce.api.response.CustomerActiveSubscriptionResponse;
 import com.lumintra.backend.commerce.api.response.CustomerOwnedCharacterResponse;
+import com.lumintra.backend.commerce.application.CustomerSubscriptionEntitlementService;
 import com.lumintra.backend.commerce.application.ListCustomerOwnedCharactersUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.exception.iam.InvalidCredentialsException;
@@ -35,6 +37,7 @@ import java.util.List;
 public class CustomerOwnedCharacterController {
 
     private final ListCustomerOwnedCharactersUseCase listCustomerOwnedCharactersUseCase;
+    private final CustomerSubscriptionEntitlementService customerSubscriptionEntitlementService;
 
     @Operation(
             summary = "List customer owned characters",
@@ -99,6 +102,22 @@ public class CustomerOwnedCharacterController {
         Long customerId = extractCustomerId(authentication);
         List<CustomerOwnedCharacterResponse> ownedCharacters = listCustomerOwnedCharactersUseCase.execute(customerId);
         return ResponseEntity.ok(ApiResponse.success(ownedCharacters));
+    }
+
+    @Operation(
+            summary = "Get active customer subscription",
+            description = "Retrieves the customer's currently active subscription entitlement (e.g. All-Access VIP Pass), or null if none is active."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/api/customer/subscriptions/active")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<CustomerActiveSubscriptionResponse>> getActiveSubscription(
+            Authentication authentication
+    ) {
+        Long customerId = extractCustomerId(authentication);
+        CustomerActiveSubscriptionResponse activeSubscription =
+                customerSubscriptionEntitlementService.findActiveSubscription(customerId).orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(activeSubscription));
     }
 
     private Long extractCustomerId(Authentication authentication) {

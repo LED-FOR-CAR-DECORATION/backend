@@ -56,7 +56,7 @@ class FirmwareQueriesPersistenceTest {
 
     private void saveInstance(String serial, String mac, Long firmwareId, LedInstanceStatus status) {
         LedInstanceEntity instance = LedInstanceEntity.createWithState(
-                1L, serial, mac, null, null, null, status, Instant.now(), null, null);
+                1L, serial, mac, null, null, status, Instant.now(), null, null);
         instance.setCurrentFirmwareId(firmwareId);
         instanceRepository.save(instance);
     }

@@ -87,18 +87,19 @@ class StaffOrderStatusPersistenceTest {
     @Test
     @DisplayName("COM-12 UTCID02 [N]: LedModelRepository.restoreStock increments stockQuantity in DB and returns 0 when model is absent")
     void restoreStock_incrementsExistingModelAndReturnsZeroForMissingModel() {
-        LedModelEntity model = LedModelEntity.create(501L, "Lumintra Matrix 64x32", Map.of("width", 64), 3L);
+        LedModelEntity model = LedModelEntity.create(null, "Lumintra Matrix 64x32", Map.of("width", 64), 3L);
         entityManager.persist(model);
         entityManager.flush();
+        Long modelId = model.getModelId();
         entityManager.clear();
 
-        int updatedRows = ledModelRepository.restoreStock(501L, 4L);
+        int updatedRows = ledModelRepository.restoreStock(modelId, 4L);
         assertThat(updatedRows).isEqualTo(1);
 
         int missingRows = ledModelRepository.restoreStock(999L, 2L);
         assertThat(missingRows).isZero();
 
-        LedModelEntity reloaded = ledModelRepository.findById(501L).orElseThrow();
+        LedModelEntity reloaded = ledModelRepository.findById(modelId).orElseThrow();
         assertThat(reloaded.getStockQuantity()).isEqualTo(7L);
         assertThat(reloaded.getUpdatedAt()).isNotNull();
     }

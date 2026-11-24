@@ -22,6 +22,8 @@ import java.time.Instant;
 public class OrderDeliveryEntity {
 
     public static final String DEFAULT_CARRIER = "AHAMOVE";
+    public static final int MAX_REDELIVERY_ATTEMPTS = 2;
+    public static final int MAX_DELIVERY_ATTEMPTS = 1 + MAX_REDELIVERY_ATTEMPTS;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -69,6 +71,12 @@ public class OrderDeliveryEntity {
     @Column(name = "delivered_at")
     private Instant deliveredAt;
 
+    @Column(name = "failure_reason", length = 500)
+    private String failureReason;
+
+    @Column(name = "delivery_attempt_count", nullable = false, columnDefinition = "integer default 0")
+    private int deliveryAttemptCount = 0;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -102,6 +110,18 @@ public class OrderDeliveryEntity {
         if (hasActiveShipment()) {
             throw new OrderStatusTransitionException(
                     "Order already has an active shipment in delivery status " + this.deliveryStatus + ".");
+        }
+    }
+
+    public boolean canRedeliver() {
+        return this.deliveryAttemptCount < MAX_DELIVERY_ATTEMPTS;
+    }
+
+    public void validateRedeliveryAllowed() {
+        if (!canRedeliver()) {
+            throw new OrderStatusTransitionException(
+                    "Order has reached the maximum number of redelivery attempts ("
+                            + MAX_REDELIVERY_ATTEMPTS + "). Please refund the order instead.");
         }
     }
 }

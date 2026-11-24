@@ -216,9 +216,9 @@ class StoreDataSeederTest {
                 );
 
         // LED models linked to the 3 seeded LED products (101L, 102L, 103L)
-        verify(ledModelCreationService).createForProduct(eq(101L), eq(StoreDataSeeder.PRODUCT_LED_PRO), anyMap(), eq(50L));
-        verify(ledModelCreationService).createForProduct(eq(102L), eq(StoreDataSeeder.PRODUCT_LED_COMPACT), anyMap(), eq(30L));
-        verify(ledModelCreationService).createForProduct(eq(103L), eq(StoreDataSeeder.PRODUCT_LED_MINI), anyMap(), eq(40L));
+        verify(ledModelCreationService).createForProduct(eq(101L), eq(StoreDataSeeder.PRODUCT_LED_PRO), anyMap(), eq(10L));
+        verify(ledModelCreationService).createForProduct(eq(102L), eq(StoreDataSeeder.PRODUCT_LED_COMPACT), anyMap(), eq(10L));
+        verify(ledModelCreationService).createForProduct(eq(103L), eq(StoreDataSeeder.PRODUCT_LED_MINI), anyMap(), eq(10L));
 
         // Character versions linked sequentially to products 104L..113L using exact CDN URLs and frame metadata
         for (int i = 0; i < StoreDataSeeder.CHARACTER_SEEDS.size(); i++) {
@@ -235,12 +235,12 @@ class StoreDataSeederTest {
                     eq(spec.byteSize()));
         }
 
-        // Bundles: Starter Neon Combo (114L: LED Mini 103L + Capybara 502L) and Anime Chibi Trio Combo (115L: Nezuko 505L, Maomao 509L, Sakura Miku 510L)
+        // Bundles: Starter Neon Combo (114L: LED Mini 103L + Heo Hong 501L + Capybara 502L) and Anime Chibi Trio Combo (115L: Nezuko 505L, Maomao 509L, Sakura Miku 510L)
         verify(bundleRepository, times(2)).save(bundleCaptor.capture());
         assertThat(bundleCaptor.getAllValues())
                 .extracting(BundleEntity::getProductId)
                 .containsExactly(114L, 115L);
-        verify(bundleItemRepository, times(5)).save(bundleItemCaptor.capture());
+        verify(bundleItemRepository, times(6)).save(bundleItemCaptor.capture());
         assertThat(bundleItemCaptor.getAllValues())
                 .extracting(
                         BundleItemEntity::getItemType,
@@ -249,6 +249,7 @@ class StoreDataSeederTest {
                         BundleItemEntity::getQuantity)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple(BundleItemType.LED, 103L, null, 1),
+                        org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 501L, 1),
                         org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 502L, 1),
                         org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 505L, 1),
                         org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 509L, 1),
@@ -316,9 +317,9 @@ class StoreDataSeederTest {
             given(characterLookupService.findVersionIdByProductId(prodId)).willReturn(Optional.of(501L + i));
         }
 
-        stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_STARTER, 114L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "159000.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_STARTER, 114L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "169000.00");
         stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_ANIME_TRIO, 115L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "129000.00");
-        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_VIP, 116L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "99000.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_VIP, 116L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "999999.00");
         stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_COMMISSION_PLUS, 117L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "79000.00");
 
         given(ledModelLookupService.findByProductId(101L))

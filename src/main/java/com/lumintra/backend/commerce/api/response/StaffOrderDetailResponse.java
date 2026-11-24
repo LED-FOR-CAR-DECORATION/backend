@@ -138,7 +138,16 @@ public record StaffOrderDetailResponse(
             Instant estimatedDeliveryAt,
 
             @Schema(description = "Actual delivered timestamp in UTC", example = "2026-11-11T09:42:00Z", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-            Instant deliveredAt
+            Instant deliveredAt,
+
+            @Schema(description = "Reason for delivery failure or return", example = "Không liên lạc được với người nhận sau 3 cuộc gọi", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            String failureReason,
+
+            @Schema(description = "Total number of dispatch attempts made for this order", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
+            int deliveryAttemptCount,
+
+            @Schema(description = "Maximum allowed dispatch attempts (1 initial + 2 redeliveries)", example = "3", requiredMode = Schema.RequiredMode.REQUIRED)
+            int maxDeliveryAttempts
     ) {}
 
     @Schema(description = "Payment reconciliation summary for internal operations")

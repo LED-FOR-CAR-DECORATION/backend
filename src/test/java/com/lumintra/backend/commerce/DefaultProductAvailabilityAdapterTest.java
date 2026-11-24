@@ -1,6 +1,7 @@
 package com.lumintra.backend.commerce;
 
 import com.lumintra.backend.character.domain.service.CharacterLookupService;
+import com.lumintra.backend.commerce.application.CustomerSubscriptionEntitlementService;
 import com.lumintra.backend.commerce.domain.model.AvailabilityCheckResult;
 import com.lumintra.backend.commerce.infrastructure.integration.DefaultProductAvailabilityAdapter;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.CustomerSubscriptionRepository;
@@ -46,6 +47,9 @@ class DefaultProductAvailabilityAdapterTest {
     @Mock
     private CustomerSubscriptionRepository customerSubscriptionRepository;
 
+    @Mock
+    private CustomerSubscriptionEntitlementService customerSubscriptionEntitlementService;
+
     private DefaultProductAvailabilityAdapter adapter;
 
     @BeforeEach
@@ -55,7 +59,8 @@ class DefaultProductAvailabilityAdapterTest {
                 characterLookupService,
                 bundleLookupService,
                 ownedCharacterRepository,
-                customerSubscriptionRepository
+                customerSubscriptionRepository,
+                customerSubscriptionEntitlementService
         );
     }
 
@@ -112,5 +117,29 @@ class DefaultProductAvailabilityAdapterTest {
         AvailabilityCheckResult owned = adapter.evaluateBundleAvailability(42L, 70L, 1);
         assertThat(owned.available()).isFalse();
         assertThat(owned.unavailableReason()).isEqualTo(AvailabilityCheckResult.REASON_ALREADY_OWNED);
+    }
+
+    @Test
+    @DisplayName("All-Access subscription marks unpurchased characters and character bundles as owned")
+    void allAccessSubscription_marksCharactersAndBundlesOwned() {
+        when(characterLookupService.findVersionIdByProductId(30L)).thenReturn(Optional.of(300L));
+        when(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(42L, 300L)).thenReturn(false);
+        when(customerSubscriptionEntitlementService.hasActiveAllAccessCharacters(42L)).thenReturn(true);
+
+        assertThat(adapter.isDigitalProductOwned(42L, 30L, ProductType.CHARACTER)).isTrue();
+
+        Instant now = Instant.now();
+        BundleSnapshot bundle = new BundleSnapshot(
+                9L, 70L, "Creator Pack", new BigDecimal("499000.00"), "PUBLISHED",
+                now.minus(1, ChronoUnit.DAYS), now.plus(5, ChronoUnit.DAYS),
+                List.of(new BundleSnapshot.BundleItemSnapshot(1L, BundleItemType.CHARACTER, null, 300L, 1))
+        );
+        when(bundleLookupService.findByProductId(70L)).thenReturn(Optional.of(bundle));
+        when(ownedCharacterRepository.existsByCustomerIdAndVersionIdInAndIsRevokedFalse(42L, Set.of(300L)))
+                .thenReturn(false);
+
+        AvailabilityCheckResult bundleResult = adapter.evaluateBundleAvailability(42L, 70L, 1);
+        assertThat(bundleResult.available()).isFalse();
+        assertThat(bundleResult.unavailableReason()).isEqualTo(AvailabilityCheckResult.REASON_ALREADY_OWNED);
     }
 }

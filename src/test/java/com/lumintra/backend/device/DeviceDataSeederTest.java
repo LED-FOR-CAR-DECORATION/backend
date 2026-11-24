@@ -59,7 +59,7 @@ class DeviceDataSeederTest {
     private ArgumentCaptor<LedInstanceEntity> instanceCaptor;
 
     @Test
-    @DisplayName("DEV-173 SEED-01 [N]: Seeds 8 LED instances for primary customer (including clean active & expired warranty) and 13 when extra customers exist")
+    @DisplayName("DEV-173 SEED-01 [N]: Seeds 10 IN_STOCK instances per LED model plus lifecycle/warranty units and syncs stockQuantity")
     void run_cleanDatabaseWithModelsAndCustomer_seedsAllStatuses() {
         LedModelEntity pro = LedModelEntity.createForProduct(101L, "Matrix 64x64 Pro", Map.of(), 50L);
         LedModelEntity compact = LedModelEntity.createForProduct(102L, "Matrix 32x64", Map.of(), 30L);
@@ -68,6 +68,8 @@ class DeviceDataSeederTest {
         given(customerLookupService.findFirstProfile()).willReturn(
                 Optional.of(new CustomerProfileSnapshot(42L, "Nguyen Van A", "0901234567", "customer@example.com")));
         given(ledInstanceRepository.existsBySerialNumber(anyString())).willReturn(false);
+        given(ledInstanceRepository.countByModelIdAndStatus(101L, LedInstanceStatus.IN_STOCK)).willReturn(10L);
+        given(ledInstanceRepository.countByModelIdAndStatus(102L, LedInstanceStatus.IN_STOCK)).willReturn(10L);
 
         AtomicLong ids = new AtomicLong(1L);
         given(ledInstanceRepository.save(any(LedInstanceEntity.class))).willAnswer(inv -> {
@@ -78,20 +80,23 @@ class DeviceDataSeederTest {
 
         seeder.run(applicationArguments);
 
-        verify(ledInstanceRepository, times(8)).save(instanceCaptor.capture());
+        // 8 base + warranty instances for primary customer + 8 more IN_STOCK for pro + 10 IN_STOCK for compact = 26
+        verify(ledInstanceRepository, times(26)).save(instanceCaptor.capture());
         List<LedInstanceEntity> saved = instanceCaptor.getAllValues();
-        assertThat(saved)
-                .extracting(LedInstanceEntity::getStatus)
-                .containsExactly(
-                        LedInstanceStatus.IN_STOCK,
-                        LedInstanceStatus.IN_STOCK,
-                        LedInstanceStatus.IN_TRANSIT,
-                        LedInstanceStatus.BOUND,
-                        LedInstanceStatus.RETURNED,
-                        LedInstanceStatus.DECOMMISSIONED,
-                        LedInstanceStatus.BOUND,
-                        LedInstanceStatus.BOUND
-                );
+
+        long proInStock = saved.stream()
+                .filter(i -> Long.valueOf(101L).equals(i.getModelId()) && i.getStatus() == LedInstanceStatus.IN_STOCK)
+                .count();
+        long compactInStock = saved.stream()
+                .filter(i -> Long.valueOf(102L).equals(i.getModelId()) && i.getStatus() == LedInstanceStatus.IN_STOCK)
+                .count();
+        assertThat(proInStock).isEqualTo(10L);
+        assertThat(compactInStock).isEqualTo(10L);
+
+        assertThat(pro.getStockQuantity()).isEqualTo(10L);
+        assertThat(compact.getStockQuantity()).isEqualTo(10L);
+        verify(ledModelRepository, times(2)).save(any(LedModelEntity.class));
+
         LedInstanceEntity bound = saved.get(3);
         assertThat(bound.getOwnerCustomerId()).isEqualTo(42L);
         assertThat(bound.getBoundAt()).isNotNull();
@@ -109,10 +114,10 @@ class DeviceDataSeederTest {
     }
 
     @Test
-    @DisplayName("N: Seeds 13 LED instances across all customers when multi-customer seeder profiles exist")
+    @DisplayName("N: Seeds 31 LED instances (10 IN_STOCK per model + 11 lifecycle/multi-customer warranty units) when extra customer profiles exist")
     void run_withExtraCustomerProfiles_seedsAll13Instances() {
-        LedModelEntity pro = LedModelEntity.createForProduct(101L, "Matrix 64x64 Pro", Map.of(), 50L);
-        LedModelEntity compact = LedModelEntity.createForProduct(102L, "Matrix 32x64", Map.of(), 30L);
+        LedModelEntity pro = LedModelEntity.createForProduct(101L, "Matrix 64x64 Pro", Map.of(), 10L);
+        LedModelEntity compact = LedModelEntity.createForProduct(102L, "Matrix 32x64", Map.of(), 10L);
 
         given(ledModelRepository.findAll(any(Sort.class))).willReturn(List.of(pro, compact));
         given(customerLookupService.findFirstProfile()).willReturn(
@@ -124,6 +129,8 @@ class DeviceDataSeederTest {
         given(customerLookupService.findProfileByEmail("thaovy.le@gmail.com")).willReturn(
                 Optional.of(new CustomerProfileSnapshot(45L, "Lê Thảo Vy", "0904567890", "thaovy.le@gmail.com")));
         given(ledInstanceRepository.existsBySerialNumber(anyString())).willReturn(false);
+        given(ledInstanceRepository.countByModelIdAndStatus(101L, LedInstanceStatus.IN_STOCK)).willReturn(10L);
+        given(ledInstanceRepository.countByModelIdAndStatus(102L, LedInstanceStatus.IN_STOCK)).willReturn(10L);
 
         AtomicLong ids = new AtomicLong(1L);
         given(ledInstanceRepository.save(any(LedInstanceEntity.class))).willAnswer(inv -> {
@@ -134,7 +141,8 @@ class DeviceDataSeederTest {
 
         seeder.run(applicationArguments);
 
-        verify(ledInstanceRepository, times(13)).save(instanceCaptor.capture());
+        // 13 base + multi-customer warranty instances + 8 more IN_STOCK for pro + 10 IN_STOCK for compact = 31
+        verify(ledInstanceRepository, times(31)).save(instanceCaptor.capture());
         assertThat(instanceCaptor.getAllValues().stream()
                 .filter(instance -> instance.getStatus() == LedInstanceStatus.BOUND)
                 .map(LedInstanceEntity::getDeviceName))
@@ -150,10 +158,11 @@ class DeviceDataSeederTest {
 
         verifyNoInteractions(ledInstanceRepository);
 
-        LedModelEntity pro = LedModelEntity.createForProduct(101L, "Matrix 64x64 Pro", Map.of(), 50L);
+        LedModelEntity pro = LedModelEntity.createForProduct(101L, "Matrix 64x64 Pro", Map.of(), 10L);
         given(ledModelRepository.findAll(any(Sort.class))).willReturn(List.of(pro));
         given(customerLookupService.findFirstProfile()).willReturn(Optional.empty());
         given(ledInstanceRepository.existsBySerialNumber(anyString())).willReturn(true);
+        given(ledInstanceRepository.countByModelIdAndStatus(101L, LedInstanceStatus.IN_STOCK)).willReturn(10L);
 
         seeder.run(applicationArguments);
 

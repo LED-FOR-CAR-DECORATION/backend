@@ -14,5 +14,7 @@ public interface CharacterLookupService {
 
     Optional<CharacterVersionSnapshot> findDetailByProductId(Long productId);
 
+    Map<Long, CharacterVersionSnapshot> findDetailsByProductIds(Collection<Long> productIds);
+
     Map<Long, CharacterVersionSnapshot> findDetailsByVersionIds(Collection<Long> versionIds);
 }

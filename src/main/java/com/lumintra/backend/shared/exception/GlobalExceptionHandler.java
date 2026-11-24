@@ -258,6 +258,16 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("LED_MODEL_DIMENSIONS_LOCKED", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(DuplicateLedInstanceException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateLedInstance(DuplicateLedInstanceException ex) {
+        return buildErrorResponse("DUPLICATE_LED_INSTANCE", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(LedModelDeprecatedException.class)
+    public ResponseEntity<ErrorResponse> handleLedModelDeprecated(LedModelDeprecatedException ex) {
+        return buildErrorResponse("LED_MODEL_DEPRECATED", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(DeviceNotBoundException.class)
     public ResponseEntity<ErrorResponse> handleDeviceNotBound(DeviceNotBoundException ex) {
         return buildErrorResponse("DEVICE_NOT_BOUND", ex.getMessage(), HttpStatus.CONFLICT);

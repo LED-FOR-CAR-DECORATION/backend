@@ -108,6 +108,7 @@ class AhamoveWebhookPersistenceTest {
                 "https://expressstg.ahamove.com/s/26AHV001",
                 new BigDecimal("32000.00"),
                 null,
+                null,
                 t1
         )).isEqualTo(1);
         assertThat(orderRepository.updateStatusIfIn(
@@ -125,6 +126,7 @@ class AhamoveWebhookPersistenceTest {
                 null,
                 null,
                 null,
+                null,
                 t2
         )).isEqualTo(1);
 
@@ -136,6 +138,7 @@ class AhamoveWebhookPersistenceTest {
                 null,
                 new BigDecimal("35000.00"),
                 t3,
+                null,
                 t3
         )).isEqualTo(1);
         assertThat(orderRepository.updateStatusIfIn(
@@ -173,6 +176,7 @@ class AhamoveWebhookPersistenceTest {
                 null,
                 null,
                 null,
+                "AhaMove: FAILED",
                 now
         )).isZero();
         assertThat(orderRepository.updateStatusIfIn(
@@ -195,6 +199,7 @@ class AhamoveWebhookPersistenceTest {
                 null,
                 null,
                 null,
+                "AhaMove: RETURNED",
                 now
         )).isEqualTo(1);
 

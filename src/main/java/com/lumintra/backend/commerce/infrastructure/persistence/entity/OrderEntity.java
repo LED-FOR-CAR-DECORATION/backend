@@ -115,7 +115,8 @@ public class OrderEntity {
         }
         return switch (this.status) {
             case PENDING_PAYMENT -> targetStatus == OrderStatus.CANCELED;
-            case DELIVERY_FAILED -> targetStatus == OrderStatus.PROCESSING;
+            case DELIVERY_FAILED -> targetStatus == OrderStatus.PROCESSING
+                    || targetStatus == OrderStatus.REFUNDED;
             // DELIVERED -> COMPLETED is handled by customer delivery confirmation (COM-15)
             default -> false;
         };

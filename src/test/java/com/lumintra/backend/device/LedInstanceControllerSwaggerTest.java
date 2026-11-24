@@ -79,7 +79,7 @@ class LedInstanceControllerSwaggerTest {
         assertSchemaOnRecordAndFields(
                 LedInstanceListResponse.LedInstanceItem.class,
                 "instanceId", "modelId", "modelName", "serialNumber", "macAddress",
-                "hardwareRevision", "deviceName", "status", "fulfillment", "owner",
+                "deviceName", "status", "fulfillment", "owner",
                 "boundAt", "warrantyExpiresAt", "manufacturedAt", "qrPayload", "createdAt", "updatedAt"
         );
         assertSchemaOnRecordAndFields(LedInstanceListResponse.FulfillmentInfo.class, "orderId", "orderItemId");
@@ -127,7 +127,7 @@ class LedInstanceControllerSwaggerTest {
     void detailResponseDtos_haveSchemaAnnotations() throws NoSuchFieldException {
         assertSchemaOnRecordAndFields(
                 LedInstanceDetailResponse.class,
-                "instanceId", "model", "serialNumber", "macAddress", "hardwareRevision",
+                "instanceId", "model", "serialNumber", "macAddress",
                 "currentFirmwareId", "deviceName", "status", "warrantyStatus",
                 "boundAt", "warrantyExpiresAt", "manufacturedAt", "fulfillment", "owner",
                 "qrPayload", "createdAt", "updatedAt"

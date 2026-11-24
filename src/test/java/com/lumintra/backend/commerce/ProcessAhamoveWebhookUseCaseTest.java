@@ -135,6 +135,7 @@ class ProcessAhamoveWebhookUseCaseTest {
                 eq("https://expressstg.ahamove.com/s/26ABCDEF"),
                 eq(new BigDecimal("33000")),
                 eq(null),
+                eq(null),
                 any(Instant.class)
         )).thenReturn(1);
         when(orderRepository.updateStatusIfIn(
@@ -176,6 +177,7 @@ class ProcessAhamoveWebhookUseCaseTest {
                 eq(null),
                 eq(new BigDecimal("33000")),
                 eq(null),
+                eq(null),
                 any(Instant.class)
         )).thenReturn(1);
 
@@ -206,6 +208,7 @@ class ProcessAhamoveWebhookUseCaseTest {
                 eq(501L),
                 eq(Set.of(DeliveryStatus.PENDING, DeliveryStatus.ASSIGNED, DeliveryStatus.PICKED_UP)),
                 eq(DeliveryStatus.SHIPPING),
+                eq(null),
                 eq(null),
                 eq(null),
                 eq(null),
@@ -241,6 +244,7 @@ class ProcessAhamoveWebhookUseCaseTest {
                 eq(null),
                 eq(new BigDecimal("35000")),
                 any(Instant.class),
+                eq(null),
                 any(Instant.class)
         )).thenReturn(1);
         when(orderRepository.updateStatusIfIn(
@@ -279,6 +283,7 @@ class ProcessAhamoveWebhookUseCaseTest {
                 eq(null),
                 eq(new BigDecimal("35000")),
                 deliveredAtCaptor.capture(),
+                eq(null),
                 any(Instant.class)
         );
         assertThat(deliveredAtCaptor.getValue()).isEqualTo(Instant.ofEpochSecond(1762938000L));
@@ -302,6 +307,7 @@ class ProcessAhamoveWebhookUseCaseTest {
                 eq(null),
                 eq(null),
                 eq(null),
+                any(),
                 any(Instant.class)
         )).thenReturn(1);
         when(orderRepository.updateStatusIfIn(
@@ -342,6 +348,7 @@ class ProcessAhamoveWebhookUseCaseTest {
                 eq(null),
                 eq(null),
                 eq(null),
+                any(),
                 any(Instant.class)
         )).thenReturn(1);
         when(orderRepository.updateStatusIfIn(
@@ -453,7 +460,7 @@ class ProcessAhamoveWebhookUseCaseTest {
         when(orderDeliveryRepository.findFirstByTrackingNumberOrderByDeliveryIdDesc("26SHIP"))
                 .thenReturn(Optional.of(alreadyShipping));
         when(orderDeliveryRepository.updateWebhookDeliveryStatusIfAllowed(
-                eq(601L), any(), eq(DeliveryStatus.ASSIGNED), any(), any(), any(), any(Instant.class)
+                eq(601L), any(), eq(DeliveryStatus.ASSIGNED), any(), any(), any(), any(), any(Instant.class)
         )).thenReturn(0);
         when(orderRepository.updateStatusIfIn(
                 eq(201L), any(), eq(OrderStatus.SHIPPING), any(Instant.class)
@@ -495,6 +502,7 @@ class ProcessAhamoveWebhookUseCaseTest {
                 eq(505L),
                 eq(Set.of(DeliveryStatus.PENDING, DeliveryStatus.ASSIGNED, DeliveryStatus.PICKED_UP)),
                 eq(DeliveryStatus.SHIPPING),
+                eq(null),
                 eq(null),
                 eq(null),
                 eq(null),

@@ -3,13 +3,21 @@ package com.lumintra.backend.commerce;
 import com.lumintra.backend.commerce.api.request.UpdateStaffOrderStatusRequest;
 import com.lumintra.backend.commerce.api.response.StaffOrderStatusResponse;
 import com.lumintra.backend.commerce.application.UpdateStaffOrderStatusUseCase;
+import com.lumintra.backend.commerce.domain.model.DeliveryStatus;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.OrderType;
+import com.lumintra.backend.commerce.domain.model.ResolvedShippingAddress;
+import com.lumintra.backend.commerce.domain.service.LedInstanceFulfillmentPort;
+import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderDeliveryEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderItemEntity;
+import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderItemFulfillmentEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.mapper.OrderMapper;
+import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderDeliveryRepository;
+import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemFulfillmentRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderRepository;
+import com.lumintra.backend.commerce.infrastructure.persistence.repository.OwnedCharacterRepository;
 import com.lumintra.backend.device.domain.service.LedInventoryService;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
 import com.lumintra.backend.shared.exception.commerce.OrderNotFoundException;
@@ -59,7 +67,16 @@ class UpdateStaffOrderStatusUseCaseTest {
     private OrderRepository orderRepository;
 
     @Mock
+    private OrderDeliveryRepository orderDeliveryRepository;
+
+    @Mock
     private OrderItemRepository orderItemRepository;
+
+    @Mock
+    private OrderItemFulfillmentRepository orderItemFulfillmentRepository;
+
+    @Mock
+    private OwnedCharacterRepository ownedCharacterRepository;
 
     @Mock
     private ProductLookupService productLookupService;
@@ -70,6 +87,9 @@ class UpdateStaffOrderStatusUseCaseTest {
     @Mock
     private LedInventoryService ledInventoryService;
 
+    @Mock
+    private LedInstanceFulfillmentPort ledInstanceFulfillmentPort;
+
     private UpdateStaffOrderStatusUseCase useCase;
 
     @BeforeEach
@@ -77,10 +97,14 @@ class UpdateStaffOrderStatusUseCaseTest {
         useCase = new UpdateStaffOrderStatusUseCase(
                 internalEmployeeAccessService,
                 orderRepository,
+                orderDeliveryRepository,
                 orderItemRepository,
+                orderItemFulfillmentRepository,
+                ownedCharacterRepository,
                 productLookupService,
                 bundleLookupService,
                 ledInventoryService,
+                ledInstanceFulfillmentPort,
                 new OrderMapper()
         );
     }
@@ -286,5 +310,72 @@ class UpdateStaffOrderStatusUseCaseTest {
         assertThatThrownBy(() -> useCase.execute("8", 109L, new UpdateStaffOrderStatusRequest("PROCESSING")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("PostgreSQL timeout");
+    }
+
+    @Test
+    @DisplayName("COM-12: DELIVERY_FAILED -> PROCESSING is rejected when max 2 redeliveries (3 attempts) already reached")
+    void execute_deliveryFailedToProcessing_maxRedeliveriesReached_throwsOrderStatusTransitionException() {
+        when(internalEmployeeAccessService.requireActiveEmployeeAccountId("7", ALLOWED_ROLES)).thenReturn(7L);
+
+        OrderEntity failedOrder = sampleOrder(120L, OrderStatus.DELIVERY_FAILED, OrderType.PHYSICAL);
+        OrderDeliveryEntity exhaustedDelivery = OrderDeliveryEntity.createPending(
+                failedOrder,
+                new ResolvedShippingAddress(
+                        10L, "Nguyen Van A", "0901234567", "123 Le Loi, Q1",
+                        new BigDecimal("10.77"), new BigDecimal("106.70")
+                )
+        );
+        exhaustedDelivery.setDeliveryStatus(DeliveryStatus.FAILED);
+        exhaustedDelivery.setDeliveryAttemptCount(OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS);
+
+        when(orderRepository.findById(120L)).thenReturn(Optional.of(failedOrder));
+        when(orderDeliveryRepository.findByOrder_OrderId(120L)).thenReturn(Optional.of(exhaustedDelivery));
+
+        assertThatThrownBy(() -> useCase.execute("7", 120L, new UpdateStaffOrderStatusRequest("PROCESSING")))
+                .isInstanceOf(OrderStatusTransitionException.class)
+                .hasMessageContaining("maximum number of redelivery attempts");
+    }
+
+    @Test
+    @DisplayName("COM-12: DELIVERY_FAILED -> REFUNDED restores LED stock, releases linked LED instances, revokes owned characters, and marks delivery RETURNED")
+    void execute_deliveryFailedToRefunded_restoresStockReleasesInstancesAndRevokesCharacters() {
+        when(internalEmployeeAccessService.requireActiveEmployeeAccountId("7", ALLOWED_ROLES)).thenReturn(7L);
+
+        OrderEntity failedMixedOrder = sampleOrder(121L, OrderStatus.DELIVERY_FAILED, OrderType.MIXED);
+        OrderItemEntity ledItem = OrderItemEntity.create(failedMixedOrder, 501L, 1, new BigDecimal("250000.00"));
+        ledItem.setOrderItemId(901L);
+        OrderItemEntity charItem = OrderItemEntity.create(failedMixedOrder, 502L, 1, new BigDecimal("50000.00"));
+        charItem.setOrderItemId(902L);
+
+        OrderItemFulfillmentEntity fulfillment = OrderItemFulfillmentEntity.create(ledItem, 777L);
+
+        when(orderRepository.findById(121L)).thenReturn(Optional.of(failedMixedOrder));
+        when(orderRepository.updateStatusIfCurrent(
+                eq(121L), eq(OrderStatus.DELIVERY_FAILED), eq(OrderStatus.REFUNDED), any(Instant.class)))
+                .thenReturn(1);
+        when(orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(121L))
+                .thenReturn(List.of(ledItem, charItem));
+        when(productLookupService.findSnapshotsByIds(new LinkedHashSet<>(List.of(501L, 502L))))
+                .thenReturn(Map.of(
+                        501L, new ProductSnapshot(501L, "Matrix 64x64 Pro", ProductType.LED, "t1", new BigDecimal("250000.00"), ProductStatus.PUBLISHED),
+                        502L, new ProductSnapshot(502L, "Capybara", ProductType.CHARACTER, "t2", new BigDecimal("50000.00"), ProductStatus.PUBLISHED)
+                ));
+        when(ledInventoryService.findModelIdByLedProductId(501L)).thenReturn(Optional.of(1L));
+        when(orderItemFulfillmentRepository.findAllByOrderItem_Order_OrderId(121L))
+                .thenReturn(List.of(fulfillment));
+        when(ownedCharacterRepository.revokeByCustomerIdAndOrderItemIds(eq(15L), eq(List.of(901L, 902L)), any(Instant.class)))
+                .thenReturn(1);
+
+        StaffOrderStatusResponse response = useCase.execute(
+                "7", 121L, new UpdateStaffOrderStatusRequest("REFUNDED", "Khách từ chối nhận hàng"));
+
+        assertThat(response.previousStatus()).isEqualTo(OrderStatus.DELIVERY_FAILED);
+        assertThat(response.status()).isEqualTo(OrderStatus.REFUNDED);
+
+        verify(ledInventoryService).restoreStocks(Map.of(1L, 1L));
+        verify(orderItemFulfillmentRepository).deleteAll(List.of(fulfillment));
+        verify(ledInstanceFulfillmentPort).releaseToStock(777L);
+        verify(ownedCharacterRepository).revokeByCustomerIdAndOrderItemIds(eq(15L), eq(List.of(901L, 902L)), any(Instant.class));
+        verify(orderDeliveryRepository).markReturnedOnRefund(eq(121L), eq("Khách từ chối nhận hàng"), any(Instant.class));
     }
 }

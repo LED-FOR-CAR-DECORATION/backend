@@ -20,7 +20,7 @@ class OrderEntityStateTransitionTest {
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STAFF_TRANSITIONS = Map.of(
             OrderStatus.PENDING_PAYMENT, Set.of(OrderStatus.CANCELED),
-            OrderStatus.DELIVERY_FAILED, Set.of(OrderStatus.PROCESSING)
+            OrderStatus.DELIVERY_FAILED, Set.of(OrderStatus.PROCESSING, OrderStatus.REFUNDED)
     );
 
     private OrderEntity orderWithStatus(OrderStatus status) {
@@ -83,11 +83,13 @@ class OrderEntityStateTransitionTest {
         StaffTargetOrderStatusValidator validator = new StaffTargetOrderStatusValidator();
 
         assertThat(validator.isValid("PROCESSING", null)).isTrue();
+        assertThat(validator.isValid("REFUNDED", null)).isTrue();
         assertThat(validator.isValid("CANCELED", null)).isTrue();
         assertThat(validator.isValid("CANCELLED", null)).isTrue();
         assertThat(validator.isValid(" PROCESSING ", null)).isTrue();
 
         assertThat(new UpdateStaffOrderStatusRequest("PROCESSING").toOrderStatus()).isEqualTo(OrderStatus.PROCESSING);
+        assertThat(new UpdateStaffOrderStatusRequest("REFUNDED").toOrderStatus()).isEqualTo(OrderStatus.REFUNDED);
         assertThat(new UpdateStaffOrderStatusRequest("CANCELED").toOrderStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(new UpdateStaffOrderStatusRequest("CANCELLED").toOrderStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(new UpdateStaffOrderStatusRequest(" CANCELLED ").toOrderStatus()).isEqualTo(OrderStatus.CANCELED);

@@ -1,5 +1,6 @@
 package com.lumintra.backend.store.infrastructure.caching;
 
+import com.lumintra.backend.dashboard.infrastructure.caching.DashboardCacheNames;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,16 @@ public class StoreCacheEvictor {
         } catch (RuntimeException ex) {
             log.warn("Failed to evict product list cache [namespace={}] [error={}]",
                     StoreCacheNames.PRODUCTS, ex.getMessage());
+        }
+        try {
+            Cache dashboardCache = cacheManager.getCache(DashboardCacheNames.MANAGER_KPI);
+            if (dashboardCache != null) {
+                dashboardCache.clear();
+                log.info("Dashboard KPI cache evicted [namespace={}]", DashboardCacheNames.MANAGER_KPI);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("Failed to evict dashboard KPI cache [namespace={}] [error={}]",
+                    DashboardCacheNames.MANAGER_KPI, ex.getMessage());
         }
     }
 

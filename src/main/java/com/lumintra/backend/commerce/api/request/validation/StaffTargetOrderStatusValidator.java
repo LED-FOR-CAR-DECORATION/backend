@@ -9,6 +9,7 @@ public class StaffTargetOrderStatusValidator implements ConstraintValidator<Staf
 
     private static final Set<String> ALLOWED_VALUES = Set.of(
             "PROCESSING",
+            "REFUNDED",
             "CANCELED",
             "CANCELLED"
     );
