@@ -55,7 +55,7 @@ class FetchOtaManifestUseCaseTest {
         session = FirmwareOtaSessionEntity.issue(CreateOtaSessionUseCase.hashToken(TOKEN), DEVICE, 12L, NONCE,
                 Instant.now().plus(Duration.ofMinutes(10)));
         session.setSessionId(31L);
-        device = LedInstanceEntity.createWithState(3L, "SN-1", "aa:bb:cc:11:22:03", null, 55L, "Car",
+        device = LedInstanceEntity.createWithState(3L, "SN-1", "aa:bb:cc:11:22:03", 55L, "Car",
                 LedInstanceStatus.BOUND, Instant.now(), Instant.now(), Instant.now());
         device.setInstanceId(DEVICE);
         firmware = FirmwareVersionEntity.create(3L, "1.2.0", "notes", "firmware/3/1.2.0.bin", 1_048_576L,

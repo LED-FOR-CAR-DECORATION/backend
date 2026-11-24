@@ -59,7 +59,7 @@ class CreateOtaSessionUseCaseTest {
     void setUp() {
         useCase = new CreateOtaSessionUseCase(new CustomerDeviceAccess(ledInstanceRepository),
                 firmwareVersionRepository, sessionRepository);
-        device = LedInstanceEntity.createWithState(3L, "SN-1", "AA:BB:CC:00:00:01", null, CUSTOMER, "Car",
+        device = LedInstanceEntity.createWithState(3L, "SN-1", "AA:BB:CC:00:00:01", CUSTOMER, "Car",
                 LedInstanceStatus.BOUND, Instant.now(), Instant.now(), Instant.now());
         device.setInstanceId(DEVICE);
         active = firmware(12L, 3L, "1.2.0", FirmwareStatus.ACTIVE);
