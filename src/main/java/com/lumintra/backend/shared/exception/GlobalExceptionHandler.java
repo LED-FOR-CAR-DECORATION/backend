@@ -221,6 +221,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse("OTA_SESSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(FirmwareModelMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleFirmwareModelMismatch(FirmwareModelMismatchException ex) {
+        return buildErrorResponse("FIRMWARE_MODEL_MISMATCH", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(FirmwareNotActiveException.class)
     public ResponseEntity<ErrorResponse> handleFirmwareNotActive(FirmwareNotActiveException ex) {
         return buildErrorResponse("FIRMWARE_NOT_ACTIVE", ex.getMessage(), HttpStatus.CONFLICT);
