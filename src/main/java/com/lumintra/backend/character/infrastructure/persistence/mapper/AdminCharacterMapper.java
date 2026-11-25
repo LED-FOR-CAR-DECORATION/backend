@@ -33,6 +33,8 @@ public final class AdminCharacterMapper {
                 character.getCharacterId(),
                 character.getCharacterName(),
                 character.getDescription(),
+                character.getCharacterType(),
+                character.getCommissionId(),
                 authorSummary,
                 totalVersions,
                 character.getCreatedAt()

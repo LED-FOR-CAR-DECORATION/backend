@@ -48,13 +48,18 @@ public class ListMyCharactersUseCase {
         );
 
         Page<CharacterEntity> characterPage = characterRepository.findAll(
-                CharacterSpecifications.forDesigner(designerEmployeeId, request.query()),
+                CharacterSpecifications.forDesigner(
+                        designerEmployeeId,
+                        request.query(),
+                        request.characterType(),
+                        request.commissionId()
+                ),
                 pageable
         );
 
         if (characterPage.isEmpty()) {
-            log.info("Listed designer characters [designerEmployeeId={}] [query={}] [totalElements=0] [page={}] [size={}]",
-                    designerEmployeeId, request.query(), request.page(), request.size());
+            log.info("Listed designer characters [designerEmployeeId={}] [query={}] [characterType={}] [commissionId={}] [totalElements=0] [page={}] [size={}]",
+                    designerEmployeeId, request.query(), request.characterType(), request.commissionId(), request.page(), request.size());
             return new PageImpl<>(Collections.emptyList(), pageable, characterPage.getTotalElements());
         }
 

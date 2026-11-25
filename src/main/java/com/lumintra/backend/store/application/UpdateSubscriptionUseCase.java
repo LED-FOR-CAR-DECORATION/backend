@@ -41,6 +41,9 @@ public class UpdateSubscriptionUseCase {
         detail.setPlanName(request.planName());
         detail.setDurationDays(request.durationDays());
         detail.setAllAccessCharacters(request.allAccessCharacters());
+        if (request.maxCommissionRevisions() != null) {
+            detail.setMaxCommissionRevisions(Math.max(0, request.maxCommissionRevisions()));
+        }
         product.setProductName(request.planName());
         product.setBasePrice(request.basePrice());
         product.setDescription(request.description());
@@ -58,6 +61,7 @@ public class UpdateSubscriptionUseCase {
                 detail.isLifetime(),
                 detail.getDurationDays(),
                 detail.isAllAccessCharacters(),
+                detail.getMaxCommissionRevisions(),
                 product.getStatus(),
                 detail.getCreatedAt(),
                 product.getTags().stream().map(TagEntity::getTagId).sorted().toList());

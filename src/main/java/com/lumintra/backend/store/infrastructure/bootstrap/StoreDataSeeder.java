@@ -47,18 +47,18 @@ public class StoreDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(StoreDataSeeder.class);
 
-    public static final String TAG_MATRIX = "matrix";
-    public static final String TAG_CYBERPUNK = "cyberpunk";
-    public static final String TAG_BUNDLE = "bundle";
-    public static final String TAG_SUBSCRIPTION = "subscription";
-    public static final String TAG_PIXEL_ART = "pixel-art";
-    public static final String TAG_ANIMAL = "animal";
-    public static final String TAG_ANIME = "anime";
-    public static final String TAG_ANIMATED = "animated";
-    public static final String TAG_CUTE = "cute";
-    public static final String TAG_ZEN = "zen";
-    public static final String TAG_HALLOWEEN = "halloween";
-    public static final String TAG_STATIC = "static";
+    public static final String TAG_MATRIX = "Đèn LED ma trận";
+    public static final String TAG_CYBERPUNK = "Cyberpunk";
+    public static final String TAG_BUNDLE = "Combo tiết kiệm";
+    public static final String TAG_SUBSCRIPTION = "Gói hội viên";
+    public static final String TAG_PIXEL_ART = "Pixel Art";
+    public static final String TAG_ANIMAL = "Động vật";
+    public static final String TAG_ANIME = "Anime";
+    public static final String TAG_ANIMATED = "Ảnh động";
+    public static final String TAG_CUTE = "Dễ thương";
+    public static final String TAG_ZEN = "Thiền Nhật";
+    public static final String TAG_HALLOWEEN = "Halloween";
+    public static final String TAG_STATIC = "Ảnh tĩnh";
 
     public static final String PRODUCT_LED_PRO = "Lumintra Matrix 64x64 Pro";
     public static final String PRODUCT_LED_COMPACT = "Lumintra Matrix 64x32 Compact";
@@ -68,17 +68,17 @@ public class StoreDataSeeder implements ApplicationRunner {
     public static final String PRODUCT_CHAR_02 = "Capybara Ôm Táo Đỏ";
     public static final String PRODUCT_CHAR_03 = "Capybara Nhâm Nhi Táo";
     public static final String PRODUCT_CHAR_04 = "Cô Nàng Tinh Nghịch";
-    public static final String PRODUCT_CHAR_05 = "Nezuko Demon Slayer";
+    public static final String PRODUCT_CHAR_05 = "Nezuko (Thanh Gươm Diệt Quỷ)";
     public static final String PRODUCT_CHAR_06 = "Ống Trúc Thiền Shishi-odoshi";
     public static final String PRODUCT_CHAR_07 = "Thiếu Nữ Kimono Viết Haiku";
     public static final String PRODUCT_CHAR_08 = "Lâu Đài Ma Ám Halloween";
     public static final String PRODUCT_CHAR_09 = "Maomao Chibi — Dược Sư";
     public static final String PRODUCT_CHAR_10 = "Sakura Miku Pastel";
 
-    public static final String PRODUCT_BUNDLE_STARTER = "Starter Neon Combo";
-    public static final String PRODUCT_BUNDLE_ANIME_TRIO = "Anime Chibi Trio Combo";
-    public static final String PRODUCT_SUB_VIP = "Lumintra All-Access VIP Pass";
-    public static final String PRODUCT_SUB_COMMISSION_PLUS = "Lumintra Commission VIP Pass";
+    public static final String PRODUCT_BUNDLE_STARTER = "Combo Neon Khởi Đầu";
+    public static final String PRODUCT_BUNDLE_ANIME_TRIO = "Combo Bộ Ba Anime Chibi";
+    public static final String PRODUCT_SUB_VIP = "Gói VIP Mở Khóa Toàn Bộ Lumintra";
+    public static final String PRODUCT_SUB_COMMISSION_PLUS = "Gói VIP Thiết Kế Riêng Lumintra";
     public static final String SUBSCRIPTION_PLAN_CODE_VIP = "VIP_LIFETIME";
     public static final String SUBSCRIPTION_PLAN_CODE_COMMISSION_PLUS = "VIP_COMMISSION";
 
@@ -311,19 +311,15 @@ public class StoreDataSeeder implements ApplicationRunner {
                 PRODUCT_SUB_VIP,
                 SUBSCRIPTION_PLAN_CODE_VIP,
                 new BigDecimal("999999.00"),
-                "Gói hội viên sở hữu toàn bộ nhân vật trên cửa hàng, kèm ưu đãi thiết kế và sao lưu đám mây.",
+                "Mở khóa toàn bộ thư viện nhân vật",
                 "https://cdn.lumintra.shop/store/products/subcription/All_Character.png",
                 true,
                 null,
                 true,
-                3,
+                0,
                 10,
-                Map.of(
-                        "commissionPriorityQueue", true,
-                        "commissionDiscountPercent", 10,
-                        "mobileCloudBackup", true
-                ),
-                "Sở hữu toàn bộ nhân vật trên cửa hàng, 3 lượt chỉnh sửa commission miễn phí và 10 slot thiết bị",
+                Map.of(),
+                "Mở khóa toàn bộ thư viện nhân vật",
                 Set.of(subscriptionTag),
                 seededAny
         );
@@ -331,20 +327,16 @@ public class StoreDataSeeder implements ApplicationRunner {
         seedSubscriptionProduct(
                 PRODUCT_SUB_COMMISSION_PLUS,
                 SUBSCRIPTION_PLAN_CODE_COMMISSION_PLUS,
-                new BigDecimal("79000.00"),
-                "Gói đặc quyền thêm lượt yêu cầu thiết kế nhân vật (Commission) và ưu tiên hàng đợi xử lý.",
+                new BigDecimal("99999.00"),
+                "+5 lượt chỉnh sửa thiết kế miễn phí",
                 "https://cdn.lumintra.shop/store/products/subcription/Vip_Commission.png",
-                false,
-                30,
+                true,
+                null,
                 false,
                 5,
                 5,
-                Map.of(
-                        "extraCommissionRequests", 3,
-                        "commissionPriorityQueue", true,
-                        "commissionDiscountPercent", 15
-                ),
-                "Thêm 3 lượt yêu cầu thiết kế character, ưu tiên xử lý và giảm 15% phí commission trong 30 ngày",
+                Map.of("extraFreeCommissionRevisions", 5),
+                "+5 lượt chỉnh sửa thiết kế miễn phí",
                 Set.of(subscriptionTag),
                 seededAny
         );
@@ -531,7 +523,7 @@ public class StoreDataSeeder implements ApplicationRunner {
                 PRODUCT_BUNDLE_ANIME_TRIO,
                 ProductType.BUNDLE,
                 new BigDecimal("129000.00"),
-                "Combo 3 nhân vật Anime Pixel Art: Nezuko Demon Slayer, Maomao Chibi — Dược Sư và Sakura Miku Pastel.",
+                "Combo 3 nhân vật Anime Pixel Art: Nezuko (Thanh Gươm Diệt Quỷ), Maomao Chibi — Dược Sư và Sakura Miku Pastel.",
                 "https://cdn.lumintra.shop/store/products/bundle/Combo2.png",
                 List.of("https://cdn.lumintra.shop/store/products/bundle/Combo2.png"),
                 ProductStatus.PUBLISHED,
@@ -543,7 +535,7 @@ public class StoreDataSeeder implements ApplicationRunner {
             BundleEntity bundle = bundleRepository.save(BundleEntity.create(
                     product.getProductId(),
                     PRODUCT_BUNDLE_ANIME_TRIO,
-                    "Combo 3 nhân vật: Nezuko Demon Slayer, Maomao Chibi — Dược Sư, Sakura Miku Pastel",
+                    "Combo 3 nhân vật: Nezuko (Thanh Gươm Diệt Quỷ), Maomao Chibi — Dược Sư, Sakura Miku Pastel",
                     new BigDecimal("154000.00"),
                     new BigDecimal("129000.00"),
                     ProductStatus.PUBLISHED.name(),

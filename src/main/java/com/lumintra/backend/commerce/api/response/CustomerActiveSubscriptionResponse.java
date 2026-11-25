@@ -30,8 +30,11 @@ public record CustomerActiveSubscriptionResponse(
         @Schema(description = "Whether this plan unlocks all published store characters", example = "true")
         boolean allAccessCharacters,
 
-        @Schema(description = "Maximum complimentary commission revisions included", example = "3")
+        @Schema(description = "Total complimentary commission revisions granted by this plan", example = "5")
         int maxCommissionRevisions,
+
+        @Schema(description = "Remaining complimentary commission revisions available in this subscription credit pool", example = "4")
+        int remainingCommissionRevisions,
 
         @Schema(description = "Maximum mobile device profiles allowed", example = "10")
         int maxMobileProfiles,
@@ -41,4 +44,33 @@ public record CustomerActiveSubscriptionResponse(
 
         @Schema(description = "Expiration timestamp (null for lifetime plans)")
         Instant expiresAt
-) {}
+) {
+    public CustomerActiveSubscriptionResponse(
+            Long subscriptionId,
+            Long productId,
+            Long orderId,
+            String planCode,
+            String planName,
+            boolean isLifetime,
+            Integer durationDays,
+            boolean allAccessCharacters,
+            int maxCommissionRevisions,
+            int maxMobileProfiles,
+            Instant activatedAt,
+            Instant expiresAt) {
+        this(
+                subscriptionId,
+                productId,
+                orderId,
+                planCode,
+                planName,
+                isLifetime,
+                durationDays,
+                allAccessCharacters,
+                maxCommissionRevisions,
+                maxCommissionRevisions,
+                maxMobileProfiles,
+                activatedAt,
+                expiresAt);
+    }
+}

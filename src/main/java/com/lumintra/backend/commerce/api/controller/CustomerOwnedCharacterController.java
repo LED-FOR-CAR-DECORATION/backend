@@ -120,6 +120,22 @@ public class CustomerOwnedCharacterController {
         return ResponseEntity.ok(ApiResponse.success(activeSubscription));
     }
 
+    @Operation(
+            summary = "List all active customer subscriptions",
+            description = "Retrieves all currently active, non-expired subscription entitlements owned by the authenticated customer (e.g. All-Access VIP Pass and Commission Revision Bonus Pass)."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/api/customer/subscriptions/active/all")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<List<CustomerActiveSubscriptionResponse>>> listActiveSubscriptions(
+            Authentication authentication
+    ) {
+        Long customerId = extractCustomerId(authentication);
+        List<CustomerActiveSubscriptionResponse> activeSubscriptions =
+                customerSubscriptionEntitlementService.findActiveSubscriptions(customerId);
+        return ResponseEntity.ok(ApiResponse.success(activeSubscriptions));
+    }
+
     private Long extractCustomerId(Authentication authentication) {
         if (authentication == null
                 || !authentication.isAuthenticated()

@@ -2,6 +2,7 @@ package com.lumintra.backend.store;
 
 import static org.assertj.core.api.Assertions.*;
 
+import com.lumintra.backend.character.domain.model.CharacterType;
 import com.lumintra.backend.character.infrastructure.persistence.CharacterProductLinkServiceImpl;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterEntity;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterVersionEntity;
@@ -96,6 +97,30 @@ class CreateStoreProductIntegrationTest {
         assertThat(result.basePrice()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(result.status()).isEqualTo(ProductStatus.UNPUBLISHED);
         assertThat(versions.findById(versionId).orElseThrow().getProductId()).isEqualTo(result.productId());
+    }
+
+    @Test
+    void rejectsCommissionCharacterForStoreProductAndDesignerDraft() {
+        long versionId = new TransactionTemplate(transactions).execute(tx -> {
+            var character = CharacterEntity.create(42L, "Commission art", null, CharacterType.COMMISSION, 105L);
+            em.persist(character);
+            var version = CharacterVersionEntity.create(character, null, 1, null, null, true);
+            em.persist(version);
+            return version.getVersionId();
+        });
+
+        var draft = request(ProductType.CHARACTER, null, versionId, null);
+        long before = products.count();
+        assertThatThrownBy(() -> useCase.submitDesignerDraft(draft, 42L))
+                .isInstanceOfSatisfying(
+                        StoreProductReferenceException.class,
+                        ex -> assertThat(ex.getReason()).isEqualTo(Reason.CHARACTER_TYPE_NOT_ALLOWED_FOR_STORE));
+        assertThatThrownBy(() -> useCase.execute(request(ProductType.CHARACTER, null, versionId, null)))
+                .isInstanceOfSatisfying(
+                        StoreProductReferenceException.class,
+                        ex -> assertThat(ex.getReason()).isEqualTo(Reason.CHARACTER_TYPE_NOT_ALLOWED_FOR_STORE));
+        assertThat(products.count()).isEqualTo(before);
+        assertThat(versions.findById(versionId).orElseThrow().getProductId()).isNull();
     }
 
     @Test

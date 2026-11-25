@@ -55,7 +55,7 @@ class ListAllCharactersUseCaseTest {
     @Test
     @DisplayName("CHR-02 UseCase UTCID01 [N]: Valid admin request returns paginated characters with author details and version counts")
     void execute_validRequest_returnsCharactersWithAuthorsAndVersionCounts() {
-        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, 0, 10);
+        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, null, null, 0, 10);
 
         CharacterEntity char1 = CharacterEntity.create(4L, "Cyber Fox", "Cyberpunk fox mascot");
         char1.setCharacterId(10L);
@@ -113,7 +113,7 @@ class ListAllCharactersUseCaseTest {
     @Test
     @DisplayName("CHR-02 UseCase UTCID02 [N]: Applies search query and creatorEmployeeId filters to specification")
     void execute_withSearchQueryAndCreatorFilter_appliesBothFilters() {
-        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest("fox", 4L, 0, 10);
+        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest("fox", 4L, null, null, 0, 10);
 
         when(characterRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
@@ -129,7 +129,7 @@ class ListAllCharactersUseCaseTest {
     @Test
     @DisplayName("CHR-02 UseCase UTCID03 [N]: Empty page returns empty list without querying versions or authors")
     void execute_emptyPage_returnsEmptyListWithoutQueryingVersionsOrAuthors() {
-        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, 1, 10);
+        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, null, null, 1, 10);
 
         when(characterRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
@@ -144,7 +144,7 @@ class ListAllCharactersUseCaseTest {
     @Test
     @DisplayName("CHR-02 UseCase UTCID04 [N]: Character with null creatorEmployeeId maps author to null")
     void execute_characterWithNullCreatorEmployeeId_handlesGracefully() {
-        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, 0, 10);
+        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, null, null, 0, 10);
 
         CharacterEntity char1 = CharacterEntity.create(null, "System Icon", "Default icon");
         char1.setCharacterId(99L);
@@ -171,7 +171,7 @@ class ListAllCharactersUseCaseTest {
     @Test
     @DisplayName("CHR-02 UseCase UTCID05 [N]: Character with unknown author returns fallback author with employeeId only")
     void execute_characterWithUnknownAuthor_handlesGracefully() {
-        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, 0, 10);
+        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, null, null, 0, 10);
 
         CharacterEntity char1 = CharacterEntity.create(88L, "Orphaned Graphic", "Deleted employee asset");
         char1.setCharacterId(101L);
@@ -198,7 +198,7 @@ class ListAllCharactersUseCaseTest {
     @Test
     @DisplayName("CHR-02 UseCase UTCID06 [N]: Character with zero versions returns totalVersions equal to zero")
     void execute_characterWithZeroVersions_setsTotalVersionsZero() {
-        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, 0, 10);
+        AdminCharacterFilterRequest request = new AdminCharacterFilterRequest(null, null, null, null, 0, 10);
 
         CharacterEntity char1 = CharacterEntity.create(4L, "New Char", "No versions yet");
         char1.setCharacterId(102L);

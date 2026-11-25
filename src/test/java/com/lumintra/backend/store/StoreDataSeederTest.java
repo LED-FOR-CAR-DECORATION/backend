@@ -259,11 +259,33 @@ class StoreDataSeederTest {
         // Subscription details link VIP All-Access (116L) and Commission VIP (117L)
         verify(subscriptionDetailRepository, times(2)).save(subscriptionCaptor.capture());
         assertThat(subscriptionCaptor.getAllValues())
-                .extracting(SubscriptionDetailEntity::getProductId, SubscriptionDetailEntity::getPlanCode)
+                .extracting(
+                        SubscriptionDetailEntity::getProductId,
+                        SubscriptionDetailEntity::getPlanCode,
+                        SubscriptionDetailEntity::isLifetime,
+                        SubscriptionDetailEntity::getDurationDays,
+                        SubscriptionDetailEntity::isAllAccessCharacters,
+                        SubscriptionDetailEntity::getMaxCommissionRevisions,
+                        SubscriptionDetailEntity::getPerksDescription)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(116L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_VIP),
-                        org.assertj.core.groups.Tuple.tuple(117L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_COMMISSION_PLUS)
+                        org.assertj.core.groups.Tuple.tuple(
+                                116L,
+                                StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_VIP,
+                                true,
+                                null,
+                                true,
+                                0,
+                                "Mở khóa toàn bộ thư viện nhân vật"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                117L,
+                                StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_COMMISSION_PLUS,
+                                true,
+                                null,
+                                false,
+                                5,
+                                "+5 lượt chỉnh sửa thiết kế miễn phí")
                 );
+        assertThat(savedProducts.get(16).getBasePrice()).isEqualByComparingTo("99999.00");
 
         verify(storeCacheEvictor, times(1)).evictAllProducts();
     }
@@ -320,7 +342,7 @@ class StoreDataSeederTest {
         stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_STARTER, 114L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "169000.00");
         stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_ANIME_TRIO, 115L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "129000.00");
         stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_VIP, 116L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "999999.00");
-        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_COMMISSION_PLUS, 117L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "79000.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_COMMISSION_PLUS, 117L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "99999.00");
 
         given(ledModelLookupService.findByProductId(101L))
                 .willReturn(Optional.of(new LedModelSnapshot(101L, StoreDataSeeder.PRODUCT_LED_PRO, Map.of(), 50L)));

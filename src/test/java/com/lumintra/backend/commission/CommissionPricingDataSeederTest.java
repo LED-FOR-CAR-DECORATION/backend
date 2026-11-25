@@ -115,6 +115,7 @@ class CommissionPricingDataSeederTest {
         List<CommissionPricingTierEntity> savedTiers = tierCaptor.getAllValues();
         assertThat(savedTiers).extracting(CommissionPricingTierEntity::getTierCode)
                 .containsExactly("CUSTOM");
+        assertThat(savedTiers.get(0).getMaxRevisions()).isEqualTo(1);
 
         verify(invariantValidator, times(3)).validateRule(any());
         verify(invariantValidator, times(1)).validateTier(any(), any());

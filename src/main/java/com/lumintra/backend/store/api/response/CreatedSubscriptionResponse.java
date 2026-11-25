@@ -18,6 +18,7 @@ public record CreatedSubscriptionResponse(
         @JsonProperty("isLifetime") boolean lifetime,
         Integer durationDays,
         boolean allAccessCharacters,
+        int maxCommissionRevisions,
         ProductStatus status,
         Instant createdAt,
         List<Long> tagIds) {}

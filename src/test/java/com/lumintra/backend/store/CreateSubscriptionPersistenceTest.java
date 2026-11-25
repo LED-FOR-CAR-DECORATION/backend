@@ -83,4 +83,28 @@ class CreateSubscriptionPersistenceTest {
                 .isInstanceOf(PlanCodeAlreadyExistsException.class);
         assertThat(productRepository.count()).isEqualTo(productCount);
     }
+
+    @Test
+    void savesLifetimeCommissionRevisionBonusPlan() {
+        var request =
+                new CreateSubscriptionRequest(
+                        "Commission +10 Vĩnh viễn",
+                        "COMMISSION_REV_10",
+                        new BigDecimal("169000.00"),
+                        "Cộng thêm 10 lượt sửa Commission miễn phí vĩnh viễn",
+                        null,
+                        null,
+                        true,
+                        null,
+                        false,
+                        10,
+                        null);
+        var result = useCase.execute(request);
+        assertThat(result.lifetime()).isTrue();
+        assertThat(result.durationDays()).isNull();
+        assertThat(result.allAccessCharacters()).isFalse();
+        assertThat(result.maxCommissionRevisions()).isEqualTo(10);
+        assertThat(subscriptionDetailRepository.findByProductId(result.productId()).orElseThrow().getMaxCommissionRevisions())
+                .isEqualTo(10);
+    }
 }

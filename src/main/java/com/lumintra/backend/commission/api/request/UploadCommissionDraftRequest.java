@@ -2,6 +2,8 @@ package com.lumintra.backend.commission.api.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 @Schema(description = "Request payload for a designer to submit an artwork draft version for a commission")
@@ -20,5 +22,14 @@ public record UploadCommissionDraftRequest(
                 example = "First animated draft following the cyberpunk neon palette requested by customer."
         )
         @Size(max = 2000, message = "designerNote must not exceed 2000 characters")
-        String designerNote
+        String designerNote,
+
+        @Schema(
+                description = "Required character version ID belonging to a COMMISSION character owned by the designer",
+                example = "25",
+                requiredMode = Schema.RequiredMode.REQUIRED
+        )
+        @NotNull(message = "characterVersionId is required")
+        @Positive(message = "characterVersionId must be positive")
+        Long characterVersionId
 ) {}

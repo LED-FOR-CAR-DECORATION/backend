@@ -3,6 +3,7 @@ package com.lumintra.backend.character;
 import com.lumintra.backend.character.api.controller.UpdateCharacterController;
 import com.lumintra.backend.character.api.response.UpdateCharacterResponse;
 import com.lumintra.backend.character.application.UpdateCharacterUseCase;
+import com.lumintra.backend.character.domain.model.CharacterType;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
@@ -57,6 +58,8 @@ class UpdateCharacterControllerTest {
                 12L,
                 "Neon Samurai Remastered",
                 "Bản nâng cấp màu sắc rực rỡ",
+                CharacterType.STORE,
+                null,
                 Instant.parse("2026-11-15T02:10:00Z")
         );
     }

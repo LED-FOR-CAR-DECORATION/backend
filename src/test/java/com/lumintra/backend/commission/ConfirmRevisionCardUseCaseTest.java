@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lumintra.backend.commerce.domain.service.CustomerSubscriptionBonusLookupService;
 import com.lumintra.backend.commission.application.ConfirmRevisionCardUseCase;
 import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
 import com.lumintra.backend.commission.domain.model.*;
@@ -33,6 +34,7 @@ class ConfirmRevisionCardUseCaseTest {
     @Mock CommissionMessageRepository messages;
     @Mock PaymentSessionPort payments;
     @Mock CommissionChatBroadcastPort broadcast;
+    @Mock CustomerSubscriptionBonusLookupService subscriptionBonusLookupService;
     @Spy CommissionMessageMapper mapper = new CommissionMessageMapper();
     @Spy ObjectMapper json = new ObjectMapper();
     RevisionRequestFakes revisions = new RevisionRequestFakes();
@@ -96,6 +98,23 @@ class ConfirmRevisionCardUseCaseTest {
         when(messages.save(card)).thenReturn(card);
         commission.setRevisionsUsed(1);
         assertThat(useCase.execute(105L, 501L, 402L).revisionsUsed()).isEqualTo(2);
+        verifyNoInteractions(payments);
+    }
+
+    @Test
+    void consumesSharedSubscriptionCreditWhenCommissionQuotaExhausted() throws Exception {
+        availableCard();
+        when(messages.save(card)).thenReturn(card);
+        commission.setRevisionsUsed(2);
+        when(subscriptionBonusLookupService.consumeOneExtraCommissionRevision(501L)).thenReturn(true);
+
+        var response = useCase.execute(105L, 501L, 402L);
+        assertThat(response.status()).isEqualTo(CommissionStatus.AWAITING_ESTIMATE);
+        assertThat(response.revisionsUsed()).isEqualTo(3);
+        assertThat(response.paymentSession()).isNull();
+        assertThat(json.readTree(card.getMetadataJson()).path("usesFreeQuota").asBoolean()).isTrue();
+        assertThat(json.readTree(card.getMetadataJson()).path("usesSubscriptionCredit").asBoolean()).isTrue();
+        verify(subscriptionBonusLookupService).consumeOneExtraCommissionRevision(501L);
         verifyNoInteractions(payments);
     }
 

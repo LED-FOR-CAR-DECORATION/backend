@@ -5,6 +5,7 @@ public class StoreProductReferenceException extends RuntimeException {
         TAG_NOT_FOUND,
         CHARACTER_VERSION_NOT_FOUND,
         CHARACTER_VERSION_ALREADY_LINKED,
+        CHARACTER_TYPE_NOT_ALLOWED_FOR_STORE,
         LED_MODEL_NOT_FOUND,
         LED_MODEL_ALREADY_LINKED
     }

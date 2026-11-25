@@ -149,7 +149,9 @@ class ManagedStoreProductControllerTest {
                     .when(useCase)
                     .execute(any());
             int expected = (reason == Reason.CHARACTER_VERSION_ALREADY_LINKED
-                    || reason == Reason.LED_MODEL_ALREADY_LINKED) ? 409 : 404;
+                    || reason == Reason.LED_MODEL_ALREADY_LINKED)
+                    ? 409
+                    : (reason == Reason.CHARACTER_TYPE_NOT_ALLOWED_FOR_STORE ? 400 : 404);
             mvc.perform(
                             post(PATH)
                                     .with(user("1").roles("ADMIN"))

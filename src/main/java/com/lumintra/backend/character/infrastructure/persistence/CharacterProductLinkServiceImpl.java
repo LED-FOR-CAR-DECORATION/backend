@@ -40,6 +40,11 @@ public class CharacterProductLinkServiceImpl implements CharacterProductLinkServ
         if (designerEmployeeId != null && !version.getCharacter().isOwnedBy(designerEmployeeId)) {
             throw new AccessDeniedException("Only the designer who owns this character can submit it for sale.");
         }
+        if (version.getCharacter() == null || !version.getCharacter().isStoreCharacter()) {
+            throw new StoreProductReferenceException(
+                    Reason.CHARACTER_TYPE_NOT_ALLOWED_FOR_STORE,
+                    "Only characters with type STORE can be linked to a store product.");
+        }
         if (version.getProductId() != null) {
             throw new StoreProductReferenceException(
                     Reason.CHARACTER_VERSION_ALREADY_LINKED,

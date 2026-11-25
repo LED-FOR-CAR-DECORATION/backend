@@ -3,6 +3,7 @@ package com.lumintra.backend.character;
 import com.lumintra.backend.character.api.controller.CreateCharacterController;
 import com.lumintra.backend.character.api.response.CreateCharacterResponse;
 import com.lumintra.backend.character.application.CreateCharacterUseCase;
+import com.lumintra.backend.character.domain.model.CharacterType;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
@@ -55,6 +56,8 @@ class CreateCharacterControllerTest {
                 12L,
                 "Neon Samurai",
                 "Chiến binh samurai phong cách neon retro 8-bit",
+                CharacterType.STORE,
+                null,
                 4L,
                 Instant.parse("2026-11-15T02:00:00Z")
         );
@@ -79,8 +82,28 @@ class CreateCharacterControllerTest {
                 .andExpect(jsonPath("$.data.characterId").value(12))
                 .andExpect(jsonPath("$.data.characterName").value("Neon Samurai"))
                 .andExpect(jsonPath("$.data.description").value("Chiến binh samurai phong cách neon retro 8-bit"))
+                .andExpect(jsonPath("$.data.characterType").value("STORE"))
                 .andExpect(jsonPath("$.data.creatorEmployeeId").value(4))
                 .andExpect(jsonPath("$.data.createdAt").value("2026-11-15T02:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("CHR-03 Controller UTCID09 [A]: Providing commissionId with STORE characterType returns 400 VALIDATION_FAILED")
+    void createCharacter_storeTypeWithCommissionId_returns400() throws Exception {
+        mockMvc.perform(post(BASE_PATH)
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "characterName": "Invalid Combo",
+                                  "characterType": "STORE",
+                                  "commissionId": 105
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(createCharacterUseCase);
     }
 
     @Test

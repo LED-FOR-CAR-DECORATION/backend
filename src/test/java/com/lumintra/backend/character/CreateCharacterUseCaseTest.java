@@ -3,6 +3,7 @@ package com.lumintra.backend.character;
 import com.lumintra.backend.character.api.request.CreateCharacterRequest;
 import com.lumintra.backend.character.api.response.CreateCharacterResponse;
 import com.lumintra.backend.character.application.CreateCharacterUseCase;
+import com.lumintra.backend.character.domain.model.CharacterType;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterEntity;
 import com.lumintra.backend.character.infrastructure.persistence.repository.CharacterRepository;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
@@ -45,7 +46,7 @@ class CreateCharacterUseCaseTest {
     void execute_validRequest_createsAndReturnsCharacter() {
         String subject = "42";
         Long designerEmployeeId = 4L;
-        CreateCharacterRequest request = new CreateCharacterRequest("Neon Samurai", "Chiến binh samurai phong cách neon retro 8-bit");
+        CreateCharacterRequest request = new CreateCharacterRequest("Neon Samurai", "Chiến binh samurai phong cách neon retro 8-bit", null, null);
 
         when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
                 .thenReturn(designerEmployeeId);
@@ -63,6 +64,8 @@ class CreateCharacterUseCaseTest {
         assertThat(response.characterId()).isEqualTo(12L);
         assertThat(response.characterName()).isEqualTo("Neon Samurai");
         assertThat(response.description()).isEqualTo("Chiến binh samurai phong cách neon retro 8-bit");
+        assertThat(response.characterType()).isEqualTo(CharacterType.STORE);
+        assertThat(response.commissionId()).isNull();
         assertThat(response.creatorEmployeeId()).isEqualTo(4L);
         assertThat(response.createdAt()).isEqualTo(Instant.parse("2026-11-15T02:00:00Z"));
 
@@ -72,6 +75,8 @@ class CreateCharacterUseCaseTest {
         assertThat(captured.getCreatorEmployeeId()).isEqualTo(designerEmployeeId);
         assertThat(captured.getCharacterName()).isEqualTo("Neon Samurai");
         assertThat(captured.getDescription()).isEqualTo("Chiến binh samurai phong cách neon retro 8-bit");
+        assertThat(captured.getCharacterType()).isEqualTo(CharacterType.STORE);
+        assertThat(captured.getCommissionId()).isNull();
     }
 
     @Test
@@ -79,7 +84,7 @@ class CreateCharacterUseCaseTest {
     void execute_validRequestWithoutDescription_createsWithNullDescription() {
         String subject = "42";
         Long designerEmployeeId = 4L;
-        CreateCharacterRequest request = new CreateCharacterRequest("Cyber Ninja", null);
+        CreateCharacterRequest request = new CreateCharacterRequest("Cyber Ninja", null, CharacterType.STORE, null);
 
         when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
                 .thenReturn(designerEmployeeId);
@@ -96,14 +101,38 @@ class CreateCharacterUseCaseTest {
         assertThat(response.characterId()).isEqualTo(13L);
         assertThat(response.characterName()).isEqualTo("Cyber Ninja");
         assertThat(response.description()).isNull();
+        assertThat(response.characterType()).isEqualTo(CharacterType.STORE);
         assertThat(response.creatorEmployeeId()).isEqualTo(4L);
+    }
+
+    @Test
+    @DisplayName("CHR-03 UseCase UTCID04 [N]: Authenticated designer creates COMMISSION character linked to commissionId")
+    void execute_commissionTypeWithCommissionId_persistsTypeAndCommissionId() {
+        String subject = "42";
+        Long designerEmployeeId = 4L;
+        CreateCharacterRequest request = new CreateCharacterRequest("Custom Dragon", "Client commission", CharacterType.COMMISSION, 105L);
+
+        when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
+                .thenReturn(designerEmployeeId);
+        when(characterRepository.save(any(CharacterEntity.class))).thenAnswer(invocation -> {
+            CharacterEntity entity = invocation.getArgument(0);
+            entity.setCharacterId(15L);
+            entity.setCreatedAt(Instant.parse("2026-11-25T08:00:00Z"));
+            return entity;
+        });
+
+        CreateCharacterResponse response = useCase.execute(subject, request);
+
+        assertThat(response.characterId()).isEqualTo(15L);
+        assertThat(response.characterType()).isEqualTo(CharacterType.COMMISSION);
+        assertThat(response.commissionId()).isEqualTo(105L);
     }
 
     @Test
     @DisplayName("CHR-03 UseCase UTCID03 [A]: Non-designer or inactive employee throws AccessDeniedException")
     void execute_nonDesignerOrInactive_throwsAccessDeniedException() {
         String subject = "10";
-        CreateCharacterRequest request = new CreateCharacterRequest("Unauthorized Mascot", "Should fail");
+        CreateCharacterRequest request = new CreateCharacterRequest("Unauthorized Mascot", "Should fail", CharacterType.STORE, null);
 
         when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
                 .thenThrow(new AccessDeniedException("Authorized internal role is required."));

@@ -64,7 +64,7 @@ public class DefaultProductAvailabilityAdapter implements ProductAvailabilityPor
         }
 
         if (productType == ProductType.SUBSCRIPTION) {
-            return customerSubscriptionRepository.existsByCustomerIdAndStatus(customerId, STATUS_ACTIVE);
+            return customerSubscriptionEntitlementService.isSubscriptionProductAlreadyOwned(customerId, productId);
         }
 
         return false;

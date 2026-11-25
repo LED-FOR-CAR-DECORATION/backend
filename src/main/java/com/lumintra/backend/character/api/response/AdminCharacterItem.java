@@ -1,5 +1,6 @@
 package com.lumintra.backend.character.api.response;
 
+import com.lumintra.backend.character.domain.model.CharacterType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
@@ -14,6 +15,12 @@ public record AdminCharacterItem(
 
         @Schema(description = "Detailed character description", example = "Mascot pixel cyberpunk")
         String description,
+
+        @Schema(description = "Character type classification (STORE or COMMISSION)", example = "STORE")
+        CharacterType characterType,
+
+        @Schema(description = "Optional linked commission ID when characterType is COMMISSION", example = "105", nullable = true)
+        Long commissionId,
 
         @Schema(description = "Creator author employee summary")
         AuthorSummary author,

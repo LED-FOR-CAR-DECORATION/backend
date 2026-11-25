@@ -46,13 +46,18 @@ public class ListAllCharactersUseCase {
         );
 
         Page<CharacterEntity> characterPage = characterRepository.findAll(
-                CharacterSpecifications.forAdmin(request.query(), request.creatorEmployeeId()),
+                CharacterSpecifications.forAdmin(
+                        request.query(),
+                        request.creatorEmployeeId(),
+                        request.characterType(),
+                        request.commissionId()
+                ),
                 pageable
         );
 
         if (characterPage.isEmpty()) {
-            log.info("Listed admin characters [query={}] [creatorEmployeeId={}] [totalElements=0] [page={}] [size={}]",
-                    request.query(), request.creatorEmployeeId(), request.page(), request.size());
+            log.info("Listed admin characters [query={}] [creatorEmployeeId={}] [characterType={}] [commissionId={}] [totalElements=0] [page={}] [size={}]",
+                    request.query(), request.creatorEmployeeId(), request.characterType(), request.commissionId(), request.page(), request.size());
             return new PageImpl<>(Collections.emptyList(), pageable, characterPage.getTotalElements());
         }
 

@@ -19,8 +19,10 @@ import com.lumintra.backend.store.domain.model.BundleSnapshot;
 import com.lumintra.backend.store.domain.model.ProductSnapshot;
 import com.lumintra.backend.store.domain.model.ProductStatus;
 import com.lumintra.backend.store.domain.model.ProductType;
+import com.lumintra.backend.store.domain.model.SubscriptionDetailSnapshot;
 import com.lumintra.backend.store.domain.service.BundleLookupService;
 import com.lumintra.backend.store.domain.service.ProductLookupService;
+import com.lumintra.backend.store.domain.service.SubscriptionLookupService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -65,6 +67,9 @@ class OrderPaymentEventListenerTest {
     @Mock
     private BundleLookupService bundleLookupService;
 
+    @Mock
+    private SubscriptionLookupService subscriptionLookupService;
+
     private OrderPaymentEventListener listener;
 
     @BeforeEach
@@ -76,7 +81,8 @@ class OrderPaymentEventListenerTest {
                 customerSubscriptionRepository,
                 productLookupService,
                 characterLookupService,
-                bundleLookupService
+                bundleLookupService,
+                subscriptionLookupService
         );
     }
 
@@ -163,7 +169,10 @@ class OrderPaymentEventListenerTest {
 
         when(characterLookupService.findVersionIdByProductId(2L)).thenReturn(Optional.of(301L));
         when(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(customerId, 301L)).thenReturn(false);
-        when(customerSubscriptionRepository.existsByCustomerIdAndStatus(customerId, "ACTIVE")).thenReturn(false);
+        when(subscriptionLookupService.findByProductIds(Set.of(3L))).thenReturn(Map.of(
+                3L, new SubscriptionDetailSnapshot(3L, "VIP_LIFETIME", "Lumintra Pro", true, null, true, 0, 10)
+        ));
+        when(customerSubscriptionRepository.existsByCustomerIdAndProductIdAndStatus(customerId, 3L, "ACTIVE")).thenReturn(false);
 
         PaymentSucceededEvent event = new PaymentSucceededEvent(
                 2L, "LMTORD101", PaymentTargetType.ORDER, orderId, customerId,
@@ -320,7 +329,10 @@ class OrderPaymentEventListenerTest {
 
         when(characterLookupService.findVersionIdByProductId(2L)).thenReturn(Optional.of(301L));
         when(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(customerId, 301L)).thenReturn(true);
-        when(customerSubscriptionRepository.existsByCustomerIdAndStatus(customerId, "ACTIVE")).thenReturn(true);
+        when(subscriptionLookupService.findByProductIds(Set.of(3L))).thenReturn(Map.of(
+                3L, new SubscriptionDetailSnapshot(3L, "VIP_LIFETIME", "Lumintra Pro", true, null, true, 0, 10)
+        ));
+        when(customerSubscriptionRepository.existsByCustomerIdAndProductIdAndStatus(customerId, 3L, "ACTIVE")).thenReturn(true);
 
         PaymentSucceededEvent event = new PaymentSucceededEvent(
                 6L, "LMTORD104", PaymentTargetType.ORDER, orderId, customerId,
@@ -332,5 +344,41 @@ class OrderPaymentEventListenerTest {
         verify(orderRepository).updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PENDING_PAYMENT), eq(OrderStatus.COMPLETED), any(Instant.class));
         verify(ownedCharacterRepository, never()).save(any());
         verify(customerSubscriptionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("OPL-07 [N]: Repeatable commission revision credit pack grants remainingCommissionRevisions per orderItem")
+    void onPaymentSucceeded_revisionCreditPack_provisionsSharedCredits() {
+        Long orderId = 105L;
+        Long customerId = 42L;
+        OrderEntity order = OrderEntity.of(
+                orderId, customerId, null,
+                new BigDecimal("169000.00"), BigDecimal.ZERO, new BigDecimal("169000.00"),
+                OrderType.DIGITAL, OrderStatus.PENDING_PAYMENT, Instant.now().plusSeconds(900)
+        );
+        OrderItemEntity creditPackItem = OrderItemEntity.create(order, 18L, 1, new BigDecimal("169000.00"));
+        creditPackItem.setOrderItemId(218L);
+
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderRepository.updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PENDING_PAYMENT), eq(OrderStatus.COMPLETED), any(Instant.class)))
+                .thenReturn(1);
+        when(orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(orderId)).thenReturn(List.of(creditPackItem));
+        when(productLookupService.findSnapshotsByIds(Set.of(18L))).thenReturn(Map.of(
+                18L, new ProductSnapshot(18L, "Commission +10", ProductType.SUBSCRIPTION, null, new BigDecimal("169000.00"), ProductStatus.PUBLISHED)
+        ));
+        when(subscriptionLookupService.findByProductIds(Set.of(18L))).thenReturn(Map.of(
+                18L, new SubscriptionDetailSnapshot(18L, "COMMISSION_REV_10", "Commission +10", true, null, false, 10, 5)
+        ));
+        when(customerSubscriptionRepository.existsByOrderItemId(218L)).thenReturn(false);
+
+        listener.onPaymentSucceeded(new PaymentSucceededEvent(
+                7L, "LMTORD105", PaymentTargetType.ORDER, orderId, customerId,
+                new BigDecimal("169000.00"), 9999L, "REF123", Instant.now()
+        ));
+
+        ArgumentCaptor<CustomerSubscriptionEntity> subCaptor = ArgumentCaptor.forClass(CustomerSubscriptionEntity.class);
+        verify(customerSubscriptionRepository).save(subCaptor.capture());
+        assertThat(subCaptor.getValue().getRemainingCommissionRevisions()).isEqualTo(10);
+        assertThat(subCaptor.getValue().getOrderItemId()).isEqualTo(218L);
     }
 }
