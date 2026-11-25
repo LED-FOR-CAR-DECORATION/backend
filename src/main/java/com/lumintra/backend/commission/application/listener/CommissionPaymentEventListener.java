@@ -37,7 +37,8 @@ public class CommissionPaymentEventListener {
         }
 
         if (event.targetType() != PaymentTargetType.COMMISSION_INITIAL) {
-            log.debug("PaymentSucceededEvent ignored by CommissionPaymentEventListener: targetType is {} [paymentId={}] [targetId={}]",
+            log.debug(
+                    "PaymentSucceededEvent ignored by CommissionPaymentEventListener: targetType is {} [paymentId={}] [targetId={}]",
                     event.targetType(), event.paymentId(), event.targetId());
             return;
         }
@@ -57,9 +58,11 @@ public class CommissionPaymentEventListener {
 
         CommissionRequestEntity commission = commissionOpt.get();
 
-        // Idempotency check: if commission is already at PAID or subsequent active stage, skip duplicate processing
+        // Idempotency check: if commission is already at PAID or subsequent active
+        // stage, skip duplicate processing
         if (commission.getStatus() != CommissionStatus.PENDING_PAYMENT) {
-            log.info("Commission payment transition skipped: commission is in non-pending status {} [commissionId={}] [paymentId={}]",
+            log.info(
+                    "Commission payment transition skipped: commission is in non-pending status {} [commissionId={}] [paymentId={}]",
                     commission.getStatus(), commissionId, event.paymentId());
             return;
         }
@@ -71,16 +74,19 @@ public class CommissionPaymentEventListener {
         commission.setStatus(CommissionStatus.PAID);
         commissionRequestRepository.save(commission);
 
-        log.info("Commission initial payment processed: status transitioned to PAID and activePaymentCode cleared [commissionId={}] [paymentId={}]",
+        log.info(
+                "Commission initial payment processed: status transitioned to PAID and activePaymentCode cleared [commissionId={}] [paymentId={}]",
                 commissionId, event.paymentId());
 
         // AC03: Insert a SYSTEM message into COMMISSION_MESSAGE
         String amountDisplay = event.amount() != null
                 ? event.amount().stripTrailingZeros().toPlainString() + " VND"
                 : "the required deposit";
-        String messageContent = "Payment confirmed. Initial deposit of " + amountDisplay + " received. Commission workflow and chat room are now unlocked.";
+        String messageContent = "Thanh toán thành công. Đã nhận" + amountDisplay
+                + " đầu. Quá trình trao đổi yêu cầu thiết kế, sử dụng chatbox đã được mở.";
 
-        CommissionMessageEntity systemMessage = CommissionMessageEntity.createSystemMessage(commissionId, messageContent);
+        CommissionMessageEntity systemMessage = CommissionMessageEntity.createSystemMessage(commissionId,
+                messageContent);
         commissionMessageRepository.save(systemMessage);
 
         log.info("Commission system message created for initial payment [commissionId={}] [messageId={}]",
