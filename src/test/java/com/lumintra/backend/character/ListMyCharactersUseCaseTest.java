@@ -60,7 +60,7 @@ class ListMyCharactersUseCaseTest {
     void execute_validDesigner_returnsPaginatedCharactersWithVersions() {
         String subject = "5";
         Long designerEmployeeId = 42L;
-        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, 0, 10);
+        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, null, null, 0, 10);
 
         when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
                 .thenReturn(designerEmployeeId);
@@ -119,7 +119,7 @@ class ListMyCharactersUseCaseTest {
     void execute_withSearchQuery_appliesFilter() {
         String subject = "5";
         Long designerEmployeeId = 42L;
-        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest("fox", 0, 10);
+        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest("fox", null, null, 0, 10);
 
         when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
                 .thenReturn(designerEmployeeId);
@@ -140,7 +140,7 @@ class ListMyCharactersUseCaseTest {
     void execute_emptyPage_returnsEmptyListWithoutFetchingVersions() {
         String subject = "5";
         Long designerEmployeeId = 42L;
-        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, 1, 10);
+        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, null, null, 1, 10);
 
         when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
                 .thenReturn(designerEmployeeId);
@@ -160,7 +160,7 @@ class ListMyCharactersUseCaseTest {
     void execute_characterWithoutVersions_returnsZeroVersionsAndNullCurrentVersion() {
         String subject = "5";
         Long designerEmployeeId = 42L;
-        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, 0, 10);
+        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, null, null, 0, 10);
 
         when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
                 .thenReturn(designerEmployeeId);
@@ -189,7 +189,7 @@ class ListMyCharactersUseCaseTest {
     void execute_characterWithVersionsNoneCurrent_fallsBackToFirst() {
         String subject = "5";
         Long designerEmployeeId = 42L;
-        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, 0, 10);
+        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, null, null, 0, 10);
 
         when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
                 .thenReturn(designerEmployeeId);
@@ -220,7 +220,7 @@ class ListMyCharactersUseCaseTest {
     @DisplayName("CHR-01 UseCase UTCID06 [A]: Non-designer or inactive employee throws AccessDeniedException")
     void execute_nonDesignerOrInactive_throwsAccessDeniedException() {
         String subject = "10";
-        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, 0, 10);
+        DesignerCharacterFilterRequest request = new DesignerCharacterFilterRequest(null, null, null, 0, 10);
 
         when(internalEmployeeAccessService.requireActiveEmployeeId(eq(subject), eq(Set.of("DESIGNER"))))
                 .thenThrow(new AccessDeniedException("Authorized internal role is required."));

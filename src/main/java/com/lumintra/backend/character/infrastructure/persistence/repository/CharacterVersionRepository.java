@@ -17,8 +17,11 @@ import java.util.Optional;
 public interface CharacterVersionRepository extends JpaRepository<CharacterVersionEntity, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select version from CharacterVersionEntity version where version.versionId = :id")
+    @Query("select version from CharacterVersionEntity version join fetch version.character where version.versionId = :id")
     Optional<CharacterVersionEntity> findForProductLink(@Param("id") long id);
+
+    @EntityGraph(attributePaths = "character")
+    Optional<CharacterVersionEntity> findWithCharacterByVersionId(Long versionId);
 
     Optional<CharacterVersionEntity> findFirstByProductIdAndIsCurrentTrue(Long productId);
 

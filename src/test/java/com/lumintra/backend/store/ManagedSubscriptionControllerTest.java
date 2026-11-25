@@ -53,12 +53,14 @@ class ManagedSubscriptionControllerTest {
                                         true,
                                         null,
                                         true,
+                                        5,
                                         ProductStatus.PUBLISHED,
                                         Instant.parse("2026-11-14T00:00:00Z"))));
         mvc.perform(get(PATH).with(user("1").roles("MANAGER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].subscriptionDetailId").value(7))
-                .andExpect(jsonPath("$.data[0].isLifetime").value(true));
+                .andExpect(jsonPath("$.data[0].isLifetime").value(true))
+                .andExpect(jsonPath("$.data[0].maxCommissionRevisions").value(5));
     }
 
     @Test

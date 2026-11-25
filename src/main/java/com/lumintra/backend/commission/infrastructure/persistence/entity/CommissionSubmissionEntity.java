@@ -59,6 +59,10 @@ public class CommissionSubmissionEntity {
     @Column(name = "revision_request_id")
     private Long revisionRequestId;
 
+    /** Optional character version backing this submission (must belong to a COMMISSION character). */
+    @Column(name = "character_version_id")
+    private Long characterVersionId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 40)
     @Builder.Default
@@ -86,12 +90,23 @@ public class CommissionSubmissionEntity {
             int versionNumber,
             String imageUrl,
             String designerNote) {
+        return createDraft(commissionId, designerId, versionNumber, imageUrl, designerNote, null);
+    }
+
+    public static CommissionSubmissionEntity createDraft(
+            Long commissionId,
+            Long designerId,
+            int versionNumber,
+            String imageUrl,
+            String designerNote,
+            Long characterVersionId) {
         return CommissionSubmissionEntity.builder()
                 .commissionId(commissionId)
                 .designerId(designerId)
                 .versionNumber(Math.max(1, versionNumber))
                 .imageUrl(imageUrl != null ? imageUrl.trim() : "")
                 .designerNote(designerNote != null && !designerNote.isBlank() ? designerNote.trim() : null)
+                .characterVersionId(characterVersionId)
                 .status(CommissionSubmissionStatus.PENDING_STAFF_REVIEW)
                 .build();
     }

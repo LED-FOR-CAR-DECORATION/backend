@@ -1,8 +1,10 @@
 package com.lumintra.backend.character.api.request;
 
+import com.lumintra.backend.character.domain.model.CharacterType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 
 @Schema(description = "Query parameters for filtering designer's personal graphic character catalog")
 public record DesignerCharacterFilterRequest(
@@ -11,6 +13,20 @@ public record DesignerCharacterFilterRequest(
                 example = "cyber"
         )
         String query,
+
+        @Schema(
+                description = "Optional filter by character type (STORE or COMMISSION)",
+                allowableValues = {"STORE", "COMMISSION"},
+                example = "STORE"
+        )
+        CharacterType characterType,
+
+        @Schema(
+                description = "Optional filter by linked commission ID",
+                example = "105"
+        )
+        @Positive(message = "commissionId must be positive")
+        Long commissionId,
 
         @Schema(
                 description = "0-based page index",

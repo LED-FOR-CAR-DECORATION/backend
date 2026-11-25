@@ -56,6 +56,14 @@ public class CreateSubscriptionUseCase {
                                 request.galleryUrls() == null ? List.of() : request.galleryUrls(),
                                 ProductStatus.UNPUBLISHED,
                                 new HashSet<>(selectedTags)));
+        int bonusRevisions =
+                request.maxCommissionRevisions() == null ? 0 : request.maxCommissionRevisions();
+        String perksDescription =
+                buildPerksDescription(
+                        request.allAccessCharacters(),
+                        bonusRevisions,
+                        request.lifetime(),
+                        request.durationDays());
         var detail =
                 SubscriptionDetailEntity.create(
                         product.getProductId(),
@@ -64,10 +72,10 @@ public class CreateSubscriptionUseCase {
                         request.lifetime(),
                         request.durationDays(),
                         request.allAccessCharacters(),
-                        0,
+                        bonusRevisions,
                         3,
                         Map.of(),
-                        null);
+                        perksDescription);
         try {
             subscriptions.saveAndFlush(detail);
         } catch (DataIntegrityViolationException ex) {
@@ -91,8 +99,30 @@ public class CreateSubscriptionUseCase {
                 detail.isLifetime(),
                 detail.getDurationDays(),
                 detail.isAllAccessCharacters(),
+                detail.getMaxCommissionRevisions(),
                 product.getStatus(),
                 detail.getCreatedAt(),
                 ids);
+    }
+
+    private String buildPerksDescription(
+            boolean allAccessCharacters,
+            int maxCommissionRevisions,
+            boolean isLifetime,
+            Integer durationDays) {
+        if (!allAccessCharacters && maxCommissionRevisions > 0) {
+            return "+" + maxCommissionRevisions + " lượt chỉnh sửa thiết kế miễn phí";
+        }
+        if (allAccessCharacters && maxCommissionRevisions <= 0) {
+            return "Mở khóa toàn bộ thư viện nhân vật";
+        }
+        var parts = new java.util.ArrayList<String>();
+        if (allAccessCharacters) {
+            parts.add("Mở khóa toàn bộ thư viện nhân vật");
+        }
+        if (maxCommissionRevisions > 0) {
+            parts.add("+" + maxCommissionRevisions + " lượt chỉnh sửa thiết kế miễn phí");
+        }
+        return parts.isEmpty() ? null : String.join(", ", parts);
     }
 }

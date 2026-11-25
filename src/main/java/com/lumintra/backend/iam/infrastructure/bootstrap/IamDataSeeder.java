@@ -69,11 +69,11 @@ public class IamDataSeeder implements ApplicationRunner {
     }
 
     private RoleEntity seedSystemRoles() {
-        RoleEntity adminRole = seedRole("ADMIN", "Super Administrator", true);
-        seedRole("MANAGER", "System Manager", true);
-        seedRole("STAFF", "Standard Staff", true);
-        seedRole("DESIGNER", "Art Designer", true);
-        seedRole("CUSTOMER", "End User", true);
+        RoleEntity adminRole = seedRole("ADMIN", "Quản trị viên cấp cao", true);
+        seedRole("MANAGER", "Quản lý hệ thống", true);
+        seedRole("STAFF", "Nhân viên vận hành", true);
+        seedRole("DESIGNER", "Nhà thiết kế", true);
+        seedRole("CUSTOMER", "Khách hàng", true);
 
         return adminRole;
     }
@@ -112,7 +112,7 @@ public class IamDataSeeder implements ApplicationRunner {
             EmployeeEntity employee = new EmployeeEntity();
             employee.setAccount(savedAccount);
             employee.setRole(adminRole);
-            employee.setFullName("System Administrator");
+            employee.setFullName("Quản trị viên hệ thống");
             employee.setCreatedAt(Instant.now());
             employeeRepository.save(employee);
 
@@ -122,16 +122,16 @@ public class IamDataSeeder implements ApplicationRunner {
     }
 
     private void seedTestAccounts() {
-        seedCustomerAccount(customerEmail, customerPassword, "Test Customer", "0901234567");
+        seedCustomerAccount(customerEmail, customerPassword, "Khách hàng mẫu", "0901234567");
         String extraCustomerPassword = (customerPassword != null && !customerPassword.isBlank())
                 ? customerPassword
                 : DEFAULT_EXTRA_CUSTOMER_PASSWORD;
         seedCustomerAccount(SEED_CUSTOMER_2_EMAIL, extraCustomerPassword, "Nguyễn Minh Anh", "0902345678");
         seedCustomerAccount(SEED_CUSTOMER_3_EMAIL, extraCustomerPassword, "Trần Quốc Bảo", "0903456789");
         seedCustomerAccount(SEED_CUSTOMER_4_EMAIL, extraCustomerPassword, "Lê Thảo Vy", "0904567890");
-        seedEmployeeAccount(managerEmail, managerPassword, "MANAGER", "Test Manager");
-        seedEmployeeAccount(staffEmail, staffPassword, "STAFF", "Test Staff");
-        seedEmployeeAccount(designerEmail, designerPassword, "DESIGNER", "Test Designer");
+        seedEmployeeAccount(managerEmail, managerPassword, "MANAGER", "Quản lý mẫu");
+        seedEmployeeAccount(staffEmail, staffPassword, "STAFF", "Nhân viên mẫu");
+        seedEmployeeAccount(designerEmail, designerPassword, "DESIGNER", "Nhà thiết kế mẫu");
     }
 
     private void seedEmployeeAccount(String email, String password, String roleName, String fullName) {

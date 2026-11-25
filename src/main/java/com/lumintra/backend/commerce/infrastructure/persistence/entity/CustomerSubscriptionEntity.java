@@ -34,6 +34,9 @@ public class CustomerSubscriptionEntity {
     @Column(name = "is_lifetime", nullable = false)
     private boolean isLifetime = true;
 
+    @Column(name = "remaining_commission_revisions", nullable = false)
+    private int remainingCommissionRevisions = 0;
+
     @Column(name = "status", nullable = false, length = 30)
     private String status;
 
@@ -46,12 +49,26 @@ public class CustomerSubscriptionEntity {
     private Instant updatedAt;
 
     public static CustomerSubscriptionEntity createActive(Long customerId, Long productId, Long orderItemId) {
+        return createActive(customerId, productId, orderItemId, 0);
+    }
+
+    public static CustomerSubscriptionEntity createActive(
+            Long customerId, Long productId, Long orderItemId, int remainingCommissionRevisions) {
         CustomerSubscriptionEntity entity = new CustomerSubscriptionEntity();
         entity.setCustomerId(customerId);
         entity.setProductId(productId);
         entity.setOrderItemId(orderItemId);
         entity.setLifetime(true);
+        entity.setRemainingCommissionRevisions(Math.max(0, remainingCommissionRevisions));
         entity.setStatus("ACTIVE");
         return entity;
+    }
+
+    public boolean consumeOneRevisionCredit() {
+        if (remainingCommissionRevisions <= 0) {
+            return false;
+        }
+        remainingCommissionRevisions -= 1;
+        return true;
     }
 }

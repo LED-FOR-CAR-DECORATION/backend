@@ -32,6 +32,8 @@ public final class DesignerCharacterMapper {
                 character.getCharacterId(),
                 character.getCharacterName(),
                 character.getDescription(),
+                character.getCharacterType(),
+                character.getCommissionId(),
                 totalVersions,
                 currentVersionSummary,
                 character.getCreatedAt()

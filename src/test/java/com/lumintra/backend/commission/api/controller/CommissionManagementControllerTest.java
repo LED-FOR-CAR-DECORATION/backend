@@ -48,6 +48,7 @@ import com.lumintra.backend.shared.exception.commission.CommissionNotFoundExcept
 import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
 import com.lumintra.backend.shared.exception.commission.CommissionStaffLockException;
 import com.lumintra.backend.shared.exception.commission.CommissionSubmissionNotFoundException;
+import com.lumintra.backend.shared.exception.commission.InvalidCharacterTypeForCommissionException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
 import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
 import com.lumintra.backend.shared.response.PaginationMeta;
@@ -1106,6 +1107,7 @@ class CommissionManagementControllerTest {
                 .versionNumber(1)
                 .imageUrl("https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif")
                 .designerNote("First animated draft")
+                .characterVersionId(25L)
                 .submissionStatus(CommissionSubmissionStatus.PENDING_STAFF_REVIEW)
                 .commissionStatus(CommissionStatus.INTERNAL_REVIEW)
                 .createdAt(Instant.parse("2026-11-17T10:50:00Z"))
@@ -1117,7 +1119,8 @@ class CommissionManagementControllerTest {
         String requestBody = """
                 {
                     "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif",
-                    "designerNote": "First animated draft"
+                    "designerNote": "First animated draft",
+                    "characterVersionId": 25
                 }
                 """;
 
@@ -1133,6 +1136,7 @@ class CommissionManagementControllerTest {
                 .andExpect(jsonPath("$.data.versionNumber").value(1))
                 .andExpect(jsonPath("$.data.imageUrl").value("https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"))
                 .andExpect(jsonPath("$.data.designerNote").value("First animated draft"))
+                .andExpect(jsonPath("$.data.characterVersionId").value(25))
                 .andExpect(jsonPath("$.data.submissionStatus").value("PENDING_STAFF_REVIEW"))
                 .andExpect(jsonPath("$.data.commissionStatus").value("INTERNAL_REVIEW"));
 
@@ -1140,6 +1144,7 @@ class CommissionManagementControllerTest {
         verify(uploadCommissionDraftUseCase).execute(eq(105L), captor.capture(), eq(5L));
         assertThat(captor.getValue().imageUrl()).isEqualTo("https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif");
         assertThat(captor.getValue().designerNote()).isEqualTo("First animated draft");
+        assertThat(captor.getValue().characterVersionId()).isEqualTo(25L);
     }
 
     @Test
@@ -1148,7 +1153,29 @@ class CommissionManagementControllerTest {
         String invalidBody = """
                 {
                     "imageUrl": "   ",
-                    "designerNote": "Some note"
+                    "designerNote": "Some note",
+                    "characterVersionId": 25
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(uploadCommissionDraftUseCase);
+    }
+
+    @Test
+    @DisplayName("CHR-09 Controller Option A: Missing characterVersionId returns 400 BAD_REQUEST (VALIDATION_FAILED)")
+    void uploadCommissionDraft_missingCharacterVersionId_returns400BadRequest() throws Exception {
+        String invalidBody = """
+                {
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif",
+                    "designerNote": "Direct upload without character version"
                 }
                 """;
 
@@ -1168,7 +1195,8 @@ class CommissionManagementControllerTest {
     void uploadCommissionDraft_nonPositiveId_returns400BadRequest() throws Exception {
         String requestBody = """
                 {
-                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif",
+                    "characterVersionId": 25
                 }
                 """;
 
@@ -1188,7 +1216,8 @@ class CommissionManagementControllerTest {
     void uploadCommissionDraft_unauthenticated_returns401Unauthorized() throws Exception {
         String requestBody = """
                 {
-                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif",
+                    "characterVersionId": 25
                 }
                 """;
 
@@ -1207,7 +1236,8 @@ class CommissionManagementControllerTest {
     void uploadCommissionDraft_nonDesignerRole_returns403Forbidden() throws Exception {
         String requestBody = """
                 {
-                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif",
+                    "characterVersionId": 25
                 }
                 """;
 
@@ -1230,7 +1260,8 @@ class CommissionManagementControllerTest {
 
         String requestBody = """
                 {
-                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif",
+                    "characterVersionId": 25
                 }
                 """;
 
@@ -1251,7 +1282,8 @@ class CommissionManagementControllerTest {
 
         String requestBody = """
                 {
-                    "imageUrl": "https://cdn.lumintra.shop/commissions/999/drafts/v1-neon-cat.gif"
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/999/drafts/v1-neon-cat.gif",
+                    "characterVersionId": 25
                 }
                 """;
 
@@ -1272,7 +1304,8 @@ class CommissionManagementControllerTest {
 
         String requestBody = """
                 {
-                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif"
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif",
+                    "characterVersionId": 25
                 }
                 """;
 
@@ -1293,7 +1326,8 @@ class CommissionManagementControllerTest {
 
         String requestBody = """
                 {
-                    "imageUrl": "https://evil.example.com/malicious.gif"
+                    "imageUrl": "https://evil.example.com/malicious.gif",
+                    "characterVersionId": 25
                 }
                 """;
 
@@ -1304,6 +1338,29 @@ class CommissionManagementControllerTest {
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    @DisplayName("CHR-09 Controller Option A: InvalidCharacterTypeForCommissionException returns 400 BAD_REQUEST (CHARACTER_TYPE_NOT_ALLOWED_FOR_COMMISSION)")
+    void uploadCommissionDraft_invalidCharacterType_returns400BadRequest() throws Exception {
+        when(uploadCommissionDraftUseCase.execute(eq(105L), any(UploadCommissionDraftRequest.class), eq(5L)))
+                .thenThrow(new InvalidCharacterTypeForCommissionException(
+                        "Only characters with type COMMISSION can be submitted to a commission."));
+
+        String requestBody = """
+                {
+                    "imageUrl": "https://cdn.lumintra.shop/commissions/105/drafts/v1-neon-cat.gif",
+                    "characterVersionId": 25
+                }
+                """;
+
+        mockMvc.perform(post(DRAFTS_PATH, 105L)
+                        .with(SecurityMockMvcRequestPostProcessors.user("5").roles("DESIGNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CHARACTER_TYPE_NOT_ALLOWED_FOR_COMMISSION"));
     }
 
     @Test

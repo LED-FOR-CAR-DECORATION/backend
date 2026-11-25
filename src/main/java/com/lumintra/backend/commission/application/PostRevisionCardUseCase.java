@@ -2,6 +2,7 @@ package com.lumintra.backend.commission.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lumintra.backend.commerce.domain.service.CustomerSubscriptionBonusLookupService;
 import com.lumintra.backend.commission.api.request.PostRevisionCardRequest;
 import com.lumintra.backend.commission.api.response.CommissionMessageResponse;
 import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
@@ -40,6 +41,7 @@ public class PostRevisionCardUseCase {
     private final CommissionChatBroadcastPort broadcast;
     private final ObjectMapper json;
     private final CommissionRevisionRequestRecorder revisionRequests;
+    private final CustomerSubscriptionBonusLookupService subscriptionBonusLookupService;
 
     @Transactional
     public CommissionMessageResponse execute(
@@ -60,7 +62,16 @@ public class PostRevisionCardUseCase {
                     "Revision cards require PREVIEW_DELIVERED status.");
         }
 
-        boolean usesFreeQuota = commission.getRevisionsUsed() < commission.getMaxRevisions();
+        boolean usesCommissionQuota = commission.getRevisionsUsed() < commission.getMaxRevisions();
+        int sharedWalletCredits =
+                usesCommissionQuota
+                        ? 0
+                        : Math.max(
+                                0,
+                                subscriptionBonusLookupService.findExtraCommissionRevisions(
+                                        commission.getCustomerId()));
+        boolean usesSubscriptionCredit = !usesCommissionQuota && sharedWalletCredits > 0;
+        boolean usesFreeQuota = usesCommissionQuota || usesSubscriptionCredit;
         var fee =
                 usesFreeQuota
                         ? BigDecimal.ZERO.setScale(2)
@@ -71,6 +82,7 @@ public class PostRevisionCardUseCase {
         var metadata = new LinkedHashMap<String, Object>();
         metadata.put("brief", request.brief());
         metadata.put("usesFreeQuota", usesFreeQuota);
+        metadata.put("usesSubscriptionCredit", usesSubscriptionCredit);
         metadata.put("revisionFee", fee);
         metadata.put("feePercentage", usesFreeQuota ? 0 : 10);
         metadata.put("revisionsUsed", commission.getRevisionsUsed());

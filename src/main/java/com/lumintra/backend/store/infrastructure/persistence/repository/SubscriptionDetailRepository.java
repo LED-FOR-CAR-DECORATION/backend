@@ -22,7 +22,7 @@ public interface SubscriptionDetailRepository extends JpaRepository<Subscription
             select new com.lumintra.backend.store.api.response.ManagedSubscriptionResponse(
                 detail.subscriptionDetailId, product.productId, detail.planCode, detail.planName,
                 product.basePrice, detail.isLifetime, detail.durationDays, detail.allAccessCharacters,
-                product.status, detail.createdAt)
+                detail.maxCommissionRevisions, product.status, detail.createdAt)
             from SubscriptionDetailEntity detail
             join ProductEntity product on product.productId = detail.productId
             where product.productType = com.lumintra.backend.store.domain.model.ProductType.SUBSCRIPTION

@@ -202,6 +202,9 @@ public record ManagementCommissionDetailResponse(
             @Schema(description = "Notes attached by designer", example = "Initial neon purple background", nullable = true)
             String designerNote,
 
+            @Schema(description = "Optional linked COMMISSION character version ID", example = "25", nullable = true)
+            Long characterVersionId,
+
             @Schema(description = "Revision request this draft answers; null for drafts of the original request", example = "31", nullable = true)
             Long revisionRequestId,
 

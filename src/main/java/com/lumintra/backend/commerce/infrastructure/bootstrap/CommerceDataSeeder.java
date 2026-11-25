@@ -213,7 +213,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
 
         Instant now = Instant.now();
         String recipientName = customer.fullName() != null && !customer.fullName().isBlank()
-                ? customer.fullName() : "Test Customer";
+                ? customer.fullName() : "Khách hàng mẫu";
         String recipientPhone = customer.phone() != null && !customer.phone().isBlank()
                 ? customer.phone() : "0901234567";
 
@@ -230,7 +230,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 new ShippingSeed(
                         recipientName,
                         recipientPhone,
-                        "123 Le Loi, Ben Nghe, District 1, Ho Chi Minh City",
+                        "123 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
                         new BigDecimal("10.7768890"),
                         new BigDecimal("106.7008060"),
                         DeliveryStatus.PENDING,
@@ -255,9 +255,9 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 2,
                 products.physicalPrice(),
                 new ShippingSeed(
-                        "Tran Thi B",
+                        "Trần Thị B",
                         "0912345678",
-                        "456 Nguyen Thi Minh Khai, Ward 5, District 3, Ho Chi Minh City",
+                        "456 Nguyễn Thị Minh Khai, Phường 5, Quận 3, TP. Hồ Chí Minh",
                         new BigDecimal("10.7681230"),
                         new BigDecimal("106.6894560"),
                         DeliveryStatus.PENDING,
@@ -284,9 +284,9 @@ public class CommerceDataSeeder implements ApplicationRunner {
                         new ItemSeed(order3Char.productId(), 1, order3Char.basePrice(), true)
                 ),
                 new ShippingSeed(
-                        "Le Van C",
+                        "Lê Văn C",
                         "0987654321",
-                        "Lot E2a-7, D1 Street, Saigon Hi-Tech Park, Thu Duc City, Ho Chi Minh City",
+                        "Lô E2a-7, Đường D1, Khu Công Nghệ Cao, TP. Thủ Đức, TP. Hồ Chí Minh",
                         new BigDecimal("10.8411000"),
                         new BigDecimal("106.8099000"),
                         DeliveryStatus.PENDING,
@@ -310,9 +310,9 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 1,
                 products.physicalPrice(),
                 new ShippingSeed(
-                        "Pham Van D",
+                        "Phạm Văn D",
                         "0933333333",
-                        "789 Vo Van Kiet, Ward 1, District 5, Ho Chi Minh City",
+                        "789 Võ Văn Kiệt, Phường 1, Quận 5, TP. Hồ Chí Minh",
                         new BigDecimal("10.7512340"),
                         new BigDecimal("106.6712340"),
                         DeliveryStatus.SHIPPING,
@@ -340,9 +340,9 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 1,
                 products.physicalPrice(),
                 new ShippingSeed(
-                        "Hoang Thi E",
+                        "Hoàng Thị E",
                         "0944444444",
-                        "101 Nam Ky Khoi Nghia, Ben Nghe, District 1, Ho Chi Minh City",
+                        "101 Nam Kỳ Khởi Nghĩa, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
                         new BigDecimal("10.7745000"),
                         new BigDecimal("106.6998000"),
                         DeliveryStatus.DELIVERED,
@@ -370,9 +370,9 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 1,
                 products.physicalPrice(),
                 new ShippingSeed(
-                        "Vu Van F",
+                        "Vũ Văn F",
                         "0955555555",
-                        "202 Pasteur, Ward 6, District 3, Ho Chi Minh City",
+                        "202 Pasteur, Phường 6, Quận 3, TP. Hồ Chí Minh",
                         new BigDecimal("10.7821000"),
                         new BigDecimal("106.6932000"),
                         DeliveryStatus.FAILED,
@@ -400,9 +400,9 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 1,
                 products.physicalPrice(),
                 new ShippingSeed(
-                        "Do Van G",
+                        "Đỗ Văn G",
                         "0966666666",
-                        "303 Hai Ba Trung, Ward 8, District 3, Ho Chi Minh City",
+                        "303 Hai Bà Trưng, Phường 8, Quận 3, TP. Hồ Chí Minh",
                         new BigDecimal("10.7891000"),
                         new BigDecimal("106.6882000"),
                         DeliveryStatus.DELIVERED,
@@ -430,9 +430,9 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 1,
                 products.physicalPrice(),
                 new ShippingSeed(
-                        "Ngo Thi H",
+                        "Ngô Thị H",
                         "0977777777",
-                        "404 Tran Hung Dao, District 5, Ho Chi Minh City",
+                        "404 Trần Hưng Đạo, Quận 5, TP. Hồ Chí Minh",
                         new BigDecimal("10.7533000"),
                         new BigDecimal("106.6744000"),
                         DeliveryStatus.PENDING,
@@ -473,9 +473,9 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 1,
                 products.physicalPrice(),
                 new ShippingSeed(
-                        "Tran Thi Mai",
+                        "Trần Thị Mai",
                         "0909999888",
-                        "555 Cach Mang Thang 8, Ward 11, District 3, Ho Chi Minh City",
+                        "555 Cách Mạng Tháng 8, Phường 11, Quận 3, TP. Hồ Chí Minh",
                         new BigDecimal("10.7834500"),
                         new BigDecimal("106.6712300"),
                         DeliveryStatus.PENDING,
@@ -499,7 +499,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
 
         Instant now = Instant.now();
         String recipientName = customer.fullName() != null && !customer.fullName().isBlank()
-                ? customer.fullName() : "Test Customer";
+                ? customer.fullName() : "Khách hàng mẫu";
         String recipientPhone = customer.phone() != null && !customer.phone().isBlank()
                 ? customer.phone() : "0901234567";
 
@@ -516,7 +516,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 new ShippingSeed(
                         recipientName,
                         recipientPhone,
-                        "123 Le Loi, Ben Nghe, District 1, Ho Chi Minh City",
+                        "123 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
                         new BigDecimal("10.7768890"),
                         new BigDecimal("106.7008060"),
                         DeliveryStatus.PENDING,
@@ -546,7 +546,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
 
         Instant now = Instant.now();
         String primaryName = primaryCustomer.fullName() != null && !primaryCustomer.fullName().isBlank()
-                ? primaryCustomer.fullName() : "Test Customer";
+                ? primaryCustomer.fullName() : "Khách hàng mẫu";
         String primaryPhone = primaryCustomer.phone() != null && !primaryCustomer.phone().isBlank()
                 ? primaryCustomer.phone() : "0901234567";
 
@@ -771,7 +771,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
         }
         return chars != null && !chars.isEmpty()
                 ? chars.get(0)
-                : new ProductSnapshot(fallbackProductId, "Character", ProductType.CHARACTER, null, products.digitalPrice(), ProductStatus.PUBLISHED);
+                : new ProductSnapshot(fallbackProductId, "Nhân vật", ProductType.CHARACTER, null, products.digitalPrice(), ProductStatus.PUBLISHED);
     }
 
     private void seedDashboardSalesHistory(
@@ -1076,7 +1076,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
 
         String codeSuffix = String.format("SALES%03d", seq);
         String recipientName = customer.fullName() != null && !customer.fullName().isBlank()
-                ? customer.fullName() : "Lumintra Customer";
+                ? customer.fullName() : "Khách hàng Lumintra";
         String recipientPhone = customer.phone() != null && !customer.phone().isBlank()
                 ? customer.phone() : "0901234567";
 

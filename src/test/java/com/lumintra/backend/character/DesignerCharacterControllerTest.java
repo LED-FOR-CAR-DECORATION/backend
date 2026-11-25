@@ -3,6 +3,7 @@ package com.lumintra.backend.character;
 import com.lumintra.backend.character.api.controller.DesignerCharacterController;
 import com.lumintra.backend.character.api.response.DesignerCharacterItem;
 import com.lumintra.backend.character.application.ListMyCharactersUseCase;
+import com.lumintra.backend.character.domain.model.CharacterType;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
@@ -58,6 +59,8 @@ class DesignerCharacterControllerTest {
                 10L,
                 "Cyber Fox",
                 "Mascot pixel cyberpunk",
+                CharacterType.STORE,
+                null,
                 3,
                 new DesignerCharacterItem.CurrentVersionSummary(
                         25L,

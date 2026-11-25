@@ -31,13 +31,15 @@ public class CreateCharacterUseCase {
         CharacterEntity entity = CharacterEntity.create(
                 designerEmployeeId,
                 request.characterName(),
-                request.description()
+                request.description(),
+                request.characterType(),
+                request.commissionId()
         );
 
         CharacterEntity saved = characterRepository.save(entity);
 
-        log.info("Created new character [characterId={}] [characterName={}] [creatorEmployeeId={}]",
-                saved.getCharacterId(), saved.getCharacterName(), designerEmployeeId);
+        log.info("Created new character [characterId={}] [characterName={}] [characterType={}] [commissionId={}] [creatorEmployeeId={}]",
+                saved.getCharacterId(), saved.getCharacterName(), saved.getCharacterType(), saved.getCommissionId(), designerEmployeeId);
 
         return CharacterMapper.toCreateResponse(saved);
     }

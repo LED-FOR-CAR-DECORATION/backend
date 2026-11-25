@@ -1,5 +1,6 @@
 package com.lumintra.backend.character.infrastructure.persistence;
 
+import com.lumintra.backend.character.domain.model.CharacterType;
 import com.lumintra.backend.character.domain.service.CharacterCreationService;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterEntity;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterVersionEntity;
@@ -30,7 +31,7 @@ public class CharacterCreationServiceImpl implements CharacterCreationService {
             Integer frameDelayMs,
             Integer byteSize) {
         CharacterEntity character = characterRepository.save(
-                CharacterEntity.create(null, characterName, description));
+                CharacterEntity.create(null, characterName, description, CharacterType.STORE, null));
 
         CharacterVersionEntity version = CharacterVersionEntity.create(
                 character,
