@@ -105,21 +105,22 @@ public class CommissionRevisionPaymentEventListener {
             throw new IllegalStateException(
                     "Revision request is not awaiting payment: " + revision.getStatus());
         }
-        revision.markPaid(paidAt);
         metadata.put("status", "PAID");
         metadata.put("paymentCode", commission.getActivePaymentCode());
         metadata.put("paymentId", event.paymentId());
         metadata.put("paidAt", paidAt.toString());
+        metadata.put("revisionsUsed", revisionNumber);
         String paidMetadata;
         try {
             paidMetadata = json.writeValueAsString(metadata);
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Unable to serialize paid revision card.", ex);
         }
+        revision.markPaid(paidAt);
         commission.setActivePaymentCode(null);
         // The estimate window starts when the designer receives the revision, not at payment time.
         commission.awaitRevisionEstimate(Instant.now());
-        commission.setRevisionsUsed(commission.getRevisionsUsed() + 1);
+        commission.setRevisionsUsed(revisionNumber);
         card.setMetadataJson(paidMetadata);
         commissions.save(commission);
         revisionRequests.save(revision);
