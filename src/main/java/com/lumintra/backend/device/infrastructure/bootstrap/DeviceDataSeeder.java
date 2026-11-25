@@ -1,6 +1,7 @@
 package com.lumintra.backend.device.infrastructure.bootstrap;
 
 import com.lumintra.backend.device.domain.model.LedInstanceStatus;
+import com.lumintra.backend.device.domain.model.LedModelStatus;
 import com.lumintra.backend.device.domain.service.OrderFulfillmentLookupService;
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedInstanceEntity;
 import com.lumintra.backend.device.infrastructure.persistence.entity.LedModelEntity;
@@ -22,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -34,6 +37,8 @@ import java.util.Set;
 public class DeviceDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceDataSeeder.class);
+
+    public static final int DEFAULT_IN_STOCK_PER_MODEL = 10;
 
     public static final String SEED_SERIAL_IN_STOCK_1 = "LMT-64X64-SEED-0001";
     public static final String SEED_SERIAL_IN_STOCK_2 = "LMT-64X64-SEED-0002";
@@ -124,21 +129,18 @@ public class DeviceDataSeeder implements ApplicationRunner {
                 primaryModel.getModelId(),
                 SEED_SERIAL_IN_STOCK_1,
                 "AA:BB:CC:11:22:01",
-                "REV_1_0",
                 manufacturedAt
         ), null);
         seededCount += seedIfAbsent(LedInstanceEntity.createInStock(
                 primaryModel.getModelId(),
                 SEED_SERIAL_IN_STOCK_2,
                 "AA:BB:CC:11:22:02",
-                "REV_1_0",
                 manufacturedAt.plus(2, ChronoUnit.DAYS)
         ), null);
         seededCount += seedIfAbsent(LedInstanceEntity.createWithState(
                 secondaryModel.getModelId(),
                 SEED_SERIAL_IN_TRANSIT,
                 "24:D7:EB:18:24:0E",
-                "REV_1_0",
                 null,
                 null,
                 LedInstanceStatus.IN_TRANSIT,
@@ -154,7 +156,6 @@ public class DeviceDataSeeder implements ApplicationRunner {
                     primaryModel.getModelId(),
                     SEED_SERIAL_BOUND,
                     "AA:BB:CC:11:22:04",
-                    "REV_1_0",
                     customer.customerId(),
                     primaryModel.getModelName(),
                     LedInstanceStatus.BOUND,
@@ -168,7 +169,6 @@ public class DeviceDataSeeder implements ApplicationRunner {
                 primaryModel.getModelId(),
                 SEED_SERIAL_RETURNED,
                 "AA:BB:CC:11:22:05",
-                "REV_1_0",
                 null,
                 null,
                 LedInstanceStatus.RETURNED,
@@ -180,7 +180,6 @@ public class DeviceDataSeeder implements ApplicationRunner {
                 primaryModel.getModelId(),
                 SEED_SERIAL_DECOMMISSIONED,
                 "AA:BB:CC:11:22:06",
-                "REV_1_0",
                 null,
                 null,
                 LedInstanceStatus.DECOMMISSIONED,
@@ -190,8 +189,63 @@ public class DeviceDataSeeder implements ApplicationRunner {
         ), null);
 
         seededCount += seedWarrantyBoundDevices(primaryModel, secondaryModel, customer, now);
+        seededCount += seedModelWarehouseStockInstances(models, manufacturedAt);
+        syncModelStocksWithInStockInstances(models);
 
         log.info("LED instance seed verification complete [seededCount={}]", seededCount);
+    }
+
+    /**
+     * Ensures each seeded LED model has {@link #DEFAULT_IN_STOCK_PER_MODEL} physical IN_STOCK instances
+     * so warehouse stock quantities align 1:1 with tracked hardware serial units.
+     */
+    private int seedModelWarehouseStockInstances(List<LedModelEntity> models, Instant manufacturedAt) {
+        int seeded = 0;
+        for (int modelIdx = 0; modelIdx < models.size(); modelIdx++) {
+            LedModelEntity model = models.get(modelIdx);
+            if (model.getModelId() == null || model.getStatus() == LedModelStatus.DEPRECATED) {
+                continue;
+            }
+            String dimTag = resolveDimensionTag(model, modelIdx);
+            // Primary model already seeds SEED_SERIAL_IN_STOCK_1 and SEED_SERIAL_IN_STOCK_2 (units 1 and 2)
+            int startSeq = modelIdx == 0 ? 3 : 1;
+            int macGroup = 0x21 + modelIdx;
+            for (int seq = startSeq; seq <= DEFAULT_IN_STOCK_PER_MODEL; seq++) {
+                String serial = String.format(Locale.ROOT, "LMT-%s-M%d-%04d", dimTag, model.getModelId(), seq);
+                String mac = String.format(Locale.ROOT, "AA:BB:CC:%02X:00:%02X", macGroup, seq);
+                seeded += seedIfAbsent(LedInstanceEntity.createInStock(
+                        model.getModelId(),
+                        serial,
+                        mac,
+                        manufacturedAt.plus(seq, ChronoUnit.DAYS)
+                ), null);
+            }
+        }
+        return seeded;
+    }
+
+    private void syncModelStocksWithInStockInstances(List<LedModelEntity> models) {
+        for (LedModelEntity model : models) {
+            if (model.getModelId() == null || model.getStatus() == LedModelStatus.DEPRECATED) {
+                continue;
+            }
+            long inStockCount = ledInstanceRepository.countByModelIdAndStatus(
+                    model.getModelId(), LedInstanceStatus.IN_STOCK);
+            if (!Objects.equals(model.getStockQuantity(), inStockCount)) {
+                model.setStockQuantity(inStockCount);
+                model.setStatus(inStockCount > 0L ? LedModelStatus.ACTIVE : LedModelStatus.OUT_OF_STOCK);
+                ledModelRepository.save(model);
+                log.info("Synced LED model stockQuantity with IN_STOCK instances [modelId={}] [stockQuantity={}]",
+                        model.getModelId(), inStockCount);
+            }
+        }
+    }
+
+    private String resolveDimensionTag(LedModelEntity model, int modelIdx) {
+        if (model.getWidthPx() != null && model.getHeightPx() != null) {
+            return model.getWidthPx() + "X" + model.getHeightPx();
+        }
+        return "M" + (modelIdx + 1);
     }
 
     private int seedWarrantyBoundDevices(
@@ -302,7 +356,6 @@ public class DeviceDataSeeder implements ApplicationRunner {
                 modelId,
                 serialNumber,
                 macAddress,
-                "REV_1_0",
                 customerId,
                 deviceName,
                 LedInstanceStatus.BOUND,

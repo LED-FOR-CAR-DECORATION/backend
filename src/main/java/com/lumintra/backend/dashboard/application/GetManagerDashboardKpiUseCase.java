@@ -5,29 +5,35 @@ import com.lumintra.backend.dashboard.api.response.ManagerKpiOverviewResponse;
 import com.lumintra.backend.dashboard.infrastructure.caching.DashboardCacheNames;
 import com.lumintra.backend.dashboard.infrastructure.persistence.mapper.ManagerDashboardMapper;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.CategoryRevenueRow;
+import com.lumintra.backend.dashboard.infrastructure.persistence.repository.DailyRevenueRow;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.LowStockLedRow;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.ManagerDashboardAnalyticsRepository;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.TopProductRow;
 import com.lumintra.backend.dashboard.infrastructure.persistence.repository.WarrantyAlertRow;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.*;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
-@RequiredArgsConstructor
 public class GetManagerDashboardKpiUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(GetManagerDashboardKpiUseCase.class);
     private static final Set<String> ALLOWED_ROLES = Set.of("MANAGER", "ADMIN");
+    private static final ZoneId REPORTING_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final long LOW_STOCK_THRESHOLD = 10L;
     private static final int TOP_PRODUCTS_LIMIT = 5;
     private static final int WARRANTY_ALERTS_LIMIT = 5;
@@ -35,18 +41,51 @@ public class GetManagerDashboardKpiUseCase {
     private final InternalEmployeeAccessService internalEmployeeAccessService;
     private final ManagerDashboardAnalyticsRepository analyticsRepository;
     private final ManagerDashboardMapper mapper;
+    @Nullable
+    private final CacheManager cacheManager;
+
+    public GetManagerDashboardKpiUseCase(
+            InternalEmployeeAccessService internalEmployeeAccessService,
+            ManagerDashboardAnalyticsRepository analyticsRepository,
+            ManagerDashboardMapper mapper) {
+        this(internalEmployeeAccessService, analyticsRepository, mapper, null);
+    }
+
+    @Autowired
+    public GetManagerDashboardKpiUseCase(
+            InternalEmployeeAccessService internalEmployeeAccessService,
+            ManagerDashboardAnalyticsRepository analyticsRepository,
+            ManagerDashboardMapper mapper,
+            @Nullable CacheManager cacheManager) {
+        this.internalEmployeeAccessService = internalEmployeeAccessService;
+        this.analyticsRepository = analyticsRepository;
+        this.mapper = mapper;
+        this.cacheManager = cacheManager;
+    }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = DashboardCacheNames.MANAGER_KPI, key = "#request.month() + ':' + #request.compareWith()", unless = "#result == null")
     public ManagerKpiOverviewResponse execute(String subject, ManagerDashboardFilterRequest request) {
-        // 1. Anti-stale-JWT verification: Verify in DB that caller is an ACTIVE employee with MANAGER or ADMIN role
+        return execute(subject, request, false);
+    }
+
+    @Transactional(readOnly = true)
+    public ManagerKpiOverviewResponse execute(String subject, ManagerDashboardFilterRequest request, boolean refresh) {
+        // 1. Anti-stale-JWT verification: ALWAYS verify in DB before any cache lookup so suspended employees cannot hit cache
         internalEmployeeAccessService.requireActiveEmployeeAccountId(subject, ALLOWED_ROLES);
 
-        // 2. Parse reporting periods with Month-To-Date (MTD) like-for-like logic
+        String cacheKey = request.month() + ":" + request.compareWith();
+        if (!refresh) {
+            ManagerKpiOverviewResponse cached = readFromCache(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
+        // 2. Parse reporting periods with Month-To-Date (MTD) like-for-like logic in Asia/Ho_Chi_Minh timezone
         YearMonth currentYm = YearMonth.parse(request.month());
         YearMonth compareYm = YearMonth.parse(request.compareWith());
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(REPORTING_ZONE);
         YearMonth thisYm = YearMonth.from(today);
 
         Instant startCurrent;
@@ -57,20 +96,20 @@ public class GetManagerDashboardKpiUseCase {
 
         if (currentYm.equals(thisYm)) {
             int currentDay = today.getDayOfMonth();
-            startCurrent = currentYm.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            endCurrent = today.atTime(LocalTime.MAX).atZone(ZoneOffset.UTC).toInstant();
+            startCurrent = currentYm.atDay(1).atStartOfDay(REPORTING_ZONE).toInstant();
+            endCurrent = today.atTime(LocalTime.MAX).atZone(REPORTING_ZONE).toInstant();
 
             int compareMaxDay = Math.min(currentDay, compareYm.lengthOfMonth());
-            startCompare = compareYm.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            endCompare = compareYm.atDay(compareMaxDay).atTime(LocalTime.MAX).atZone(ZoneOffset.UTC).toInstant();
+            startCompare = compareYm.atDay(1).atStartOfDay(REPORTING_ZONE).toInstant();
+            endCompare = compareYm.atDay(compareMaxDay).atTime(LocalTime.MAX).atZone(REPORTING_ZONE).toInstant();
 
             revenuePeriod = "vs. cùng kỳ tháng trước (" + currentDay + " ngày)";
         } else {
-            startCurrent = currentYm.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            endCurrent = currentYm.atEndOfMonth().atTime(LocalTime.MAX).atZone(ZoneOffset.UTC).toInstant();
+            startCurrent = currentYm.atDay(1).atStartOfDay(REPORTING_ZONE).toInstant();
+            endCurrent = currentYm.atEndOfMonth().atTime(LocalTime.MAX).atZone(REPORTING_ZONE).toInstant();
 
-            startCompare = compareYm.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            endCompare = compareYm.atEndOfMonth().atTime(LocalTime.MAX).atZone(ZoneOffset.UTC).toInstant();
+            startCompare = compareYm.atDay(1).atStartOfDay(REPORTING_ZONE).toInstant();
+            endCompare = compareYm.atEndOfMonth().atTime(LocalTime.MAX).atZone(REPORTING_ZONE).toInstant();
 
             revenuePeriod = "vs. tháng " + request.compareWith();
         }
@@ -103,14 +142,23 @@ public class GetManagerDashboardKpiUseCase {
         List<CategoryRevenueRow> orderCategoryRows = analyticsRepository.calculateOrderItemCategoryRevenues(startCurrent, endCurrent);
         CategoryRevenueRow commissionRow = analyticsRepository.calculateCommissionCategoryRevenue(startCurrent, endCurrent);
 
-        // 7. Query top 5 selling products
+        // 7. Query top 5 selling products and their comparison-period units for trend calculation
         List<TopProductRow> topProductRows = analyticsRepository.findTopSellingProducts(startCurrent, endCurrent, TOP_PRODUCTS_LIMIT);
+        List<Long> topProductIds = topProductRows.stream()
+                .map(TopProductRow::productId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<Long, Long> previousProductUnits = topProductIds.isEmpty()
+                ? Collections.emptyMap()
+                : analyticsRepository.findProductUnitsSoldMap(startCompare, endCompare, topProductIds);
 
-        log.info("Manager KPI overview retrieved [month={}] [compareWith={}] [totalRevenue={}] [growth={}%]",
-                request.month(), request.compareWith(), totalCurrentRev, growthPercent);
+        List<DailyRevenueRow> dailyRevenueRows = analyticsRepository.findDailyRevenue(startCurrent, endCurrent);
 
-        // 8. Map to response
-        return mapper.toResponse(
+        log.info("Manager KPI overview retrieved [month={}] [compareWith={}] [refresh={}] [totalRevenue={}] [growth={}%]",
+                request.month(), request.compareWith(), refresh, totalCurrentRev, growthPercent);
+
+        // 8. Map to response and update cache
+        ManagerKpiOverviewResponse response = mapper.toResponse(
                 totalCurrentRev,
                 growthPercent,
                 revenuePeriod,
@@ -125,8 +173,49 @@ public class GetManagerDashboardKpiUseCase {
                 commissionRow,
                 topProductRows,
                 lowStockModels,
-                warrantyAlerts
+                warrantyAlerts,
+                LOW_STOCK_THRESHOLD,
+                previousProductUnits,
+                currentYm,
+                dailyRevenueRows
         );
+        writeToCache(cacheKey, response);
+        return response;
+    }
+
+    @Nullable
+    private ManagerKpiOverviewResponse readFromCache(String key) {
+        if (cacheManager == null) {
+            return null;
+        }
+        try {
+            Cache cache = cacheManager.getCache(DashboardCacheNames.MANAGER_KPI);
+            if (cache == null) {
+                return null;
+            }
+            ManagerKpiOverviewResponse cached = cache.get(key, ManagerKpiOverviewResponse.class);
+            if (cached != null && cached.dailyRevenue() == null) {
+                return null;
+            }
+            return cached;
+        } catch (RuntimeException ex) {
+            log.warn("Dashboard KPI cache GET degraded to database [key={}] [error={}]", key, ex.getMessage());
+            return null;
+        }
+    }
+
+    private void writeToCache(String key, ManagerKpiOverviewResponse response) {
+        if (cacheManager == null || response == null) {
+            return;
+        }
+        try {
+            Cache cache = cacheManager.getCache(DashboardCacheNames.MANAGER_KPI);
+            if (cache != null) {
+                cache.put(key, response);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("Dashboard KPI cache PUT skipped [key={}] [error={}]", key, ex.getMessage());
+        }
     }
 
     private double calculateGrowthPercent(BigDecimal current, BigDecimal compare) {

@@ -41,9 +41,6 @@ public class LedInstanceEntity {
     @Column(name = "mac_address", nullable = false, unique = true, length = 17)
     private String macAddress;
 
-    @Column(name = "hardware_revision", length = 50)
-    private String hardwareRevision;
-
     @Column(name = "current_firmware_id")
     private Long currentFirmwareId;
 
@@ -78,13 +75,11 @@ public class LedInstanceEntity {
             Long modelId,
             String serialNumber,
             String macAddress,
-            String hardwareRevision,
             Instant manufacturedAt) {
         return createWithState(
                 modelId,
                 serialNumber,
                 macAddress,
-                hardwareRevision,
                 null,
                 null,
                 LedInstanceStatus.IN_STOCK,
@@ -98,7 +93,6 @@ public class LedInstanceEntity {
             Long modelId,
             String serialNumber,
             String macAddress,
-            String hardwareRevision,
             Long ownerCustomerId,
             String deviceName,
             LedInstanceStatus status,
@@ -109,7 +103,6 @@ public class LedInstanceEntity {
         entity.setModelId(modelId);
         entity.setSerialNumber(serialNumber != null ? serialNumber.strip() : null);
         entity.setMacAddress(macAddress != null ? macAddress.strip().toUpperCase(Locale.ROOT) : null);
-        entity.setHardwareRevision(hardwareRevision != null && !hardwareRevision.isBlank() ? hardwareRevision.strip() : null);
         entity.setOwnerCustomerId(ownerCustomerId);
         entity.setDeviceName(deviceName != null && !deviceName.isBlank() ? deviceName.strip() : null);
         entity.setStatus(status != null ? status : LedInstanceStatus.IN_STOCK);

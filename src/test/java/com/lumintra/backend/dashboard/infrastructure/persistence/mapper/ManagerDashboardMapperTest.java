@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -95,35 +96,54 @@ class ManagerDashboardMapperTest {
     }
 
     @Test
-    @DisplayName("MGT-01 Mapper UTCID15 [N]: Correctly maps top selling products ranked 1..5 with mapped category codes")
+    @DisplayName("MGT-01 Mapper UTCID15 [N]: Correctly maps top selling products with real stockStatus, trend, and null thumbnail fallback")
     void toResponse_mapsTopSellingProductsCorrectly() {
         List<TopProductRow> topRows = List.of(
-                new TopProductRow(1L, "Màn hình LED P4", "LED", "https://cdn.com/p4.png", 50L, new BigDecimal("250000000")),
-                new TopProductRow(2L, "Gói VIP Lumintra", "SUBSCRIPTION", "https://cdn.com/vip.png", 30L, new BigDecimal("60000000"))
+                new TopProductRow(1L, "Màn hình LED P4", "LED", "https://cdn.com/p4.png", 50L, new BigDecimal("250000000"), "PUBLISHED", 25L, "ACTIVE"),
+                new TopProductRow(2L, "LED Matrix Sắp hết", "LED", null, 30L, new BigDecimal("60000000"), "PUBLISHED", 4L, "ACTIVE"),
+                new TopProductRow(3L, "LED Matrix Hết hàng", "LED", "   ", 20L, new BigDecimal("40000000"), "PUBLISHED", 0L, "OUT_OF_STOCK"),
+                new TopProductRow(4L, "Combo LED Tết", "BUNDLE", "https://cdn.com/bundle.png", 15L, new BigDecimal("30000000"), "PUBLISHED", 0L, null),
+                new TopProductRow(5L, "Gói VIP Lumintra", "SUBSCRIPTION", null, 10L, new BigDecimal("20000000"), "ARCHIVED", null, null)
         );
 
         ManagerKpiOverviewResponse response = mapper.toResponse(
                 BigDecimal.ZERO, 0.0, "period", 0L, 0L, 0L, 0L, 0L, 0L, 0L,
-                List.of(), null, topRows, List.of(), List.of()
+                List.of(), null, topRows, List.of(), List.of(),
+                10L,
+                Map.of(1L, 40L, 2L, 30L, 3L, 25L)
         );
 
         List<TopProductItem> items = response.topSellingProducts();
-        assertThat(items).hasSize(2);
+        assertThat(items).hasSize(5);
+
         assertThat(items.get(0).rank()).isEqualTo(1);
         assertThat(items.get(0).category()).isEqualTo("HARDWARE");
         assertThat(items.get(0).unitsSold()).isEqualTo(50L);
+        assertThat(items.get(0).stockStatus()).isEqualTo("In stock");
+        assertThat(items.get(0).trend()).isEqualTo("up");
+        assertThat(items.get(0).thumbnail()).isEqualTo("https://cdn.com/p4.png");
 
-        assertThat(items.get(1).rank()).isEqualTo(2);
-        assertThat(items.get(1).category()).isEqualTo("SUBSCRIPTION");
-        assertThat(items.get(1).unitsSold()).isEqualTo(30L);
+        assertThat(items.get(1).stockStatus()).isEqualTo("Low stock");
+        assertThat(items.get(1).trend()).isEqualTo("stable");
+        assertThat(items.get(1).thumbnail()).isNull();
+
+        assertThat(items.get(2).stockStatus()).isEqualTo("Out of stock");
+        assertThat(items.get(2).trend()).isEqualTo("down");
+        assertThat(items.get(2).thumbnail()).isNull();
+
+        assertThat(items.get(3).category()).isEqualTo("BUNDLE");
+        assertThat(items.get(3).stockStatus()).isEqualTo("Out of stock");
+
+        assertThat(items.get(4).category()).isEqualTo("SUBSCRIPTION");
+        assertThat(items.get(4).stockStatus()).isEqualTo("Out of stock");
     }
 
     @Test
-    @DisplayName("MGT-01 Mapper UTCID16 [A]: Correctly formats LED dimensions and urgency thresholds (0 -> CRITICAL, < 5 -> LOW, >= 5 -> NORMAL)")
+    @DisplayName("MGT-01 Mapper UTCID16 [A]: Correctly formats LED dimensions, reserved stock, and urgency thresholds (0 -> CRITICAL, < 5 -> LOW, >= 5 -> NORMAL)")
     void toResponse_mapsLowStockUrgencyCorrectly() {
         List<LowStockLedRow> lowStockRows = List.of(
-                new LowStockLedRow(10L, 100L, "LED Matrix Alpha", 64, 32, 0L, new BigDecimal("3000000")),
-                new LowStockLedRow(11L, 101L, "LED Matrix Beta", 128, 64, 4L, new BigDecimal("6000000")),
+                new LowStockLedRow(10L, 100L, "LED Matrix Alpha", 64, 32, 0L, new BigDecimal("3000000"), 3L),
+                new LowStockLedRow(11L, 101L, "LED Matrix Beta", 128, 64, 4L, new BigDecimal("6000000"), 1L),
                 new LowStockLedRow(12L, null, "LED Matrix Gamma", null, null, 9L, new BigDecimal("1000000"))
         );
 
@@ -138,13 +158,17 @@ class ManagerDashboardMapperTest {
         assertThat(leds.get(0).urgency()).isEqualTo("CRITICAL");
         assertThat(leds.get(0).dimensions()).isEqualTo("64x32");
         assertThat(leds.get(0).productId()).isEqualTo("100");
+        assertThat(leds.get(0).reserved()).isEqualTo(3L);
+        assertThat(leds.get(0).minimumStock()).isEqualTo(10L);
 
         assertThat(leds.get(1).urgency()).isEqualTo("LOW");
         assertThat(leds.get(1).dimensions()).isEqualTo("128x64");
+        assertThat(leds.get(1).reserved()).isEqualTo(1L);
 
         assertThat(leds.get(2).urgency()).isEqualTo("NORMAL");
         assertThat(leds.get(2).dimensions()).isEqualTo("—");
         assertThat(leds.get(2).productId()).isEqualTo("12");
+        assertThat(leds.get(2).reserved()).isEqualTo(0L);
     }
 
     @Test

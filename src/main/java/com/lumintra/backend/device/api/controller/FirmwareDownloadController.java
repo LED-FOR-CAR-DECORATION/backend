@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lumintra.backend.device.api.response.OtaManifestResponse;
 import com.lumintra.backend.device.application.FetchOtaManifestUseCase;
+import com.lumintra.backend.device.application.StartFirmwareDownloadUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,6 +14,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +39,7 @@ public class FirmwareDownloadController {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final FetchOtaManifestUseCase fetchOtaManifestUseCase;
+    private final StartFirmwareDownloadUseCase startFirmwareDownloadUseCase;
 
     @Operation(
             summary = "Fetch the OTA manifest (DEV-22)",
@@ -67,5 +71,34 @@ public class FirmwareDownloadController {
                 .contentLength(body.length)
                 .cacheControl(CacheControl.noStore())
                 .body(body);
+    }
+
+    @Operation(
+            summary = "Download the firmware binary (DEV-23)",
+            description = "Called by the LED device, not the app. Same token rules as the manifest. Streams the binary "
+                    + "from private storage through the backend as application/octet-stream with Content-Length equal to "
+                    + "the file size; never redirects. Up to 3 attempts per session within the 10-minute window; further "
+                    + "attempts, and any unknown, expired, revoked or unbound token, return the same 404."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Firmware binary",
+                    content = @Content(mediaType = "application/octet-stream")),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "OTA_SESSION_NOT_FOUND",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500",
+                    description = "STORAGE_SERVICE_ERROR: the stored binary is missing or does not match the release",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @GetMapping("/{token}/binary")
+    public ResponseEntity<Resource> getBinary(
+            @Parameter(description = "One-time 64-hex OTA token", required = true) @PathVariable String token) {
+        StartFirmwareDownloadUseCase.FirmwareDownload download = startFirmwareDownloadUseCase.execute(token);
+        // InputStreamResource is copied to the response in chunks; Content-Length is set from the known size so the
+        // converter never has to read the stream to measure it.
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(download.size())
+                .cacheControl(CacheControl.noStore())
+                .body(new InputStreamResource(download.content()));
     }
 }

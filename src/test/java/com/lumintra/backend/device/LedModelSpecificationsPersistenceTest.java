@@ -41,41 +41,29 @@ class LedModelSpecificationsPersistenceTest {
     @Autowired
     private LedModelRepository repository;
 
+    private Long proLinkedId;
+    private Long compactUnlinkedLowStockId;
+    private Long exactBoundaryStockFiveId;
+    private Long outOfStockLinkedId;
+    private Long deprecatedWithWildcardId;
+
     @BeforeEach
     void setUp() {
         repository.deleteAllInBatch();
 
-        LedModelEntity proLinked = LedModelEntity.createForProduct(
+        LedModelEntity proLinked = repository.save(LedModelEntity.createCatalogModel(
+                null,
                 101L,
                 "Lumintra Matrix 64x64 Pro",
-                Map.of("widthPx", 64, "heightPx", 64),
-                50L
-        );
-
-        LedModelEntity compactUnlinkedLowStock = LedModelEntity.createCatalogModel(
-                201L,
-                null,
-                "Lumintra Compact 32x64",
-                32,
-                64,
-                Map.of("widthPx", 32, "heightPx", 64),
-                4L,
-                LedModelStatus.ACTIVE
-        );
-
-        LedModelEntity exactBoundaryStockFive = LedModelEntity.createCatalogModel(
-                202L,
-                null,
-                "Lumintra Panel 64x64 Stock5",
                 64,
                 64,
                 Map.of("widthPx", 64, "heightPx", 64),
-                5L,
+                50L,
                 LedModelStatus.ACTIVE
-        );
+        ));
 
-        LedModelEntity outOfStockLinked = LedModelEntity.createCatalogModel(
-                102L,
+        LedModelEntity outOfStockLinked = repository.save(LedModelEntity.createCatalogModel(
+                null,
                 102L,
                 "Lumintra Legacy 32x32",
                 32,
@@ -83,10 +71,32 @@ class LedModelSpecificationsPersistenceTest {
                 Map.of("resolution", "32x32"),
                 0L,
                 LedModelStatus.OUT_OF_STOCK
-        );
+        ));
 
-        LedModelEntity deprecatedWithWildcard = LedModelEntity.createCatalogModel(
-                203L,
+        LedModelEntity compactUnlinkedLowStock = repository.save(LedModelEntity.createCatalogModel(
+                null,
+                null,
+                "Lumintra Compact 32x64",
+                32,
+                64,
+                Map.of("widthPx", 32, "heightPx", 64),
+                4L,
+                LedModelStatus.ACTIVE
+        ));
+
+        LedModelEntity exactBoundaryStockFive = repository.save(LedModelEntity.createCatalogModel(
+                null,
+                null,
+                "Lumintra Panel 64x64 Stock5",
+                64,
+                64,
+                Map.of("widthPx", 64, "heightPx", 64),
+                5L,
+                LedModelStatus.ACTIVE
+        ));
+
+        LedModelEntity deprecatedWithWildcard = repository.save(LedModelEntity.createCatalogModel(
+                null,
                 null,
                 "Lumintra 64%Pro_Beta",
                 64,
@@ -94,15 +104,15 @@ class LedModelSpecificationsPersistenceTest {
                 Map.of("widthPx", 64, "heightPx", 64),
                 2L,
                 LedModelStatus.DEPRECATED
-        );
-
-        repository.saveAllAndFlush(List.of(
-                proLinked,
-                compactUnlinkedLowStock,
-                exactBoundaryStockFive,
-                outOfStockLinked,
-                deprecatedWithWildcard
         ));
+
+        repository.flush();
+
+        proLinkedId = proLinked.getModelId();
+        outOfStockLinkedId = outOfStockLinked.getModelId();
+        compactUnlinkedLowStockId = compactUnlinkedLowStock.getModelId();
+        exactBoundaryStockFiveId = exactBoundaryStockFive.getModelId();
+        deprecatedWithWildcardId = deprecatedWithWildcard.getModelId();
     }
 
     @Test
@@ -116,7 +126,13 @@ class LedModelSpecificationsPersistenceTest {
         assertThat(page.getTotalElements()).isEqualTo(5);
         assertThat(page.getContent())
                 .extracting(LedModelEntity::getModelId)
-                .containsExactly(203L, 202L, 201L, 102L, 101L);
+                .containsExactly(
+                        deprecatedWithWildcardId,
+                        exactBoundaryStockFiveId,
+                        compactUnlinkedLowStockId,
+                        outOfStockLinkedId,
+                        proLinkedId
+                );
     }
 
     @Test
@@ -129,7 +145,7 @@ class LedModelSpecificationsPersistenceTest {
         );
         assertThat(active64x64)
                 .extracting(LedModelEntity::getModelId)
-                .containsExactly(202L, 101L);
+                .containsExactly(exactBoundaryStockFiveId, proLinkedId);
 
         List<LedModelEntity> width32 = repository.findAll(
                 LedModelSpecifications.withFilter(
@@ -138,7 +154,7 @@ class LedModelSpecificationsPersistenceTest {
         );
         assertThat(width32)
                 .extracting(LedModelEntity::getModelId)
-                .containsExactly(201L, 102L);
+                .containsExactly(compactUnlinkedLowStockId, outOfStockLinkedId);
 
         List<LedModelEntity> outOfStock = repository.findAll(
                 LedModelSpecifications.withFilter(
@@ -146,7 +162,7 @@ class LedModelSpecificationsPersistenceTest {
         );
         assertThat(outOfStock)
                 .extracting(LedModelEntity::getModelId)
-                .containsExactly(102L);
+                .containsExactly(outOfStockLinkedId);
     }
 
     @Test
@@ -159,17 +175,17 @@ class LedModelSpecificationsPersistenceTest {
         );
         assertThat(unlinked)
                 .extracting(LedModelEntity::getModelId)
-                .containsExactly(203L, 202L, 201L);
+                .containsExactly(deprecatedWithWildcardId, exactBoundaryStockFiveId, compactUnlinkedLowStockId);
 
         List<LedModelEntity> lowStock = repository.findAll(
                 LedModelSpecifications.withFilter(
                         new LedModelFilterRequest(0, 20, null, null, null, null, true, null)),
                 Sort.by(Sort.Direction.DESC, "modelId")
         );
-        // stock 5 (modelId 202) MUST be excluded; stock 2, 4, 0 (203, 201, 102) MUST be included
+        // stock 5 (exactBoundaryStockFiveId) MUST be excluded; stock 2, 4, 0 MUST be included
         assertThat(lowStock)
                 .extracting(LedModelEntity::getModelId)
-                .containsExactly(203L, 201L, 102L);
+                .containsExactly(deprecatedWithWildcardId, compactUnlinkedLowStockId, outOfStockLinkedId);
     }
 
     @Test
@@ -182,7 +198,7 @@ class LedModelSpecificationsPersistenceTest {
         );
         assertThat(matrixUpper)
                 .extracting(LedModelEntity::getModelId)
-                .containsExactly(101L);
+                .containsExactly(proLinkedId);
 
         List<LedModelEntity> literalWildcard = repository.findAll(
                 LedModelSpecifications.withFilter(
@@ -191,6 +207,6 @@ class LedModelSpecificationsPersistenceTest {
         );
         assertThat(literalWildcard)
                 .extracting(LedModelEntity::getModelId)
-                .containsExactly(203L);
+                .containsExactly(deprecatedWithWildcardId);
     }
 }

@@ -53,7 +53,6 @@ public class LedInstanceMapper {
                 .modelName(model != null ? model.modelName() : null)
                 .serialNumber(entity.getSerialNumber())
                 .macAddress(entity.getMacAddress())
-                .hardwareRevision(entity.getHardwareRevision())
                 .deviceName(entity.getDeviceName())
                 .status(entity.getStatus())
                 .fulfillment(mapFulfillment(fulfillmentSnapshot,
@@ -177,7 +176,6 @@ public class LedInstanceMapper {
                                 .build()))
                 .serialNumber(entity.getSerialNumber())
                 .macAddress(entity.getMacAddress())
-                .hardwareRevision(entity.getHardwareRevision())
                 .currentFirmwareId(entity.getCurrentFirmwareId())
                 .deviceName(entity.getDeviceName())
                 .status(entity.getStatus())

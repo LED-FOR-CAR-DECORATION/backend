@@ -1,6 +1,8 @@
 package com.lumintra.backend.store.infrastructure.persistence;
 
 import com.lumintra.backend.store.domain.model.ProductSnapshot;
+import com.lumintra.backend.store.domain.model.ProductStatus;
+import com.lumintra.backend.store.domain.model.ProductType;
 import com.lumintra.backend.store.domain.service.ProductLookupService;
 import com.lumintra.backend.store.infrastructure.persistence.entity.ProductEntity;
 import com.lumintra.backend.store.infrastructure.persistence.repository.ProductRepository;
@@ -51,6 +53,18 @@ public class ProductLookupServiceImpl implements ProductLookupService {
     @Transactional(readOnly = true)
     public List<ProductSnapshot> findAllSnapshots() {
         return productRepository.findAll().stream()
+                .map(this::toSnapshot)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductSnapshot> findPublishedByType(ProductType productType) {
+        if (productType == null) {
+            return Collections.emptyList();
+        }
+        return productRepository.findAllByProductTypeAndStatusOrderByProductIdDesc(productType, ProductStatus.PUBLISHED)
+                .stream()
                 .map(this::toSnapshot)
                 .toList();
     }

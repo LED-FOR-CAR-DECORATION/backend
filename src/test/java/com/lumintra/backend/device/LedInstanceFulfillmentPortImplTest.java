@@ -50,7 +50,6 @@ class LedInstanceFulfillmentPortImplTest {
                 modelId,
                 serial,
                 mac,
-                "v1.0",
                 null,
                 null,
                 status,

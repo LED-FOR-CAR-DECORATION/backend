@@ -161,6 +161,10 @@ public class ProcessAhamoveWebhookUseCase {
         Instant deliveredAt = transition.targetDeliveryStatus() == DeliveryStatus.DELIVERED
                 ? resolveCompletedAt(request.completeTime(), now)
                 : null;
+        String failureReason = (transition.targetDeliveryStatus() == DeliveryStatus.FAILED
+                || transition.targetDeliveryStatus() == DeliveryStatus.RETURNED)
+                ? request.resolvedFailureReason()
+                : null;
 
         int deliveryUpdated = orderDeliveryRepository.updateWebhookDeliveryStatusIfAllowed(
                 delivery.getDeliveryId(),
@@ -169,6 +173,7 @@ public class ProcessAhamoveWebhookUseCase {
                 request.normalizedTrackingUrl(),
                 request.resolvedCarrierFee(),
                 deliveredAt,
+                failureReason,
                 now
         );
 

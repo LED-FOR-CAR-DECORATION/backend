@@ -1,5 +1,6 @@
 package com.lumintra.backend.device.infrastructure.integration;
 
+import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
@@ -9,6 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.nio.channels.Channels;
 
 /**
  * Stores firmware binaries in the private Firebase/GCS bucket (falls back to the default bucket
@@ -43,6 +46,23 @@ public class GcsFirmwareBinaryStorage implements FirmwareBinaryStorage {
             log.error("Failed to upload firmware binary [bucket={}] [objectKey={}]", bucket, objectKey, ex);
             throw new StorageServiceException("Failed to upload firmware binary: " + ex.getMessage(), ex);
         }
+    }
+
+    @Override
+    public StoredBinary open(String objectKey) {
+        Blob blob;
+        try {
+            blob = storage.get(BlobId.of(bucket, objectKey));
+        } catch (Exception ex) {
+            log.error("Failed to look up firmware binary [bucket={}] [objectKey={}]", bucket, objectKey, ex);
+            throw new StorageServiceException("Failed to read firmware binary: " + ex.getMessage(), ex);
+        }
+        if (blob == null || !blob.exists()) {
+            log.error("Firmware binary missing from storage [bucket={}] [objectKey={}]", bucket, objectKey);
+            throw new StorageServiceException("Firmware binary is missing from storage.");
+        }
+        // The reader fetches in chunks, so the binary is never held in memory as a whole.
+        return new StoredBinary(blob.getSize(), Channels.newInputStream(blob.reader()));
     }
 
     @Override

@@ -63,7 +63,11 @@ public class FirmwareOtaSessionEntity {
     @Column(name = "manifest_fetched_at")
     private Instant manifestFetchedAt;
 
-    /** Binary download attempts by the device (DEV-23). */
+    /** First binary download attempt by the device (DEV-23). */
+    @Column(name = "download_started_at")
+    private Instant downloadStartedAt;
+
+    /** Binary download attempts by the device (DEV-23); capped per session. */
     @Column(name = "download_attempts", nullable = false)
     private int downloadAttempts = 0;
 

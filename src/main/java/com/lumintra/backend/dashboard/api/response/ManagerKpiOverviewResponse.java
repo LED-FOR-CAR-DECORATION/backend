@@ -21,8 +21,34 @@ public record ManagerKpiOverviewResponse(
         List<LowStockLedItem> lowStockLeds,
 
         @Schema(description = "Up to 5 open warranty claims (PENDING first, then APPROVED) awaiting manager action")
-        List<WarrantyAlertItem> warrantyAlerts
+        List<WarrantyAlertItem> warrantyAlerts,
+
+        @Schema(description = "Daily revenue breakdown across the selected reporting month")
+        List<DailyRevenuePoint> dailyRevenue
 ) {
+    public ManagerKpiOverviewResponse(
+            KpiSummary kpiSummary,
+            List<RevenueCategoryItem> revenueByCategory,
+            List<TopProductItem> topSellingProducts,
+            List<LowStockLedItem> lowStockLeds,
+            List<WarrantyAlertItem> warrantyAlerts) {
+        this(kpiSummary, revenueByCategory, topSellingProducts, lowStockLeds, warrantyAlerts, List.of());
+    }
+
+    @Schema(description = "Daily revenue and order count point for monthly bar/line chart")
+    public record DailyRevenuePoint(
+            @Schema(description = "Day of month (1..31)", example = "15")
+            int day,
+
+            @Schema(description = "Calendar date in ISO format (YYYY-MM-DD)", example = "2026-11-15")
+            String date,
+
+            @Schema(description = "Total revenue generated on this day in VND", example = "1250000")
+            BigDecimal revenue,
+
+            @Schema(description = "Total paid orders and commissions on this day", example = "4")
+            long orderCount
+    ) {}
 
     @Schema(description = "Open warranty claim alert")
     public record WarrantyAlertItem(

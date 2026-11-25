@@ -1,8 +1,12 @@
 package com.lumintra.backend.dashboard.api.controller;
 
 import com.lumintra.backend.dashboard.api.request.ManagerDashboardFilterRequest;
+import com.lumintra.backend.dashboard.api.request.ManagerRevenueDrilldownRequest;
 import com.lumintra.backend.dashboard.api.response.ManagerKpiOverviewResponse;
+import com.lumintra.backend.dashboard.api.response.ManagerOrderAuditDetailResponse;
+import com.lumintra.backend.dashboard.api.response.ManagerRevenueDrilldownResponse;
 import com.lumintra.backend.dashboard.application.GetManagerDashboardKpiUseCase;
+import com.lumintra.backend.dashboard.application.GetManagerRevenueDrilldownUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,7 +25,9 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(
@@ -34,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ManagerDashboardController {
 
     private final GetManagerDashboardKpiUseCase getManagerDashboardKpiUseCase;
+    private final GetManagerRevenueDrilldownUseCase getManagerRevenueDrilldownUseCase;
 
     @Operation(
             summary = "Get manager operations KPI & analytics overview",
@@ -100,6 +107,7 @@ public class ManagerDashboardController {
     @GetMapping("/kpi")
     public ResponseEntity<ApiResponse<ManagerKpiOverviewResponse>> getKpiOverview(
             @Valid @ModelAttribute ManagerDashboardFilterRequest request,
+            @RequestParam(name = "refresh", defaultValue = "false") boolean refresh,
             Authentication authentication) {
 
         if (authentication == null
@@ -109,7 +117,48 @@ public class ManagerDashboardController {
         }
 
         String subject = authentication.getName();
-        ManagerKpiOverviewResponse response = getManagerDashboardKpiUseCase.execute(subject, request);
+        ManagerKpiOverviewResponse response = refresh
+                ? getManagerDashboardKpiUseCase.execute(subject, request, true)
+                : getManagerDashboardKpiUseCase.execute(subject, request);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Drill down into orders & commissions backing dashboard revenue metrics",
+            description = "Returns the exact orders, line items, and commissions contributing to total revenue, a specific category, or a specific top-selling product within the reporting month."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @GetMapping("/revenue-sources")
+    public ResponseEntity<ApiResponse<ManagerRevenueDrilldownResponse>> getRevenueSources(
+            @Valid @ModelAttribute ManagerRevenueDrilldownRequest request,
+            Authentication authentication) {
+        String subject = requireAuthenticatedSubject(authentication);
+        ManagerRevenueDrilldownResponse response = getManagerRevenueDrilldownUseCase.execute(subject, request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Get full order audit detail for manager dashboard drill-down",
+            description = "Retrieves full line items, shipping fee, subtotal, total amount, and payment transaction status for a specific order referenced in dashboard revenue analytics."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @GetMapping("/revenue-sources/orders/{orderId}")
+    public ResponseEntity<ApiResponse<ManagerOrderAuditDetailResponse>> getOrderAuditDetail(
+            @PathVariable Long orderId,
+            Authentication authentication) {
+        String subject = requireAuthenticatedSubject(authentication);
+        ManagerOrderAuditDetailResponse response = getManagerRevenueDrilldownUseCase.getOrderAuditDetail(subject, orderId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    private String requireAuthenticatedSubject(Authentication authentication) {
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            throw new AuthenticationCredentialsNotFoundException("Authenticated manager identity is required.");
+        }
+        return authentication.getName();
     }
 }

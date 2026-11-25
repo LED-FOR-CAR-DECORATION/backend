@@ -3,11 +3,16 @@ package com.lumintra.backend.commerce.application;
 import com.lumintra.backend.commerce.api.request.UpdateStaffOrderStatusRequest;
 import com.lumintra.backend.commerce.api.response.StaffOrderStatusResponse;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
+import com.lumintra.backend.commerce.domain.service.LedInstanceFulfillmentPort;
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderItemEntity;
+import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderItemFulfillmentEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.mapper.OrderMapper;
+import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderDeliveryRepository;
+import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemFulfillmentRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderRepository;
+import com.lumintra.backend.commerce.infrastructure.persistence.repository.OwnedCharacterRepository;
 import com.lumintra.backend.device.domain.service.LedInventoryService;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
 import com.lumintra.backend.shared.exception.commerce.OrderNotFoundException;
@@ -44,10 +49,14 @@ public class UpdateStaffOrderStatusUseCase {
 
     private final InternalEmployeeAccessService internalEmployeeAccessService;
     private final OrderRepository orderRepository;
+    private final OrderDeliveryRepository orderDeliveryRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderItemFulfillmentRepository orderItemFulfillmentRepository;
+    private final OwnedCharacterRepository ownedCharacterRepository;
     private final ProductLookupService productLookupService;
     private final BundleLookupService bundleLookupService;
     private final LedInventoryService ledInventoryService;
+    private final LedInstanceFulfillmentPort ledInstanceFulfillmentPort;
     private final OrderMapper orderMapper;
 
     @Transactional
@@ -72,6 +81,11 @@ public class UpdateStaffOrderStatusUseCase {
         OrderStatus previousStatus = order.getStatus();
         order.validateStaffTransition(targetStatus);
 
+        if (previousStatus == OrderStatus.DELIVERY_FAILED && targetStatus == OrderStatus.PROCESSING) {
+            orderDeliveryRepository.findByOrder_OrderId(orderId)
+                    .ifPresent(delivery -> delivery.validateRedeliveryAllowed());
+        }
+
         Instant updatedAt = Instant.now();
         int updatedRows = orderRepository.updateStatusIfCurrent(
                 orderId,
@@ -88,22 +102,59 @@ public class UpdateStaffOrderStatusUseCase {
         }
 
         Map<Long, Long> restoredLedStocks = Collections.emptyMap();
-        if (targetStatus == OrderStatus.CANCELED) {
-            restoredLedStocks = collectLedHardwareQuantities(orderId);
+        int releasedInstances = 0;
+        int revokedCharacters = 0;
+
+        if (targetStatus == OrderStatus.CANCELED || targetStatus == OrderStatus.REFUNDED) {
+            List<OrderItemEntity> orderItems = orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(orderId);
+            restoredLedStocks = collectLedHardwareQuantities(orderId, orderItems);
             if (!restoredLedStocks.isEmpty()) {
                 ledInventoryService.restoreStocks(restoredLedStocks);
             }
+
+            if (targetStatus == OrderStatus.REFUNDED) {
+                releasedInstances = releaseFulfilledLedInstances(orderId);
+                revokedCharacters = revokeOwnedCharacters(order.getCustomerId(), orderItems, updatedAt);
+                orderDeliveryRepository.markReturnedOnRefund(orderId, request.normalizedReason(), updatedAt);
+            }
         }
 
-        log.info("Order status updated by staff [orderId={}] [employeeAccountId={}] [previousStatus={}] [newStatus={}] [restoredLedModels={}]",
-                orderId, employeeAccountId, previousStatus, targetStatus, restoredLedStocks.size());
+        log.info("Order status updated by staff [orderId={}] [employeeAccountId={}] [previousStatus={}] [newStatus={}] [restoredLedModels={}] [releasedInstances={}] [revokedCharacters={}]",
+                orderId, employeeAccountId, previousStatus, targetStatus,
+                restoredLedStocks.size(), releasedInstances, revokedCharacters);
 
         return orderMapper.toStaffOrderStatusResponse(orderId, previousStatus, targetStatus, updatedAt);
     }
 
-    private Map<Long, Long> collectLedHardwareQuantities(Long orderId) {
-        List<OrderItemEntity> items = orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(orderId);
-        if (items.isEmpty()) {
+    private int releaseFulfilledLedInstances(Long orderId) {
+        List<OrderItemFulfillmentEntity> fulfillments =
+                orderItemFulfillmentRepository.findAllByOrderItem_Order_OrderId(orderId);
+        if (fulfillments.isEmpty()) {
+            return 0;
+        }
+        orderItemFulfillmentRepository.deleteAll(fulfillments);
+        for (OrderItemFulfillmentEntity fulfillment : fulfillments) {
+            ledInstanceFulfillmentPort.releaseToStock(fulfillment.getInstanceId());
+        }
+        return fulfillments.size();
+    }
+
+    private int revokeOwnedCharacters(Long customerId, List<OrderItemEntity> items, Instant updatedAt) {
+        if (customerId == null || items.isEmpty()) {
+            return 0;
+        }
+        List<Long> orderItemIds = items.stream()
+                .map(OrderItemEntity::getOrderItemId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (orderItemIds.isEmpty()) {
+            return 0;
+        }
+        return ownedCharacterRepository.revokeByCustomerIdAndOrderItemIds(customerId, orderItemIds, updatedAt);
+    }
+
+    private Map<Long, Long> collectLedHardwareQuantities(Long orderId, List<OrderItemEntity> items) {
+        if (items == null || items.isEmpty()) {
             return Collections.emptyMap();
         }
 

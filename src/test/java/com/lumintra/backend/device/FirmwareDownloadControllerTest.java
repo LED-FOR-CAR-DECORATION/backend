@@ -3,6 +3,8 @@ package com.lumintra.backend.device;
 import com.lumintra.backend.device.api.controller.FirmwareDownloadController;
 import com.lumintra.backend.device.api.response.OtaManifestResponse;
 import com.lumintra.backend.device.application.FetchOtaManifestUseCase;
+import com.lumintra.backend.device.application.StartFirmwareDownloadUseCase;
+import com.lumintra.backend.shared.exception.media.StorageServiceException;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
@@ -20,6 +22,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,6 +46,7 @@ class FirmwareDownloadControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @MockitoBean private FetchOtaManifestUseCase fetchOtaManifestUseCase;
+    @MockitoBean private StartFirmwareDownloadUseCase startFirmwareDownloadUseCase;
     @MockitoBean private JwtTokenProvider jwtTokenProvider;
     @MockitoBean private TokenBlacklistService tokenBlacklistService;
     @MockitoBean private Tracer tracer;
@@ -98,5 +102,52 @@ class FirmwareDownloadControllerTest {
     void manifest_onlyGetIsPublic() throws Exception {
         mockMvc.perform(post(PATH)).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/firmware/downloads/" + TOKEN + "/other")).andExpect(status().isUnauthorized());
+    }
+
+    private static final String BINARY_PATH = "/api/firmware/downloads/" + TOKEN + "/binary";
+    private static final byte[] BINARY = {(byte) 0xE9, 0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+    @Test
+    @DisplayName("DEV-23 Controller UTCID01 [N]: Anonymous device gets 200 octet-stream with Content-Length = file size")
+    void binary_anonymous_streamsFile() throws Exception {
+        when(startFirmwareDownloadUseCase.execute(TOKEN))
+                .thenReturn(new StartFirmwareDownloadUseCase.FirmwareDownload(BINARY.length, new ByteArrayInputStream(BINARY)));
+
+        MvcResult result = mockMvc.perform(get(BINARY_PATH))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/octet-stream"))
+                .andExpect(content().bytes(BINARY))
+                .andReturn();
+
+        assertThat(result.getResponse().getHeader("Content-Length")).isEqualTo(String.valueOf(BINARY.length));
+        assertThat(result.getResponse().getHeader("Location")).isNull();
+        assertThat(result.getResponse().getHeader("Cache-Control")).contains("no-store");
+        verify(startFirmwareDownloadUseCase).execute(TOKEN);
+    }
+
+    @Test
+    @DisplayName("DEV-23 Controller UTCID02 [A]: Unusable token or attempts used up returns 404 OTA_SESSION_NOT_FOUND")
+    void binary_unusableToken_returns404() throws Exception {
+        when(startFirmwareDownloadUseCase.execute(anyString())).thenThrow(new OtaSessionNotFoundException());
+
+        mockMvc.perform(get(BINARY_PATH))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("OTA_SESSION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("DEV-23 Controller UTCID03 [A]: Missing or mismatched stored binary returns 500 STORAGE_SERVICE_ERROR, not a partial file")
+    void binary_storageFailure_returns500() throws Exception {
+        when(startFirmwareDownloadUseCase.execute(anyString())).thenThrow(new StorageServiceException("missing"));
+
+        mockMvc.perform(get(BINARY_PATH))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("STORAGE_SERVICE_ERROR"));
+    }
+
+    @Test
+    @DisplayName("DEV-23 Controller UTCID04 [A]: Only GET on the binary path is public")
+    void binary_onlyGetIsPublic() throws Exception {
+        mockMvc.perform(post(BINARY_PATH)).andExpect(status().isUnauthorized());
     }
 }

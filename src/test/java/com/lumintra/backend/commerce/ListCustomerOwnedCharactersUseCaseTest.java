@@ -2,7 +2,9 @@ package com.lumintra.backend.commerce;
 
 import com.lumintra.backend.character.domain.model.CharacterVersionSnapshot;
 import com.lumintra.backend.character.domain.service.CharacterLookupService;
+import com.lumintra.backend.commerce.api.response.CustomerActiveSubscriptionResponse;
 import com.lumintra.backend.commerce.api.response.CustomerOwnedCharacterResponse;
+import com.lumintra.backend.commerce.application.CustomerSubscriptionEntitlementService;
 import com.lumintra.backend.commerce.application.ListCustomerOwnedCharactersUseCase;
 import com.lumintra.backend.commerce.domain.model.OrderStatus;
 import com.lumintra.backend.commerce.domain.model.OrderType;
@@ -49,6 +51,9 @@ class ListCustomerOwnedCharactersUseCaseTest {
 
     @Mock
     private ProductLookupService productLookupService;
+
+    @Mock
+    private CustomerSubscriptionEntitlementService customerSubscriptionEntitlementService;
 
     @InjectMocks
     private ListCustomerOwnedCharactersUseCase listCustomerOwnedCharactersUseCase;
@@ -250,5 +255,63 @@ class ListCustomerOwnedCharactersUseCaseTest {
         assertThat(resp.orderId()).isEqualTo(1001L);
         assertThat(resp.storeProductId()).isEqualTo(999L);
         assertThat(resp.purchasedPrice()).isEqualByComparingTo("50000.00");
+    }
+
+    @Test
+    @DisplayName("execute: when customer holds active All-Access VIP Pass, includes all published characters without duplicating owned ones")
+    void execute_whenActiveAllAccessSubscription_returnsAllPublishedCharactersWithoutDuplicates() {
+        Instant now = Instant.parse("2026-11-24T06:00:00Z");
+
+        OwnedCharacterEntity owned1 = OwnedCharacterEntity.create(customerId, 12L, null);
+        ReflectionTestUtils.setField(owned1, "ownedId", 1L);
+        ReflectionTestUtils.setField(owned1, "grantedAt", now.minusSeconds(7200));
+
+        when(ownedCharacterRepository.findByCustomerIdAndIsRevokedFalseOrderByGrantedAtDesc(customerId))
+                .thenReturn(List.of(owned1));
+
+        CharacterVersionSnapshot versionOwned = new CharacterVersionSnapshot(
+                12L, 5L, "Samurai Cat", "Cat animation", 1,
+                "https://cdn.lumintra.shop/characters/5/preview.gif", 16, 60
+        );
+        CharacterVersionSnapshot versionUnlocked = new CharacterVersionSnapshot(
+                15L, 8L, "Neon Dragon", "Dragon animation", 2,
+                "https://cdn.lumintra.shop/characters/8/preview.gif", 24, 50
+        );
+
+        when(characterLookupService.findDetailsByVersionIds(Set.of(12L)))
+                .thenReturn(Map.of(12L, versionOwned));
+
+        CustomerActiveSubscriptionResponse vipSub = new CustomerActiveSubscriptionResponse(
+                99L, 300L, 2001L, "VIP_LIFETIME", "Lumintra All-Access VIP Pass",
+                true, null, true, 3, 10, now, null
+        );
+        when(customerSubscriptionEntitlementService.findActiveAllAccessSubscription(customerId))
+                .thenReturn(java.util.Optional.of(vipSub));
+
+        ProductSnapshot catProduct = new ProductSnapshot(
+                201L, "Samurai Cat Store", ProductType.CHARACTER,
+                "thumb1", new BigDecimal("50000.00"), ProductStatus.PUBLISHED
+        );
+        ProductSnapshot dragonProduct = new ProductSnapshot(
+                202L, "Neon Dragon Store", ProductType.CHARACTER,
+                "thumb2", new BigDecimal("75000.00"), ProductStatus.PUBLISHED
+        );
+        when(productLookupService.findPublishedByType(ProductType.CHARACTER))
+                .thenReturn(List.of(catProduct, dragonProduct));
+        when(characterLookupService.findDetailsByProductIds(Set.of(201L, 202L)))
+                .thenReturn(Map.of(201L, versionOwned, 202L, versionUnlocked));
+
+        List<CustomerOwnedCharacterResponse> result = listCustomerOwnedCharactersUseCase.execute(customerId);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).characterId()).isEqualTo(5L);
+        assertThat(result.get(0).unlockedBySubscription()).isFalse();
+
+        assertThat(result.get(1).characterId()).isEqualTo(8L);
+        assertThat(result.get(1).storeProductId()).isEqualTo(202L);
+        assertThat(result.get(1).orderId()).isEqualTo(2001L);
+        assertThat(result.get(1).productName()).isEqualTo("Lumintra All-Access VIP Pass");
+        assertThat(result.get(1).purchasedPrice()).isEqualByComparingTo("0");
+        assertThat(result.get(1).unlockedBySubscription()).isTrue();
     }
 }

@@ -39,7 +39,6 @@ class LedInstanceMapperTest {
                     101L,
                     "LMT-" + status.name(),
                     "AA:BB:CC:00:00:01",
-                    "REV_1_0",
                     null,
                     null,
                     status,
@@ -74,7 +73,6 @@ class LedInstanceMapperTest {
                 101L,
                 "LMT-64X64-0099",
                 "aa:bb:cc:99:88:77",
-                "REV_2_0",
                 42L,
                 "Front Windshield",
                 LedInstanceStatus.BOUND,
@@ -100,7 +98,6 @@ class LedInstanceMapperTest {
         assertThat(item.modelId()).isEqualTo(101L);
         assertThat(item.modelName()).isEqualTo("Lumintra Matrix 64x64 Pro");
         assertThat(item.macAddress()).isEqualTo("AA:BB:CC:99:88:77");
-        assertThat(item.hardwareRevision()).isEqualTo("REV_2_0");
         assertThat(item.deviceName()).isEqualTo("Front Windshield");
         assertThat(item.status()).isEqualTo(LedInstanceStatus.BOUND);
         assertThat(item.qrPayload()).isNull();
@@ -119,7 +116,6 @@ class LedInstanceMapperTest {
                 101L,
                 "LMT-64X64-0100",
                 "AA:BB:CC:00:00:10",
-                "REV_1_0",
                 88L,
                 null,
                 LedInstanceStatus.RETURNED,
@@ -163,7 +159,6 @@ class LedInstanceMapperTest {
                 101L,
                 "LMT-64X64-0001",
                 "AA:BB:CC:11:22:01",
-                "REV_1_0",
                 42L,
                 "Windshield Pro",
                 LedInstanceStatus.BOUND,
@@ -203,7 +198,7 @@ class LedInstanceMapperTest {
 
         for (LedInstanceStatus status : LedInstanceStatus.values()) {
             LedInstanceEntity candidate = LedInstanceEntity.createWithState(
-                    101L, "LMT-" + status.name(), "AA:BB:CC:00:00:02", "REV_1_0",
+                    101L, "LMT-" + status.name(), "AA:BB:CC:00:00:02",
                     null, null, status, manufacturedAt, null, null);
             ReflectionTestUtils.setField(candidate, "instanceId", 8L);
 
@@ -226,11 +221,11 @@ class LedInstanceMapperTest {
         Instant expiry = Instant.parse("2027-04-30T10:00:00Z");
 
         LedInstanceEntity unactivated = LedInstanceEntity.createInStock(
-                101L, "LMT-01", "AA:BB:CC:00:00:11", "REV_1_0", Instant.parse("2026-10-01T00:00:00Z"));
+                101L, "LMT-01", "AA:BB:CC:00:00:11", Instant.parse("2026-10-01T00:00:00Z"));
         ReflectionTestUtils.setField(unactivated, "instanceId", 1L);
 
         LedInstanceEntity activated = LedInstanceEntity.createWithState(
-                101L, "LMT-02", "AA:BB:CC:00:00:12", "REV_1_0", 42L, "Rear",
+                101L, "LMT-02", "AA:BB:CC:00:00:12", 42L, "Rear",
                 LedInstanceStatus.BOUND, Instant.parse("2026-10-01T00:00:00Z"), boundAt, expiry);
         ReflectionTestUtils.setField(activated, "instanceId", 2L);
 
@@ -254,7 +249,6 @@ class LedInstanceMapperTest {
                 101L,
                 "LMT-64X64-0005",
                 "aa:bb:cc:11:22:05",
-                "REV_1_0",
                 42L,
                 "Rear Window Matrix",
                 LedInstanceStatus.BOUND,
@@ -302,7 +296,6 @@ class LedInstanceMapperTest {
                 101L,
                 "LMT-64X16-0009",
                 "aa:bb:cc:11:22:09",
-                "REV_1_0",
                 42L,
                 "Rear Window Matrix",
                 LedInstanceStatus.BOUND,
@@ -352,7 +345,6 @@ class LedInstanceMapperTest {
                 101L,
                 "LMT-64X64-0010",
                 "aa:bb:cc:11:22:10",
-                "REV_1_0",
                 42L,
                 "Rear Window Matrix",
                 LedInstanceStatus.BOUND,
@@ -414,7 +406,7 @@ class LedInstanceMapperTest {
         Instant expiry = Instant.parse("2027-04-30T10:00:00Z");
 
         LedInstanceEntity boundDevice = LedInstanceEntity.createWithState(
-                102L, "LMT-OLD-01", "AA:BB:CC:00:00:21", "REV_1_0",
+                102L, "LMT-OLD-01", "AA:BB:CC:00:00:21",
                 42L, null, LedInstanceStatus.BOUND, Instant.parse("2026-10-01T00:00:00Z"),
                 boundAt, expiry);
         ReflectionTestUtils.setField(boundDevice, "instanceId", 2002L);
@@ -436,7 +428,7 @@ class LedInstanceMapperTest {
         assertThat(deprecatedExpired.model().spec().widthPx()).isEqualTo(32);
 
         LedInstanceEntity unactivated = LedInstanceEntity.createWithState(
-                102L, "LMT-NEW-02", "AA:BB:CC:00:00:22", "REV_1_0",
+                102L, "LMT-NEW-02", "AA:BB:CC:00:00:22",
                 42L, "Test", LedInstanceStatus.BOUND, Instant.parse("2026-10-01T00:00:00Z"),
                 null, null);
         ReflectionTestUtils.setField(unactivated, "instanceId", 2003L);

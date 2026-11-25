@@ -99,6 +99,7 @@ public class ConfirmRevisionCardUseCase {
         metadata.put("status", "CONFIRMED");
         metadata.put("usesFreeQuota", free);
         metadata.put("revisionFee", fee);
+        metadata.put("revisionsUsed", free ? revisionNumber : commission.getRevisionsUsed());
         String confirmedMetadata;
         try {
             confirmedMetadata = json.writeValueAsString(metadata);
@@ -108,7 +109,7 @@ public class ConfirmRevisionCardUseCase {
         PaymentSessionResponse session = null;
         var now = Instant.now();
         if (free) {
-            commission.setRevisionsUsed(commission.getRevisionsUsed() + 1);
+            commission.setRevisionsUsed(revisionNumber);
             // The brief was written by staff and confirmed by the customer: it goes straight to the designer.
             commission.awaitRevisionEstimate(now);
             commission.setActivePaymentCode(null);

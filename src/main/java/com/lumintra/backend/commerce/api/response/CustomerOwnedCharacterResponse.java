@@ -35,5 +35,24 @@ public record CustomerOwnedCharacterResponse(
         BigDecimal purchasedPrice,
 
         @Schema(description = "Timestamp when the character was granted/purchased", example = "2026-11-15T17:00:00Z")
-        Instant purchasedAt
-) {}
+        Instant purchasedAt,
+
+        @Schema(description = "True when access is granted via an active All-Access subscription rather than individual purchase", example = "false")
+        boolean unlockedBySubscription
+) {
+    public CustomerOwnedCharacterResponse(
+            Long characterId,
+            String characterName,
+            String previewGifUrl,
+            Integer frameCount,
+            Integer frameDelayMs,
+            Long orderId,
+            Long storeProductId,
+            String productName,
+            BigDecimal purchasedPrice,
+            Instant purchasedAt
+    ) {
+        this(characterId, characterName, previewGifUrl, frameCount, frameDelayMs,
+                orderId, storeProductId, productName, purchasedPrice, purchasedAt, false);
+    }
+}

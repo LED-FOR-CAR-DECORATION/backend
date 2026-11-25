@@ -111,7 +111,16 @@ public record OrderDetailResponse(
             String trackingUrl,
 
             @Schema(description = "Estimated delivery timestamp in UTC", example = "2026-11-11T10:00:00Z", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-            Instant estimatedDeliveryAt
+            Instant estimatedDeliveryAt,
+
+            @Schema(description = "Reason for delivery failure or return", example = "Không liên lạc được với người nhận", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            String failureReason,
+
+            @Schema(description = "Total number of dispatch attempts made for this order", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
+            int deliveryAttemptCount,
+
+            @Schema(description = "Maximum allowed dispatch attempts (1 initial + 2 redeliveries)", example = "3", requiredMode = Schema.RequiredMode.REQUIRED)
+            int maxDeliveryAttempts
     ) {}
 
     @Schema(description = "Payment details showing active SePay VietQR retry info when PENDING_PAYMENT or settled payment confirmation when SUCCESS")

@@ -90,6 +90,7 @@ class DispatchOrderPersistenceTest {
                 "24ABCD",
                 "https://expressstg.ahamove.com/s/24ABCD",
                 new BigDecimal("33000.00"),
+                OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS,
                 updatedAt
         );
         assertThat(firstAttempt).isEqualTo(1);
@@ -101,6 +102,7 @@ class DispatchOrderPersistenceTest {
                 "24EFGH",
                 "https://expressstg.ahamove.com/s/24EFGH",
                 new BigDecimal("35000.00"),
+                OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS,
                 updatedAt.plusSeconds(10)
         );
         assertThat(concurrentSecondAttempt).isZero();
@@ -110,6 +112,7 @@ class DispatchOrderPersistenceTest {
         assertThat(reloaded.getTrackingNumber()).isEqualTo("24ABCD");
         assertThat(reloaded.getTrackingUrl()).isEqualTo("https://expressstg.ahamove.com/s/24ABCD");
         assertThat(reloaded.getCarrierFee()).isEqualByComparingTo("33000.00");
+        assertThat(reloaded.getDeliveryAttemptCount()).isEqualTo(1);
         assertThat(reloaded.getUpdatedAt()).isEqualTo(updatedAt);
     }
 
@@ -179,6 +182,7 @@ class DispatchOrderPersistenceTest {
                 "24RETRY",
                 "https://expressstg.ahamove.com/s/24RETRY",
                 new BigDecimal("28000.00"),
+                OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS,
                 updatedAt
         );
         assertThat(redispatchResult).isEqualTo(1);
@@ -190,6 +194,7 @@ class DispatchOrderPersistenceTest {
                 "24BLOCKED",
                 "https://expressstg.ahamove.com/s/24BLOCKED",
                 new BigDecimal("28000.00"),
+                OrderDeliveryEntity.MAX_DELIVERY_ATTEMPTS,
                 updatedAt
         );
         assertThat(blockedDeliveredResult).isZero();

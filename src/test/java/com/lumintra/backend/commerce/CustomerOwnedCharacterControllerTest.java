@@ -1,7 +1,9 @@
 package com.lumintra.backend.commerce;
 
 import com.lumintra.backend.commerce.api.controller.CustomerOwnedCharacterController;
+import com.lumintra.backend.commerce.api.response.CustomerActiveSubscriptionResponse;
 import com.lumintra.backend.commerce.api.response.CustomerOwnedCharacterResponse;
+import com.lumintra.backend.commerce.application.CustomerSubscriptionEntitlementService;
 import com.lumintra.backend.commerce.application.ListCustomerOwnedCharactersUseCase;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
@@ -41,6 +43,9 @@ class CustomerOwnedCharacterControllerTest {
 
     @MockitoBean
     private ListCustomerOwnedCharactersUseCase listCustomerOwnedCharactersUseCase;
+
+    @MockitoBean
+    private CustomerSubscriptionEntitlementService customerSubscriptionEntitlementService;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -134,5 +139,26 @@ class CustomerOwnedCharacterControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verifyNoInteractions(listCustomerOwnedCharactersUseCase);
+    }
+
+    @Test
+    @DisplayName("GET /api/customer/subscriptions/active: returns active subscription details when present")
+    void getActiveSubscription_whenAuthenticatedCustomer_returnsActivePlan() throws Exception {
+        Instant activatedAt = Instant.parse("2026-11-24T06:00:00Z");
+        CustomerActiveSubscriptionResponse sub = new CustomerActiveSubscriptionResponse(
+                10L, 16L, 42L, "VIP_LIFETIME", "Lumintra All-Access VIP Pass",
+                true, null, true, 3, 10, activatedAt, null
+        );
+        when(customerSubscriptionEntitlementService.findActiveSubscription(42L))
+                .thenReturn(java.util.Optional.of(sub));
+
+        mockMvc.perform(get("/api/customer/subscriptions/active")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.planCode").value("VIP_LIFETIME"))
+                .andExpect(jsonPath("$.data.allAccessCharacters").value(true));
+
+        verify(customerSubscriptionEntitlementService).findActiveSubscription(42L);
     }
 }

@@ -76,14 +76,13 @@ class ListLedInstancesUseCaseTest {
     @DisplayName("DEV-173 UC-01 [N]: Queries repository sorted by instanceId DESC and batch-enriches models, owners, and fulfillments")
     void execute_populatedPage_enrichesInBatchAndMapsMeta() {
         LedInstanceEntity inStock = LedInstanceEntity.createInStock(
-                101L, "LMT-001", "AA:BB:CC:00:00:01", "REV_1_0", Instant.now());
+                101L, "LMT-001", "AA:BB:CC:00:00:01", Instant.now());
         ReflectionTestUtils.setField(inStock, "instanceId", 11L);
 
         LedInstanceEntity bound = LedInstanceEntity.createWithState(
                 102L,
                 "LMT-002",
                 "AA:BB:CC:00:00:02",
-                "REV_1_0",
                 42L,
                 "Car Display",
                 LedInstanceStatus.BOUND,
@@ -147,7 +146,7 @@ class ListLedInstancesUseCaseTest {
         assertThat(emptyResponse.meta().getTotalElements()).isZero();
         verifyNoInteractions(ledModelLookupService, customerLookupService, orderFulfillmentLookupService);
 
-        LedInstanceEntity unbound = LedInstanceEntity.createInStock(101L, "LMT-003", "AA:BB:CC:00:00:03", "REV_1_0", null);
+        LedInstanceEntity unbound = LedInstanceEntity.createInStock(101L, "LMT-003", "AA:BB:CC:00:00:03", null);
         ReflectionTestUtils.setField(unbound, "instanceId", 3L);
         when(ledInstanceRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(unbound), defaultPageable, 1L));

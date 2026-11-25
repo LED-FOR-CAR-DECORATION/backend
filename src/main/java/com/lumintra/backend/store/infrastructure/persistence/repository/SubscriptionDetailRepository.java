@@ -6,12 +6,15 @@ import org.springframework.stereotype.Repository;
 
 import com.lumintra.backend.store.api.response.ManagedSubscriptionResponse;
 import org.springframework.data.jpa.repository.Query;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface SubscriptionDetailRepository extends JpaRepository<SubscriptionDetailEntity, Long> {
     Optional<SubscriptionDetailEntity> findByProductId(Long productId);
+
+    List<SubscriptionDetailEntity> findByProductIdIn(Collection<Long> productIds);
 
     Optional<SubscriptionDetailEntity> findByPlanCode(String planCode);
 

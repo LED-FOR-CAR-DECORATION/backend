@@ -76,7 +76,6 @@ class GetCustomerDeviceDetailUseCaseTest {
                 101L,
                 "LMT-64X64-0001",
                 "AA:BB:CC:11:22:01",
-                "REV_1_0",
                 42L,
                 "Rear Window Matrix",
                 LedInstanceStatus.BOUND,
@@ -148,7 +147,6 @@ class GetCustomerDeviceDetailUseCaseTest {
                 102L,
                 "LMT-32X16-0002",
                 "AA:BB:CC:11:22:02",
-                "REV_1_0",
                 42L,
                 null,
                 LedInstanceStatus.BOUND,
@@ -191,7 +189,6 @@ class GetCustomerDeviceDetailUseCaseTest {
                 103L,
                 "LMT-64X32-0003",
                 "AA:BB:CC:11:22:03",
-                "REV_1_0",
                 42L,
                 "Cabin Bar",
                 LedInstanceStatus.BOUND,
@@ -235,7 +232,6 @@ class GetCustomerDeviceDetailUseCaseTest {
                 101L,
                 "LMT-64X64-0004",
                 "AA:BB:CC:11:22:04",
-                "REV_1_0",
                 99L,
                 "Other Car",
                 LedInstanceStatus.BOUND,
@@ -249,7 +245,6 @@ class GetCustomerDeviceDetailUseCaseTest {
                 101L,
                 "LMT-64X64-0005",
                 "AA:BB:CC:11:22:05",
-                "REV_1_0",
                 Instant.now().minus(10, ChronoUnit.DAYS)
         );
         ReflectionTestUtils.setField(unbound, "instanceId", 2005L);

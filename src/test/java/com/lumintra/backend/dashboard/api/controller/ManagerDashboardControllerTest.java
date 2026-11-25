@@ -1,9 +1,13 @@
 package com.lumintra.backend.dashboard.api.controller;
 
 import com.lumintra.backend.dashboard.api.request.ManagerDashboardFilterRequest;
+import com.lumintra.backend.dashboard.api.request.ManagerRevenueDrilldownRequest;
 import com.lumintra.backend.dashboard.api.response.ManagerKpiOverviewResponse;
 import com.lumintra.backend.dashboard.api.response.ManagerKpiOverviewResponse.*;
+import com.lumintra.backend.dashboard.api.response.ManagerOrderAuditDetailResponse;
+import com.lumintra.backend.dashboard.api.response.ManagerRevenueDrilldownResponse;
 import com.lumintra.backend.dashboard.application.GetManagerDashboardKpiUseCase;
+import com.lumintra.backend.dashboard.application.GetManagerRevenueDrilldownUseCase;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
 import com.lumintra.backend.iam.infrastructure.security.JwtTokenProvider;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
@@ -42,6 +46,9 @@ class ManagerDashboardControllerTest {
 
     @MockitoBean
     private GetManagerDashboardKpiUseCase getManagerDashboardKpiUseCase;
+
+    @MockitoBean
+    private GetManagerRevenueDrilldownUseCase getManagerRevenueDrilldownUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -164,5 +171,95 @@ class ManagerDashboardControllerTest {
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         verifyNoInteractions(getManagerDashboardKpiUseCase);
+    }
+
+    @Test
+    @DisplayName("MGT-01 Controller UTCID14 [N]: refresh=true bypasses cache via execute(subject, request, true)")
+    void getKpiOverview_refreshTrue_invokesFreshExecute() throws Exception {
+        when(getManagerDashboardKpiUseCase.execute(eq("42"), any(ManagerDashboardFilterRequest.class), eq(true)))
+                .thenReturn(sampleResponse());
+
+        mockMvc.perform(get(BASE_PATH)
+                        .param("month", "2026-11")
+                        .param("compareWith", "2026-10")
+                        .param("refresh", "true")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("MANAGER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.kpiSummary.totalRevenue").value(1250000000));
+    }
+
+    @Test
+    @DisplayName("Drill-down Controller [N]: MANAGER receives 200 OK with contributing orders for category")
+    void getRevenueSources_managerRole_returns200() throws Exception {
+        java.time.Instant now = java.time.Instant.parse("2026-11-24T08:00:00Z");
+        ManagerRevenueDrilldownResponse resp = new ManagerRevenueDrilldownResponse(
+                "2026-11",
+                "CATEGORY",
+                "Phần cứng",
+                "HARDWARE",
+                null,
+                now.minusSeconds(3600),
+                now,
+                new BigDecimal("500000.00"),
+                2L,
+                1L,
+                List.of(new ManagerRevenueDrilldownResponse.RevenueSourceItem(
+                        "ORDER", 38L, "#38", "Nguyễn Minh Anh", "minhanh@gmail.com",
+                        "COMPLETED", "PHYSICAL", 1L, "Lumintra Matrix 64x64 Pro", "HARDWARE",
+                        2L, new BigDecimal("250000.00"), new BigDecimal("500000.00"),
+                        new BigDecimal("525000.00"), now
+                ))
+        );
+        when(getManagerRevenueDrilldownUseCase.execute(eq("42"), any(ManagerRevenueDrilldownRequest.class)))
+                .thenReturn(resp);
+
+        mockMvc.perform(get("/api/management/admin/dashboard/revenue-sources")
+                        .param("month", "2026-11")
+                        .param("category", "HARDWARE")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("MANAGER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.scopeType").value("CATEGORY"))
+                .andExpect(jsonPath("$.data.items[0].referenceCode").value("#38"))
+                .andExpect(jsonPath("$.data.items[0].contributionAmount").value(500000.00));
+    }
+
+    @Test
+    @DisplayName("Drill-down Controller [A]: Invalid category returns 400 VALIDATION_FAILED")
+    void getRevenueSources_invalidCategory_returns400() throws Exception {
+        mockMvc.perform(get("/api/management/admin/dashboard/revenue-sources")
+                        .param("month", "2026-11")
+                        .param("category", "INVALID_CAT")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("MANAGER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(getManagerRevenueDrilldownUseCase);
+    }
+
+    @Test
+    @DisplayName("Drill-down Order Audit [N]: MANAGER receives 200 OK with full order line items")
+    void getOrderAuditDetail_managerRole_returns200() throws Exception {
+        java.time.Instant now = java.time.Instant.parse("2026-11-24T08:00:00Z");
+        ManagerOrderAuditDetailResponse detail = new ManagerOrderAuditDetailResponse(
+                38L, "#38", "Nguyễn Minh Anh", "minhanh@gmail.com",
+                "COMPLETED", "MIXED",
+                new BigDecimal("300000.00"), new BigDecimal("25000.00"), new BigDecimal("325000.00"),
+                now, "LMTORD38SALES001", "SEPAY", "SUCCESS", now,
+                List.of(new ManagerOrderAuditDetailResponse.OrderLineItem(
+                        10L, 1L, "Lumintra Matrix 64x64 Pro", "HARDWARE",
+                        1L, new BigDecimal("250000.00"), new BigDecimal("250000.00")
+                ))
+        );
+        when(getManagerRevenueDrilldownUseCase.getOrderAuditDetail("42", 38L)).thenReturn(detail);
+
+        mockMvc.perform(get("/api/management/admin/dashboard/revenue-sources/orders/38")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("MANAGER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.referenceCode").value("#38"))
+                .andExpect(jsonPath("$.data.paymentCode").value("LMTORD38SALES001"))
+                .andExpect(jsonPath("$.data.items[0].productName").value("Lumintra Matrix 64x64 Pro"));
     }
 }
