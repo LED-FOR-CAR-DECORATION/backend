@@ -72,6 +72,9 @@ public class GoogleCloudStorageSignedUrlService implements StorageSignedUrlServi
 
             String publicUrl = privateObject ? null : publicUrlFor(objectKey);
 
+            log.info("Generated V4 signed PUT URL [bucket={}] [private={}] [objectKey={}] [contentType={}]",
+                    targetBucket, privateObject, objectKey, contentType);
+
             return new SignedUploadUrlResult(
                     signedUrl.toString(),
                     publicUrl,
@@ -106,10 +109,15 @@ public class GoogleCloudStorageSignedUrlService implements StorageSignedUrlServi
     public boolean privateObjectExists(String objectKey) {
         String privateBucket = resolvePrivateBucket();
         try {
-            return storage.get(
+            boolean exists = storage.get(
                     BlobId.of(privateBucket, objectKey),
                     Storage.BlobGetOption.fields(Storage.BlobField.NAME)
             ) != null;
+            if (!exists) {
+                log.warn("Private object does not exist in GCS bucket [bucket={}] [objectKey={}]",
+                        privateBucket, objectKey);
+            }
+            return exists;
         } catch (Exception ex) {
             log.error("Failed to look up private object [bucket={}] [objectKey={}]", privateBucket, objectKey, ex);
             throw new StorageServiceException("Failed to verify uploaded media: " + ex.getMessage(), ex);
