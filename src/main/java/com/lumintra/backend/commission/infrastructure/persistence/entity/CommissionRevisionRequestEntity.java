@@ -190,6 +190,11 @@ public class CommissionRevisionRequestEntity {
         this.status = CommissionRevisionRequestStatus.SUPERSEDED;
     }
 
+    /** Customer rejects a pending revision brief card (no quota consumed, no fee charged). */
+    public void reject() {
+        this.status = CommissionRevisionRequestStatus.REJECTED;
+    }
+
     /** A preview answering this revision was delivered to the customer. */
     public void complete(Instant now) {
         this.status = CommissionRevisionRequestStatus.COMPLETED;
