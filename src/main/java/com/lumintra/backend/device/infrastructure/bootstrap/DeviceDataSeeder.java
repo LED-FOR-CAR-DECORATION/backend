@@ -42,16 +42,16 @@ public class DeviceDataSeeder implements ApplicationRunner {
 
     public static final String SEED_SERIAL_IN_STOCK_1 = "LMT-64X64-SEED-0001";
     public static final String SEED_SERIAL_IN_STOCK_2 = "LMT-64X64-SEED-0002";
-    public static final String SEED_SERIAL_IN_TRANSIT = "LMT-32X64-SEED-0003";
+    public static final String SEED_SERIAL_IN_TRANSIT = "LMT-64X32-SEED-0003";
     public static final String SEED_SERIAL_BOUND = "LMT-64X64-SEED-0004";
     public static final String SEED_SERIAL_RETURNED = "LMT-64X64-SEED-0005";
     public static final String SEED_SERIAL_DECOMMISSIONED = "LMT-64X64-SEED-0006";
     public static final String SEED_SERIAL_WARRANTY_CLEAN = "LMT-64X64-SEED-0007";
-    public static final String SEED_SERIAL_WARRANTY_EXPIRED = "LMT-32X64-SEED-0008";
+    public static final String SEED_SERIAL_WARRANTY_EXPIRED = "LMT-64X32-SEED-0008";
     public static final String SEED_SERIAL_CUST2_PENDING = "LMT-64X64-SEED-0009";
-    public static final String SEED_SERIAL_CUST2_APPROVED = "LMT-32X64-SEED-0010";
+    public static final String SEED_SERIAL_CUST2_APPROVED = "LMT-64X32-SEED-0010";
     public static final String SEED_SERIAL_CUST3_COMPLETED = "LMT-64X64-SEED-0011";
-    public static final String SEED_SERIAL_CUST4_REJECTED = "LMT-32X64-SEED-0012";
+    public static final String SEED_SERIAL_CUST4_REJECTED = "LMT-64X32-SEED-0012";
     public static final String SEED_SERIAL_CUST4_PENDING = "LMT-64X64-SEED-0013";
 
     private static final String SEED_ORDER_SHIPPING_SUFFIX = "SEED0004";
@@ -76,7 +76,11 @@ public class DeviceDataSeeder implements ApplicationRunner {
             "Bàn làm việc Gaming RGB",
             "Quầy thu ngân Cafe Lumintra",
             "SH 150i - Biển LED sau xe",
-            "VF e34 - Bảng LED chào mừng"
+            "VF e34 - Bảng LED chào mừng",
+            "Lumintra Matrix 64x64 Pro",
+            "Lumintra Matrix 64x32 Compact",
+            "Lumintra Matrix 32x16 Mini",
+            "Lumintra Matrix 32x64"
     );
 
     private final LedModelRepository ledModelRepository;
@@ -98,8 +102,8 @@ public class DeviceDataSeeder implements ApplicationRunner {
             return;
         }
 
-        LedModelEntity primaryModel = models.get(0);
-        LedModelEntity secondaryModel = models.size() > 1 ? models.get(1) : primaryModel;
+        LedModelEntity primaryModel = resolveLedModel(models, 64, 64, "64x64", null);
+        LedModelEntity secondaryModel = resolveLedModel(models, 64, 32, "64x32", primaryModel);
         CustomerProfileSnapshot customer = resolveCustomer();
 
         Instant now = Instant.now();
@@ -220,6 +224,37 @@ public class DeviceDataSeeder implements ApplicationRunner {
                         model.getModelId(), inStockCount);
             }
         }
+    }
+
+    private LedModelEntity resolveLedModel(
+            List<LedModelEntity> models,
+            int targetWidth,
+            int targetHeight,
+            String resolutionToken,
+            LedModelEntity excluded) {
+        return models.stream()
+                .filter(m -> isDistinctModel(m, excluded))
+                .filter(m -> Objects.equals(m.getWidthPx(), targetWidth) && Objects.equals(m.getHeightPx(), targetHeight))
+                .findFirst()
+                .or(() -> models.stream()
+                        .filter(m -> isDistinctModel(m, excluded))
+                        .filter(m -> m.getModelName() != null
+                                && m.getModelName().toLowerCase(Locale.ROOT).contains(resolutionToken))
+                        .findFirst())
+                .or(() -> models.stream()
+                        .filter(m -> isDistinctModel(m, excluded))
+                        .findFirst())
+                .orElse(models.get(0));
+    }
+
+    private boolean isDistinctModel(LedModelEntity candidate, LedModelEntity excluded) {
+        if (excluded == null) {
+            return true;
+        }
+        if (candidate == excluded) {
+            return false;
+        }
+        return excluded.getModelId() == null || !Objects.equals(candidate.getModelId(), excluded.getModelId());
     }
 
     private String resolveDimensionTag(LedModelEntity model, int modelIdx) {

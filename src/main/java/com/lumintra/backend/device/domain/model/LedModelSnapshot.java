@@ -8,8 +8,18 @@ public record LedModelSnapshot(
         Long modelId,
         String modelName,
         Map<String, Object> spec,
-        Long stockQuantity
+        Long stockQuantity,
+        Long productId
 ) {
+    public LedModelSnapshot(
+            Long modelId,
+            String modelName,
+            Map<String, Object> spec,
+            Long stockQuantity
+    ) {
+        this(modelId, modelName, spec, stockQuantity, null);
+    }
+
     public LedModelSnapshot {
         spec = spec == null ? Collections.emptyMap() : Collections.unmodifiableMap(new LinkedHashMap<>(spec));
     }

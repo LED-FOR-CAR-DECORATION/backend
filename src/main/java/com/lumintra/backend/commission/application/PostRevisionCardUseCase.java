@@ -62,16 +62,13 @@ public class PostRevisionCardUseCase {
                     "Revision cards require PREVIEW_DELIVERED status.");
         }
 
-        boolean usesCommissionQuota = commission.getRevisionsUsed() < commission.getMaxRevisions();
-        int sharedWalletCredits =
-                usesCommissionQuota
-                        ? 0
-                        : Math.max(
-                                0,
-                                subscriptionBonusLookupService.findExtraCommissionRevisions(
-                                        commission.getCustomerId()));
-        boolean usesSubscriptionCredit = !usesCommissionQuota && sharedWalletCredits > 0;
-        boolean usesFreeQuota = usesCommissionQuota || usesSubscriptionCredit;
+        int subscriptionMaxRevisions =
+                Math.max(
+                        0,
+                        subscriptionBonusLookupService.findMaxFreeCommissionRevisions(
+                                commission.getCustomerId()));
+        int effectiveMaxRevisions = Math.max(commission.getMaxRevisions(), subscriptionMaxRevisions);
+        boolean usesFreeQuota = commission.getRevisionsUsed() < effectiveMaxRevisions;
         var fee =
                 usesFreeQuota
                         ? BigDecimal.ZERO.setScale(2)
@@ -82,11 +79,11 @@ public class PostRevisionCardUseCase {
         var metadata = new LinkedHashMap<String, Object>();
         metadata.put("brief", request.brief());
         metadata.put("usesFreeQuota", usesFreeQuota);
-        metadata.put("usesSubscriptionCredit", usesSubscriptionCredit);
+        metadata.put("usesSubscriptionCredit", false);
         metadata.put("revisionFee", fee);
         metadata.put("feePercentage", usesFreeQuota ? 0 : 10);
         metadata.put("revisionsUsed", commission.getRevisionsUsed());
-        metadata.put("maxRevisions", commission.getMaxRevisions());
+        metadata.put("maxRevisions", effectiveMaxRevisions);
         String payload;
         try {
             payload = json.writeValueAsString(metadata);

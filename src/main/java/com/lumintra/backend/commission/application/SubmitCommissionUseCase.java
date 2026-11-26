@@ -2,6 +2,7 @@ package com.lumintra.backend.commission.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lumintra.backend.commerce.domain.service.CustomerSubscriptionBonusLookupService;
 import com.lumintra.backend.commission.api.request.SubmitCommissionRequest;
 import com.lumintra.backend.commission.api.request.SubmitCommissionRequest.CommissionAttachmentItemRequest;
 import com.lumintra.backend.commission.api.request.SubmitCommissionRequest.SelectedOptionItem;
@@ -72,6 +73,7 @@ public class SubmitCommissionUseCase {
     private final CommissionRequestMapper commissionRequestMapper;
     private final ObjectMapper objectMapper;
     private final ApproveCommissionRequestUseCase commissionApproval;
+    private final CustomerSubscriptionBonusLookupService subscriptionBonusLookupService;
 
     @Transactional
     public CustomerCommissionDetailResponse execute(Long customerId, SubmitCommissionRequest request) {
@@ -133,6 +135,12 @@ public class SubmitCommissionUseCase {
 
         Long assignedStaffId = staffAutoAssignmentService.assignNextAvailableStaff();
 
+        int subscriptionMaxRevisions =
+                subscriptionBonusLookupService != null
+                        ? Math.max(0, subscriptionBonusLookupService.findMaxFreeCommissionRevisions(customerId))
+                        : 0;
+        int effectiveMaxRevisions = Math.max(tier.getMaxRevisions(), subscriptionMaxRevisions);
+
         CommissionRequestEntity commission = CommissionRequestEntity.createPendingReview(
                 customerId,
                 request.title(),
@@ -141,7 +149,7 @@ public class SubmitCommissionUseCase {
                 resolvedTargetMatrixDimensions,
                 priceBreakdownJson,
                 initialPrice,
-                tier.getMaxRevisions(),
+                effectiveMaxRevisions,
                 assignedStaffId
         );
         commission = commissionRequestRepository.save(commission);

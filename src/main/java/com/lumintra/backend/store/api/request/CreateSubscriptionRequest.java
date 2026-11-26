@@ -21,6 +21,7 @@ public record CreateSubscriptionRequest(
         @Positive Integer durationDays,
         @NotNull Boolean allAccessCharacters,
         @Min(0) @Max(100) Integer maxCommissionRevisions,
+        @Min(1) @Max(100) Integer maxMobileProfiles,
         List<@NotNull @Positive Long> tagIds) {
     public CreateSubscriptionRequest(
             String planName,
@@ -43,6 +44,7 @@ public record CreateSubscriptionRequest(
                 durationDays,
                 allAccessCharacters,
                 0,
+                3,
                 tagIds);
     }
 
@@ -68,6 +70,34 @@ public record CreateSubscriptionRequest(
                 durationDays,
                 allAccessCharacters,
                 0,
+                3,
+                tagIds);
+    }
+
+    public CreateSubscriptionRequest(
+            String planName,
+            String planCode,
+            BigDecimal basePrice,
+            String description,
+            String thumbnailUrl,
+            List<String> galleryUrls,
+            Boolean lifetime,
+            Integer durationDays,
+            Boolean allAccessCharacters,
+            Integer maxCommissionRevisions,
+            List<Long> tagIds) {
+        this(
+                planName,
+                planCode,
+                basePrice,
+                description,
+                thumbnailUrl,
+                galleryUrls,
+                lifetime,
+                durationDays,
+                allAccessCharacters,
+                maxCommissionRevisions,
+                3,
                 tagIds);
     }
 
@@ -75,6 +105,7 @@ public record CreateSubscriptionRequest(
         planName = planName == null ? null : planName.strip();
         planCode = planCode == null ? null : planCode.strip();
         maxCommissionRevisions = maxCommissionRevisions == null ? 0 : maxCommissionRevisions;
+        maxMobileProfiles = maxMobileProfiles == null ? 3 : maxMobileProfiles;
     }
 
     @JsonIgnore
@@ -84,18 +115,5 @@ public record CreateSubscriptionRequest(
                         + " lifetime plan")
     public boolean isDurationValid() {
         return lifetime == null || lifetime == (durationDays == null);
-    }
-
-    @JsonIgnore
-    @AssertTrue(
-            message =
-                    "Commission revision bonus plan without all-access characters must be lifetime"
-                        + " (isLifetime=true, durationDays=null)")
-    public boolean isCommissionRevisionPlanLifetime() {
-        boolean isRevisionOnlyPlan =
-                Boolean.FALSE.equals(allAccessCharacters)
-                        && maxCommissionRevisions != null
-                        && maxCommissionRevisions > 0;
-        return !isRevisionOnlyPlan || Boolean.TRUE.equals(lifetime);
     }
 }

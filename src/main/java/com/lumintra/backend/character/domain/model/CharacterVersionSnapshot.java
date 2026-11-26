@@ -12,5 +12,19 @@ public record CharacterVersionSnapshot(
         int versionNumber,
         String previewGifUrl,
         Integer frameCount,
-        Integer frameDelayMs
-) {}
+        Integer frameDelayMs,
+        Long productId
+) {
+    public CharacterVersionSnapshot(
+            Long versionId,
+            Long characterId,
+            String characterName,
+            String description,
+            int versionNumber,
+            String previewGifUrl,
+            Integer frameCount,
+            Integer frameDelayMs
+    ) {
+        this(versionId, characterId, characterName, description, versionNumber, previewGifUrl, frameCount, frameDelayMs, null);
+    }
+}

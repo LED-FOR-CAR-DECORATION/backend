@@ -68,7 +68,8 @@ public class LedModelLookupServiceImpl implements LedModelLookupService {
                 entity.getModelId(),
                 entity.getModelName(),
                 entity.getSpec(),
-                entity.getStockQuantity() != null ? entity.getStockQuantity() : 0L
+                entity.getStockQuantity() != null ? entity.getStockQuantity() : 0L,
+                entity.getProductId()
         );
     }
 }

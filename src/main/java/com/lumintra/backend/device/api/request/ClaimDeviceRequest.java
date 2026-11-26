@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 public record ClaimDeviceRequest(
         @Schema(
                 description = "Compact HMAC-SHA256 signed factory QR JSON payload string scanned from the hardware unit",
-                example = "{\"v\":1,\"sn\":\"LMT-32X64-SEED-0003\",\"mac\":\"AA:BB:CC:11:22:03\",\"sig\":\"7f8c...\"}",
+                example = "{\"v\":1,\"sn\":\"LMT-64X32-SEED-0003\",\"mac\":\"AA:BB:CC:11:22:03\",\"sig\":\"7f8c...\"}",
                 requiredMode = Schema.RequiredMode.REQUIRED
         )
         @NotBlank(message = "qrPayload is required")

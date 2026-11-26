@@ -85,26 +85,29 @@ class CreateSubscriptionPersistenceTest {
     }
 
     @Test
-    void savesLifetimeCommissionRevisionBonusPlan() {
+    void savesThirtyDayTierPlanWithMobileProfilesAndCommissionRevisions() {
         var request =
                 new CreateSubscriptionRequest(
-                        "Commission +10 Vĩnh viễn",
-                        "COMMISSION_REV_10",
-                        new BigDecimal("169000.00"),
-                        "Cộng thêm 10 lượt sửa Commission miễn phí vĩnh viễn",
+                        "Pro 30 Ngày",
+                        "VIP_PRO_30D",
+                        new BigDecimal("599999.00"),
+                        "10 profile Mobile và 5 lượt sửa miễn phí mỗi đơn thiết kế",
                         null,
-                        null,
-                        true,
                         null,
                         false,
+                        30,
+                        false,
+                        5,
                         10,
                         null);
         var result = useCase.execute(request);
-        assertThat(result.lifetime()).isTrue();
-        assertThat(result.durationDays()).isNull();
+        assertThat(result.lifetime()).isFalse();
+        assertThat(result.durationDays()).isEqualTo(30);
         assertThat(result.allAccessCharacters()).isFalse();
-        assertThat(result.maxCommissionRevisions()).isEqualTo(10);
-        assertThat(subscriptionDetailRepository.findByProductId(result.productId()).orElseThrow().getMaxCommissionRevisions())
-                .isEqualTo(10);
+        assertThat(result.maxCommissionRevisions()).isEqualTo(5);
+        assertThat(result.maxMobileProfiles()).isEqualTo(10);
+        var saved = subscriptionDetailRepository.findByProductId(result.productId()).orElseThrow();
+        assertThat(saved.getMaxCommissionRevisions()).isEqualTo(5);
+        assertThat(saved.getMaxMobileProfiles()).isEqualTo(10);
     }
 }

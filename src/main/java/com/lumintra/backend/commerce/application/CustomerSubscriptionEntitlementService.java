@@ -1,18 +1,23 @@
 package com.lumintra.backend.commerce.application;
 
 import com.lumintra.backend.commerce.api.response.CustomerActiveSubscriptionResponse;
+import com.lumintra.backend.commerce.api.response.CustomerSubscriptionBenefitsResponse;
 import com.lumintra.backend.commerce.domain.service.CustomerSubscriptionBonusLookupService;
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.CustomerSubscriptionEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.OrderItemEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.CustomerSubscriptionRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemRepository;
+import com.lumintra.backend.store.domain.model.ProductSnapshot;
+import com.lumintra.backend.store.domain.model.ProductType;
 import com.lumintra.backend.store.domain.model.SubscriptionDetailSnapshot;
+import com.lumintra.backend.store.domain.service.ProductLookupService;
 import com.lumintra.backend.store.domain.service.SubscriptionLookupService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -27,11 +32,14 @@ import java.util.stream.Collectors;
 public class CustomerSubscriptionEntitlementService implements CustomerSubscriptionBonusLookupService {
 
     private static final String STATUS_ACTIVE = "ACTIVE";
-    private static final String STATUS_EXHAUSTED = "EXHAUSTED";
+    private static final String STATUS_EXPIRED = "EXPIRED";
+    private static final int DEFAULT_MOBILE_PROFILES = 3;
+    private static final int DEFAULT_COMMISSION_REVISIONS = 1;
 
     private final CustomerSubscriptionRepository customerSubscriptionRepository;
     private final SubscriptionLookupService subscriptionLookupService;
     private final OrderItemRepository orderItemRepository;
+    private final ProductLookupService productLookupService;
 
     @Transactional(readOnly = true)
     public Optional<CustomerActiveSubscriptionResponse> findActiveSubscription(Long customerId) {
@@ -68,70 +76,254 @@ public class CustomerSubscriptionEntitlementService implements CustomerSubscript
     }
 
     /**
-     * Pure commission-revision credit packs can be purchased repeatedly to top up credits;
-     * all-access character plans cannot be repurchased while already active.
+     * Tier-based ownership check:
+     * - Prevents repurchasing a plan that is already active for the customer.
+     * - Prevents purchasing an all-access-character-only plan when the customer already owns
+     *   any active all-access plan (such as Ultimate).
+     * - Allows upgrading from an all-access-character-only plan to an expanded all-access plan
+     *   (e.g. Ultimate with 20 mobile profiles + 10 free commission revisions).
      */
     @Transactional(readOnly = true)
     public boolean isSubscriptionProductAlreadyOwned(Long customerId, Long productId) {
         if (customerId == null || productId == null) {
             return false;
         }
-        SubscriptionDetailSnapshot detail =
-                subscriptionLookupService.findByProductIds(Set.of(productId)).get(productId);
-        boolean isRepeatableRevisionPack =
-                detail != null && !detail.allAccessCharacters() && detail.maxCommissionRevisions() > 0;
-        if (isRepeatableRevisionPack) {
+        List<CustomerActiveSubscriptionResponse> activeSubs = resolveValidActiveSubscriptions(customerId);
+        if (activeSubs.isEmpty()) {
             return false;
         }
-        return hasActiveSubscriptionForProduct(customerId, productId);
+        if (activeSubs.stream().anyMatch(sub -> productId.equals(sub.productId()))) {
+            return true;
+        }
+
+        SubscriptionDetailSnapshot targetDetail =
+                subscriptionLookupService.findByProductIds(Set.of(productId)).get(productId);
+        if (isAllAccessOnlyPlan(targetDetail)) {
+            return activeSubs.stream().anyMatch(CustomerActiveSubscriptionResponse::allAccessCharacters);
+        }
+        return false;
+    }
+
+    /**
+     * Resolves the effective purchase price for a subscription product.
+     * When the customer already holds an active all-access-character-only plan (e.g. 999,999 VND)
+     * and purchases an expanded all-access plan (e.g. Ultimate 4,999,999 VND), the price of the
+     * owned all-access-only plan is deducted from the target plan price.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal resolveEffectiveSubscriptionPrice(Long customerId, ProductSnapshot targetProduct) {
+        if (targetProduct == null || targetProduct.basePrice() == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal basePrice = targetProduct.basePrice().setScale(2, RoundingMode.HALF_UP);
+        if (customerId == null || targetProduct.productType() != ProductType.SUBSCRIPTION) {
+            return basePrice;
+        }
+
+        SubscriptionDetailSnapshot targetDetail =
+                subscriptionLookupService.findByProductIds(Set.of(targetProduct.productId()))
+                        .get(targetProduct.productId());
+        if (!isAllAccessUpgradePlan(targetDetail)) {
+            return basePrice;
+        }
+
+        List<CustomerActiveSubscriptionResponse> activeSubs = resolveValidActiveSubscriptions(customerId);
+        boolean alreadyOwnsAllAccessUpgrade = activeSubs.stream().anyMatch(this::isAllAccessUpgradePlan);
+        if (alreadyOwnsAllAccessUpgrade) {
+            return basePrice;
+        }
+
+        BigDecimal deduction = activeSubs.stream()
+                .filter(this::isAllAccessOnlyPlan)
+                .map(CustomerActiveSubscriptionResponse::paidPrice)
+                .filter(Objects::nonNull)
+                .filter(price -> price.signum() > 0)
+                .max(BigDecimal::compareTo)
+                .orElse(BigDecimal.ZERO);
+
+        if (deduction.signum() <= 0) {
+            return basePrice;
+        }
+        return basePrice.subtract(deduction).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public int findExtraCommissionRevisions(Long customerId) {
+    public int findMaxFreeCommissionRevisions(Long customerId) {
         if (customerId == null) {
             return 0;
         }
         return resolveValidActiveSubscriptions(customerId).stream()
-                .mapToInt(sub -> Math.max(0, sub.remainingCommissionRevisions()))
-                .sum();
+                .mapToInt(sub -> Math.max(0, sub.maxCommissionRevisions()))
+                .max()
+                .orElse(0);
     }
 
-    @Override
-    @Transactional(propagation = Propagation.MANDATORY)
-    public boolean consumeOneExtraCommissionRevision(Long customerId) {
+    @Transactional(readOnly = true)
+    public int findMaxMobileProfiles(Long customerId) {
         if (customerId == null) {
-            return false;
+            return DEFAULT_MOBILE_PROFILES;
         }
-        List<CustomerSubscriptionEntity> candidates =
-                customerSubscriptionRepository.findActiveWithRemainingRevisionsForUpdate(customerId, STATUS_ACTIVE);
-        if (candidates == null || candidates.isEmpty()) {
-            return false;
+        return resolveValidActiveSubscriptions(customerId).stream()
+                .mapToInt(sub -> Math.max(DEFAULT_MOBILE_PROFILES, sub.maxMobileProfiles()))
+                .max()
+                .orElse(DEFAULT_MOBILE_PROFILES);
+    }
+
+    @Transactional(readOnly = true)
+    public CustomerSubscriptionBenefitsResponse getCustomerSubscriptionBenefits(Long customerId) {
+        if (customerId == null) {
+            return emptyBenefits();
+        }
+        List<CustomerSubscriptionEntity> allSubs =
+                customerSubscriptionRepository.findByCustomerIdOrderByActivatedAtDesc(customerId);
+        if (allSubs == null || allSubs.isEmpty()) {
+            return emptyBenefits();
         }
 
-        Set<Long> productIds = candidates.stream()
+        Set<Long> productIds = allSubs.stream()
                 .map(CustomerSubscriptionEntity::getProductId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, SubscriptionDetailSnapshot> detailsByProductId =
                 productIds.isEmpty() ? Map.of() : subscriptionLookupService.findByProductIds(productIds);
+        Map<Long, ProductSnapshot> productsById =
+                (productIds.isEmpty() || productLookupService == null)
+                        ? Map.of()
+                        : Optional.ofNullable(productLookupService.findSnapshotsByIds(productIds)).orElse(Map.of());
+
+        Set<Long> orderItemIds = allSubs.stream()
+                .map(CustomerSubscriptionEntity::getOrderItemId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, OrderItemEntity> orderItemsById = orderItemIds.isEmpty()
+                ? Map.of()
+                : orderItemRepository.findWithOrderByOrderItemIdIn(orderItemIds).stream()
+                        .collect(Collectors.toMap(OrderItemEntity::getOrderItemId, oi -> oi, (a, b) -> a));
 
         Instant now = Instant.now();
-        for (CustomerSubscriptionEntity sub : candidates) {
+        List<CustomerActiveSubscriptionResponse> activeList = new java.util.ArrayList<>();
+        List<CustomerSubscriptionBenefitsResponse.SubscriptionHistoryItem> historyList = new java.util.ArrayList<>();
+
+        for (CustomerSubscriptionEntity sub : allSubs) {
             SubscriptionDetailSnapshot detail = detailsByProductId.get(sub.getProductId());
-            if (isExpired(sub, detail, now)) {
-                continue;
+            ProductSnapshot product = productsById.get(sub.getProductId());
+            boolean isLifetime = detail != null ? detail.isLifetime() : sub.isLifetime();
+            Integer durationDays = detail != null ? detail.durationDays() : null;
+            Instant activatedAt = sub.getActivatedAt();
+            Instant expiresAt = null;
+            boolean expired = false;
+            if (!isLifetime && durationDays != null && durationDays > 0 && activatedAt != null) {
+                expiresAt = activatedAt.plus(durationDays, ChronoUnit.DAYS);
+                expired = !now.isBefore(expiresAt);
             }
-            if (sub.consumeOneRevisionCredit()) {
-                boolean allAccess = detail != null && detail.allAccessCharacters();
-                if (!allAccess && sub.getRemainingCommissionRevisions() <= 0) {
-                    sub.setStatus(STATUS_EXHAUSTED);
+
+            boolean allAccess = detail != null && detail.allAccessCharacters();
+            int maxCommissionRevisions = detail != null ? Math.max(0, detail.maxCommissionRevisions()) : 0;
+            int maxMobileProfiles = detail != null
+                    ? Math.max(DEFAULT_MOBILE_PROFILES, detail.maxMobileProfiles())
+                    : DEFAULT_MOBILE_PROFILES;
+
+            Long orderId = null;
+            BigDecimal paidPrice = null;
+            if (sub.getOrderItemId() != null) {
+                OrderItemEntity orderItem = orderItemsById.get(sub.getOrderItemId());
+                if (orderItem != null) {
+                    if (orderItem.getOrder() != null) {
+                        orderId = orderItem.getOrder().getOrderId();
+                    }
+                    paidPrice = orderItem.getUnitPrice();
                 }
-                customerSubscriptionRepository.save(sub);
-                return true;
+            }
+            if (paidPrice == null && product != null) {
+                paidPrice = product.basePrice();
+            }
+
+            boolean isActiveStatus = STATUS_ACTIVE.equalsIgnoreCase(sub.getStatus());
+            if (isActiveStatus && !expired) {
+                activeList.add(new CustomerActiveSubscriptionResponse(
+                        sub.getSubscriptionId(),
+                        sub.getProductId(),
+                        orderId,
+                        detail != null ? detail.planCode() : null,
+                        detail != null ? detail.planName() : null,
+                        isLifetime,
+                        durationDays,
+                        allAccess,
+                        maxCommissionRevisions,
+                        maxCommissionRevisions,
+                        maxMobileProfiles,
+                        activatedAt,
+                        expiresAt,
+                        paidPrice
+                ));
+            } else {
+                String resolvedStatus = (isActiveStatus && expired) ? STATUS_EXPIRED : sub.getStatus();
+                historyList.add(new CustomerSubscriptionBenefitsResponse.SubscriptionHistoryItem(
+                        sub.getSubscriptionId(),
+                        sub.getProductId(),
+                        orderId,
+                        detail != null ? detail.planCode() : null,
+                        detail != null ? detail.planName() : null,
+                        isLifetime,
+                        durationDays,
+                        allAccess,
+                        maxCommissionRevisions,
+                        maxMobileProfiles,
+                        resolvedStatus,
+                        activatedAt,
+                        expiresAt,
+                        paidPrice
+                ));
             }
         }
-        return false;
+
+        boolean hasAllAccess = activeList.stream().anyMatch(CustomerActiveSubscriptionResponse::allAccessCharacters);
+        int effectiveMobileProfiles = activeList.stream()
+                .mapToInt(sub -> Math.max(DEFAULT_MOBILE_PROFILES, sub.maxMobileProfiles()))
+                .max()
+                .orElse(DEFAULT_MOBILE_PROFILES);
+        int effectiveCommissionRevisions = activeList.stream()
+                .mapToInt(sub -> Math.max(DEFAULT_COMMISSION_REVISIONS, sub.maxCommissionRevisions()))
+                .max()
+                .orElse(DEFAULT_COMMISSION_REVISIONS);
+        boolean alreadyOwnsUpgrade = activeList.stream().anyMatch(this::isAllAccessUpgradePlan);
+        BigDecimal upgradeCredit = alreadyOwnsUpgrade
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : activeList.stream()
+                        .filter(this::isAllAccessOnlyPlan)
+                        .map(CustomerActiveSubscriptionResponse::paidPrice)
+                        .filter(Objects::nonNull)
+                        .filter(price -> price.signum() > 0)
+                        .max(BigDecimal::compareTo)
+                        .orElse(BigDecimal.ZERO)
+                        .setScale(2, RoundingMode.HALF_UP);
+
+        return new CustomerSubscriptionBenefitsResponse(
+                !activeList.isEmpty(),
+                hasAllAccess,
+                DEFAULT_MOBILE_PROFILES,
+                effectiveMobileProfiles,
+                DEFAULT_COMMISSION_REVISIONS,
+                effectiveCommissionRevisions,
+                upgradeCredit,
+                List.copyOf(activeList),
+                List.copyOf(historyList)
+        );
+    }
+
+    private CustomerSubscriptionBenefitsResponse emptyBenefits() {
+        return new CustomerSubscriptionBenefitsResponse(
+                false,
+                false,
+                DEFAULT_MOBILE_PROFILES,
+                DEFAULT_MOBILE_PROFILES,
+                DEFAULT_COMMISSION_REVISIONS,
+                DEFAULT_COMMISSION_REVISIONS,
+                BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
+                List.of(),
+                List.of()
+        );
     }
 
     private List<CustomerActiveSubscriptionResponse> resolveValidActiveSubscriptions(Long customerId) {
@@ -150,6 +342,10 @@ public class CustomerSubscriptionEntitlementService implements CustomerSubscript
                 .collect(Collectors.toSet());
         Map<Long, SubscriptionDetailSnapshot> detailsByProductId =
                 productIds.isEmpty() ? Map.of() : subscriptionLookupService.findByProductIds(productIds);
+        Map<Long, ProductSnapshot> productsById =
+                (productIds.isEmpty() || productLookupService == null)
+                        ? Map.of()
+                        : Optional.ofNullable(productLookupService.findSnapshotsByIds(productIds)).orElse(Map.of());
 
         Set<Long> orderItemIds = activeSubs.stream()
                 .map(CustomerSubscriptionEntity::getOrderItemId)
@@ -162,25 +358,20 @@ public class CustomerSubscriptionEntitlementService implements CustomerSubscript
 
         Instant now = Instant.now();
         return activeSubs.stream()
-                .map(sub -> toResponseIfValid(sub, detailsByProductId.get(sub.getProductId()), orderItemsById, now))
+                .map(sub -> toResponseIfValid(
+                        sub,
+                        detailsByProductId.get(sub.getProductId()),
+                        productsById.get(sub.getProductId()),
+                        orderItemsById,
+                        now))
                 .flatMap(Optional::stream)
                 .toList();
-    }
-
-    private boolean isExpired(CustomerSubscriptionEntity sub, SubscriptionDetailSnapshot detail, Instant now) {
-        boolean isLifetime = detail != null ? detail.isLifetime() : sub.isLifetime();
-        Integer durationDays = detail != null ? detail.durationDays() : null;
-        Instant activatedAt = sub.getActivatedAt();
-        if (!isLifetime && durationDays != null && durationDays > 0 && activatedAt != null) {
-            Instant expiresAt = activatedAt.plus(durationDays, ChronoUnit.DAYS);
-            return !now.isBefore(expiresAt);
-        }
-        return false;
     }
 
     private Optional<CustomerActiveSubscriptionResponse> toResponseIfValid(
             CustomerSubscriptionEntity sub,
             SubscriptionDetailSnapshot detail,
+            ProductSnapshot product,
             Map<Long, OrderItemEntity> orderItemsById,
             Instant now) {
         boolean isLifetime = detail != null ? detail.isLifetime() : sub.isLifetime();
@@ -195,18 +386,22 @@ public class CustomerSubscriptionEntitlementService implements CustomerSubscript
         }
 
         boolean allAccess = detail != null && detail.allAccessCharacters();
-        int maxCommissionRevisions = detail != null ? detail.maxCommissionRevisions() : 0;
-        int remainingCommissionRevisions = Math.max(0, sub.getRemainingCommissionRevisions());
-        if (!allAccess && maxCommissionRevisions > 0 && remainingCommissionRevisions <= 0) {
-            return Optional.empty();
-        }
+        int maxCommissionRevisions = detail != null ? Math.max(0, detail.maxCommissionRevisions()) : 0;
+        int maxMobileProfiles = detail != null ? Math.max(DEFAULT_MOBILE_PROFILES, detail.maxMobileProfiles()) : DEFAULT_MOBILE_PROFILES;
 
         Long orderId = null;
+        BigDecimal paidPrice = null;
         if (sub.getOrderItemId() != null) {
             OrderItemEntity orderItem = orderItemsById.get(sub.getOrderItemId());
-            if (orderItem != null && orderItem.getOrder() != null) {
-                orderId = orderItem.getOrder().getOrderId();
+            if (orderItem != null) {
+                if (orderItem.getOrder() != null) {
+                    orderId = orderItem.getOrder().getOrderId();
+                }
+                paidPrice = orderItem.getUnitPrice();
             }
+        }
+        if (paidPrice == null && product != null) {
+            paidPrice = product.basePrice();
         }
 
         return Optional.of(new CustomerActiveSubscriptionResponse(
@@ -219,10 +414,39 @@ public class CustomerSubscriptionEntitlementService implements CustomerSubscript
                 durationDays,
                 allAccess,
                 maxCommissionRevisions,
-                remainingCommissionRevisions,
-                detail != null ? detail.maxMobileProfiles() : 3,
+                maxCommissionRevisions,
+                maxMobileProfiles,
                 activatedAt,
-                expiresAt
+                expiresAt,
+                paidPrice
         ));
+    }
+
+    private boolean isAllAccessOnlyPlan(SubscriptionDetailSnapshot detail) {
+        return detail != null
+                && detail.allAccessCharacters()
+                && detail.maxMobileProfiles() <= DEFAULT_MOBILE_PROFILES
+                && detail.maxCommissionRevisions() <= 0;
+    }
+
+    private boolean isAllAccessOnlyPlan(CustomerActiveSubscriptionResponse sub) {
+        return sub != null
+                && sub.allAccessCharacters()
+                && sub.maxMobileProfiles() <= DEFAULT_MOBILE_PROFILES
+                && sub.maxCommissionRevisions() <= 0;
+    }
+
+    private boolean isAllAccessUpgradePlan(SubscriptionDetailSnapshot detail) {
+        return detail != null
+                && detail.allAccessCharacters()
+                && (detail.maxMobileProfiles() > DEFAULT_MOBILE_PROFILES
+                        || detail.maxCommissionRevisions() > 0);
+    }
+
+    private boolean isAllAccessUpgradePlan(CustomerActiveSubscriptionResponse sub) {
+        return sub != null
+                && sub.allAccessCharacters()
+                && (sub.maxMobileProfiles() > DEFAULT_MOBILE_PROFILES
+                        || sub.maxCommissionRevisions() > 0);
     }
 }

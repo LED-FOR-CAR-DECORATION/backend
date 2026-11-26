@@ -94,7 +94,7 @@ class UpdateSubscriptionPersistenceTest {
                 useCase.execute(
                         detail.getSubscriptionDetailId(),
                         new UpdateSubscriptionRequest(
-                                "New", BigDecimal.TEN, "New description", null, 60, false, 5));
+                                "New", BigDecimal.TEN, "New description", null, 60, false, 5, 10));
         em.flush();
         em.clear();
 
@@ -107,7 +107,9 @@ class UpdateSubscriptionPersistenceTest {
         assertThat(saved.getDurationDays()).isEqualTo(60);
         assertThat(saved.isAllAccessCharacters()).isFalse();
         assertThat(saved.getMaxCommissionRevisions()).isEqualTo(5);
+        assertThat(saved.getMaxMobileProfiles()).isEqualTo(10);
         assertThat(response.maxCommissionRevisions()).isEqualTo(5);
+        assertThat(response.maxMobileProfiles()).isEqualTo(10);
         assertThat(productRepository.findById(product.getProductId()).orElseThrow().getBasePrice())
                 .isEqualByComparingTo("10");
         assertThat(response.status()).isEqualTo(ProductStatus.PUBLISHED);

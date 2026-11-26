@@ -61,8 +61,10 @@ class DeviceDataSeederTest {
     @Test
     @DisplayName("DEV-173 SEED-01 [N]: Seeds 10 IN_STOCK instances per LED model plus lifecycle/warranty units and syncs stockQuantity")
     void run_cleanDatabaseWithModelsAndCustomer_seedsAllStatuses() {
-        LedModelEntity pro = LedModelEntity.createForProduct(101L, "Matrix 64x64 Pro", Map.of(), 50L);
-        LedModelEntity compact = LedModelEntity.createForProduct(102L, "Matrix 32x64", Map.of(), 30L);
+        LedModelEntity pro = LedModelEntity.createForProduct(
+                101L, "Tấm LED Lumintra 64x64 Cao Cấp", Map.of("resolution", "64x64"), 50L);
+        LedModelEntity compact = LedModelEntity.createForProduct(
+                102L, "Tấm LED Lumintra 64x32 Gọn Nhẹ", Map.of("resolution", "64x32"), 30L);
 
         given(ledModelRepository.findAll(any(Sort.class))).willReturn(List.of(pro, compact));
         given(customerLookupService.findFirstProfile()).willReturn(
@@ -116,8 +118,10 @@ class DeviceDataSeederTest {
     @Test
     @DisplayName("N: Seeds 31 LED instances (10 IN_STOCK per model + 11 lifecycle/multi-customer warranty units) when extra customer profiles exist")
     void run_withExtraCustomerProfiles_seedsAll13Instances() {
-        LedModelEntity pro = LedModelEntity.createForProduct(101L, "Matrix 64x64 Pro", Map.of(), 10L);
-        LedModelEntity compact = LedModelEntity.createForProduct(102L, "Matrix 32x64", Map.of(), 10L);
+        LedModelEntity pro = LedModelEntity.createForProduct(
+                101L, "Tấm LED Lumintra 64x64 Cao Cấp", Map.of("resolution", "64x64"), 10L);
+        LedModelEntity compact = LedModelEntity.createForProduct(
+                102L, "Tấm LED Lumintra 64x32 Gọn Nhẹ", Map.of("resolution", "64x32"), 10L);
 
         given(ledModelRepository.findAll(any(Sort.class))).willReturn(List.of(pro, compact));
         given(customerLookupService.findFirstProfile()).willReturn(
@@ -143,10 +147,19 @@ class DeviceDataSeederTest {
 
         // 13 base + multi-customer warranty instances + 8 more IN_STOCK for pro + 10 IN_STOCK for compact = 31
         verify(ledInstanceRepository, times(31)).save(instanceCaptor.capture());
-        assertThat(instanceCaptor.getAllValues().stream()
+        List<LedInstanceEntity> allSaved = instanceCaptor.getAllValues();
+        assertThat(allSaved.stream()
                 .filter(instance -> instance.getStatus() == LedInstanceStatus.BOUND)
                 .map(LedInstanceEntity::getDeviceName))
-                .allSatisfy(name -> assertThat(name).isIn("Matrix 64x64 Pro", "Matrix 32x64"));
+                .allSatisfy(name -> assertThat(name).isIn(
+                        "Tấm LED Lumintra 64x64 Cao Cấp",
+                        "Tấm LED Lumintra 64x32 Gọn Nhẹ"));
+        assertThat(allSaved)
+                .filteredOn(i -> i.getSerialNumber().startsWith("LMT-64X64-SEED-"))
+                .allSatisfy(i -> assertThat(i.getModelId()).isEqualTo(101L));
+        assertThat(allSaved)
+                .filteredOn(i -> i.getSerialNumber().startsWith("LMT-64X32-SEED-"))
+                .allSatisfy(i -> assertThat(i.getModelId()).isEqualTo(102L));
     }
 
     @Test

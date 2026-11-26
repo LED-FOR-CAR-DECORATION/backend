@@ -5,7 +5,11 @@ import com.lumintra.backend.commerce.application.CustomerSubscriptionEntitlement
 import com.lumintra.backend.commerce.infrastructure.persistence.entity.CustomerSubscriptionEntity;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.CustomerSubscriptionRepository;
 import com.lumintra.backend.commerce.infrastructure.persistence.repository.OrderItemRepository;
+import com.lumintra.backend.store.domain.model.ProductSnapshot;
+import com.lumintra.backend.store.domain.model.ProductStatus;
+import com.lumintra.backend.store.domain.model.ProductType;
 import com.lumintra.backend.store.domain.model.SubscriptionDetailSnapshot;
+import com.lumintra.backend.store.domain.service.ProductLookupService;
 import com.lumintra.backend.store.domain.service.SubscriptionLookupService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -36,6 +41,9 @@ class CustomerSubscriptionEntitlementServiceTest {
 
     @Mock
     private OrderItemRepository orderItemRepository;
+
+    @Mock
+    private ProductLookupService productLookupService;
 
     @InjectMocks
     private CustomerSubscriptionEntitlementService service;
@@ -99,52 +107,103 @@ class CustomerSubscriptionEntitlementServiceTest {
     }
 
     @Test
-    @DisplayName("Multiple active lifetime plans sum remaining commission credits, allow rebuying credit packs, and consume FIFO")
-    void multipleActivePlans_sumCommissionRevisionsAndConsumeFifo() {
-        CustomerSubscriptionEntity allAccess = CustomerSubscriptionEntity.createActive(42L, 16L, null, 0);
-        ReflectionTestUtils.setField(allAccess, "subscriptionId", 10L);
-        ReflectionTestUtils.setField(allAccess, "activatedAt", Instant.now().minus(5, ChronoUnit.DAYS));
+    @DisplayName("Tier-based subscriptions use highest active allowance, allow Ultimate upgrade, and deduct Full-Char price")
+    void tierBasedPlans_useHighestAllowanceAndDeductAllAccessOnlyPriceOnUltimateUpgrade() {
+        CustomerSubscriptionEntity fullCharOnly = CustomerSubscriptionEntity.createActive(42L, 16L, null, 0);
+        ReflectionTestUtils.setField(fullCharOnly, "subscriptionId", 10L);
+        ReflectionTestUtils.setField(fullCharOnly, "activatedAt", Instant.now().minus(5, ChronoUnit.DAYS));
 
-        CustomerSubscriptionEntity bonus5 = CustomerSubscriptionEntity.createActive(42L, 17L, null, 1);
-        ReflectionTestUtils.setField(bonus5, "subscriptionId", 11L);
-        ReflectionTestUtils.setField(bonus5, "activatedAt", Instant.now().minus(2, ChronoUnit.DAYS));
+        CustomerSubscriptionEntity standard30d = CustomerSubscriptionEntity.createActive(42L, 17L, null, 3);
+        ReflectionTestUtils.setField(standard30d, "subscriptionId", 11L);
+        ReflectionTestUtils.setField(standard30d, "activatedAt", Instant.now().minus(2, ChronoUnit.DAYS));
 
-        CustomerSubscriptionEntity bonus10 = CustomerSubscriptionEntity.createActive(42L, 18L, null, 10);
-        ReflectionTestUtils.setField(bonus10, "subscriptionId", 12L);
-        ReflectionTestUtils.setField(bonus10, "activatedAt", Instant.now().minus(1, ChronoUnit.DAYS));
+        CustomerSubscriptionEntity pro30d = CustomerSubscriptionEntity.createActive(42L, 18L, null, 5);
+        ReflectionTestUtils.setField(pro30d, "subscriptionId", 12L);
+        ReflectionTestUtils.setField(pro30d, "activatedAt", Instant.now().minus(1, ChronoUnit.DAYS));
 
         when(customerSubscriptionRepository.findByCustomerIdAndStatusOrderByActivatedAtDesc(42L, "ACTIVE"))
-                .thenReturn(List.of(bonus10, bonus5, allAccess));
+                .thenReturn(List.of(pro30d, standard30d, fullCharOnly));
         when(subscriptionLookupService.findByProductIds(Set.of(16L, 17L, 18L)))
                 .thenReturn(Map.of(
-                        16L, new SubscriptionDetailSnapshot(16L, "VIP_LIFETIME", "All Access", true, null, true, 0, 10),
-                        17L, new SubscriptionDetailSnapshot(17L, "VIP_COMMISSION", "Commission +5", true, null, false, 5, 5),
-                        18L, new SubscriptionDetailSnapshot(18L, "VIP_COMMISSION_10", "Commission +10", true, null, false, 10, 5)
+                        16L, new SubscriptionDetailSnapshot(16L, "VIP_LIFETIME", "All Access", true, null, true, 0, 3),
+                        17L, new SubscriptionDetailSnapshot(17L, "VIP_STANDARD_30D", "Standard 30D", false, 30, false, 3, 5),
+                        18L, new SubscriptionDetailSnapshot(18L, "VIP_PRO_30D", "Pro 30D", false, 30, false, 5, 10)
                 ));
-        when(subscriptionLookupService.findByProductIds(Set.of(16L)))
-                .thenReturn(Map.of(16L, new SubscriptionDetailSnapshot(16L, "VIP_LIFETIME", "All Access", true, null, true, 0, 10)));
-        when(subscriptionLookupService.findByProductIds(Set.of(17L)))
-                .thenReturn(Map.of(17L, new SubscriptionDetailSnapshot(17L, "VIP_COMMISSION", "Commission +5", true, null, false, 5, 5)));
+        when(productLookupService.findSnapshotsByIds(Set.of(16L, 17L, 18L)))
+                .thenReturn(Map.of(
+                        16L, new ProductSnapshot(16L, "All Access", ProductType.SUBSCRIPTION, null, new BigDecimal("999999.00"), ProductStatus.PUBLISHED),
+                        17L, new ProductSnapshot(17L, "Standard 30D", ProductType.SUBSCRIPTION, null, new BigDecimal("399999.00"), ProductStatus.PUBLISHED),
+                        18L, new ProductSnapshot(18L, "Pro 30D", ProductType.SUBSCRIPTION, null, new BigDecimal("599999.00"), ProductStatus.PUBLISHED)
+                ));
+        when(subscriptionLookupService.findByProductIds(Set.of(19L)))
+                .thenReturn(Map.of(
+                        19L, new SubscriptionDetailSnapshot(19L, "VIP_ULTIMATE_LIFETIME", "Ultimate Lifetime", true, null, true, 10, 20)
+                ));
 
         assertThat(service.findActiveSubscriptions(42L)).hasSize(3);
         assertThat(service.hasActiveAllAccessCharacters(42L)).isTrue();
-        assertThat(service.findExtraCommissionRevisions(42L)).isEqualTo(11);
-        // All-Access is owned; repeatable credit pack is NOT blocked from rebuy
-        assertThat(service.isSubscriptionProductAlreadyOwned(42L, 16L)).isTrue();
-        assertThat(service.isSubscriptionProductAlreadyOwned(42L, 17L)).isFalse();
+        // Tier-based max: 5 free revisions per commission, 10 mobile profiles
+        assertThat(service.findMaxFreeCommissionRevisions(42L)).isEqualTo(5);
+        assertThat(service.findMaxMobileProfiles(42L)).isEqualTo(10);
 
-        // Consuming 1 credit depletes bonus5 (1 -> 0) and marks it EXHAUSTED
-        when(customerSubscriptionRepository.findActiveWithRemainingRevisionsForUpdate(42L, "ACTIVE"))
-                .thenReturn(List.of(bonus5, bonus10));
-        when(subscriptionLookupService.findByProductIds(Set.of(17L, 18L)))
+        // Already-owned plans are blocked; Ultimate upgrade (19L) is allowed
+        assertThat(service.isSubscriptionProductAlreadyOwned(42L, 16L)).isTrue();
+        assertThat(service.isSubscriptionProductAlreadyOwned(42L, 17L)).isTrue();
+        assertThat(service.isSubscriptionProductAlreadyOwned(42L, 19L)).isFalse();
+
+        // Ultimate price 4,999,999 - Full-Char-Only price 999,999 = 4,000,000
+        ProductSnapshot ultimateProduct = new ProductSnapshot(
+                19L, "Ultimate Lifetime", ProductType.SUBSCRIPTION, null,
+                new BigDecimal("4999999.00"), ProductStatus.PUBLISHED
+        );
+        assertThat(service.resolveEffectiveSubscriptionPrice(42L, ultimateProduct))
+                .isEqualByComparingTo("4000000.00");
+    }
+
+    @Test
+    @DisplayName("getCustomerSubscriptionBenefits aggregates effective limits, upgrade credit, active plans, and expired history")
+    void getCustomerSubscriptionBenefits_returnsAggregatedBenefitsAndHistory() {
+        CustomerSubscriptionEntity activeFullChar = CustomerSubscriptionEntity.createActive(42L, 16L, null, 0);
+        ReflectionTestUtils.setField(activeFullChar, "subscriptionId", 20L);
+        ReflectionTestUtils.setField(activeFullChar, "activatedAt", Instant.now().minus(10, ChronoUnit.DAYS));
+
+        CustomerSubscriptionEntity activePro = CustomerSubscriptionEntity.createActive(42L, 18L, null, 5);
+        activePro.setLifetime(false);
+        ReflectionTestUtils.setField(activePro, "subscriptionId", 21L);
+        ReflectionTestUtils.setField(activePro, "activatedAt", Instant.now().minus(5, ChronoUnit.DAYS));
+
+        CustomerSubscriptionEntity expiredStandard = CustomerSubscriptionEntity.createActive(42L, 17L, null, 3);
+        expiredStandard.setLifetime(false);
+        ReflectionTestUtils.setField(expiredStandard, "subscriptionId", 22L);
+        ReflectionTestUtils.setField(expiredStandard, "activatedAt", Instant.now().minus(45, ChronoUnit.DAYS));
+
+        when(customerSubscriptionRepository.findByCustomerIdOrderByActivatedAtDesc(42L))
+                .thenReturn(List.of(activePro, activeFullChar, expiredStandard));
+        when(subscriptionLookupService.findByProductIds(Set.of(16L, 17L, 18L)))
                 .thenReturn(Map.of(
-                        17L, new SubscriptionDetailSnapshot(17L, "VIP_COMMISSION", "Commission +5", true, null, false, 5, 5),
-                        18L, new SubscriptionDetailSnapshot(18L, "VIP_COMMISSION_10", "Commission +10", true, null, false, 10, 5)
+                        16L, new SubscriptionDetailSnapshot(16L, "VIP_LIFETIME", "All Access", true, null, true, 0, 3),
+                        17L, new SubscriptionDetailSnapshot(17L, "VIP_STANDARD_30D", "Standard 30D", false, 30, false, 3, 5),
+                        18L, new SubscriptionDetailSnapshot(18L, "VIP_PRO_30D", "Pro 30D", false, 30, false, 5, 10)
+                ));
+        when(productLookupService.findSnapshotsByIds(Set.of(16L, 17L, 18L)))
+                .thenReturn(Map.of(
+                        16L, new ProductSnapshot(16L, "All Access", ProductType.SUBSCRIPTION, null, new BigDecimal("999999.00"), ProductStatus.PUBLISHED),
+                        17L, new ProductSnapshot(17L, "Standard 30D", ProductType.SUBSCRIPTION, null, new BigDecimal("399999.00"), ProductStatus.PUBLISHED),
+                        18L, new ProductSnapshot(18L, "Pro 30D", ProductType.SUBSCRIPTION, null, new BigDecimal("599999.00"), ProductStatus.PUBLISHED)
                 ));
 
-        assertThat(service.consumeOneExtraCommissionRevision(42L)).isTrue();
-        assertThat(bonus5.getRemainingCommissionRevisions()).isZero();
-        assertThat(bonus5.getStatus()).isEqualTo("EXHAUSTED");
-        assertThat(bonus10.getRemainingCommissionRevisions()).isEqualTo(10);
+        var benefits = service.getCustomerSubscriptionBenefits(42L);
+
+        assertThat(benefits.hasActiveSubscription()).isTrue();
+        assertThat(benefits.allAccessCharacters()).isTrue();
+        assertThat(benefits.defaultMobileProfiles()).isEqualTo(3);
+        assertThat(benefits.maxMobileProfiles()).isEqualTo(10);
+        assertThat(benefits.defaultCommissionRevisions()).isEqualTo(1);
+        assertThat(benefits.maxCommissionRevisions()).isEqualTo(5);
+        assertThat(benefits.upgradeCreditAvailable()).isEqualByComparingTo("999999.00");
+        assertThat(benefits.activeSubscriptions()).hasSize(2);
+        assertThat(benefits.subscriptionHistory()).hasSize(1);
+        assertThat(benefits.subscriptionHistory().getFirst().status()).isEqualTo("EXPIRED");
+        assertThat(benefits.subscriptionHistory().getFirst().planCode()).isEqualTo("VIP_STANDARD_30D");
     }
 }

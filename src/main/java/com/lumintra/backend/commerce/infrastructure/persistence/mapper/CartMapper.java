@@ -25,6 +25,15 @@ public class CartMapper {
             List<CartItemEntity> items,
             Map<Long, ProductSnapshot> productsById,
             Map<Long, AvailabilityCheckResult> availabilityByItemId) {
+        return toCartResponse(cart, items, productsById, availabilityByItemId, Collections.emptyMap());
+    }
+
+    public CartResponse toCartResponse(
+            CartEntity cart,
+            List<CartItemEntity> items,
+            Map<Long, ProductSnapshot> productsById,
+            Map<Long, AvailabilityCheckResult> availabilityByItemId,
+            Map<Long, BigDecimal> effectiveUnitPricesByProductId) {
         if (cart == null) {
             return null;
         }
@@ -35,7 +44,10 @@ public class CartMapper {
                         .map(item -> toCartItemResponse(
                                 item,
                                 productsById.get(item.getProductId()),
-                                availabilityByItemId.get(item.getCartItemId())
+                                availabilityByItemId.get(item.getCartItemId()),
+                                effectiveUnitPricesByProductId != null
+                                        ? effectiveUnitPricesByProductId.get(item.getProductId())
+                                        : null
                         ))
                         .toList();
 
@@ -46,9 +58,19 @@ public class CartMapper {
             CartItemEntity item,
             ProductSnapshot product,
             AvailabilityCheckResult availability) {
-        BigDecimal currentUnitPrice = (product != null && product.basePrice() != null)
-                ? product.basePrice()
-                : item.getUnitPrice();
+        return toCartItemResponse(item, product, availability, null);
+    }
+
+    public CartResponse.CartItemResponse toCartItemResponse(
+            CartItemEntity item,
+            ProductSnapshot product,
+            AvailabilityCheckResult availability,
+            BigDecimal effectiveUnitPrice) {
+        BigDecimal currentUnitPrice = effectiveUnitPrice != null
+                ? effectiveUnitPrice
+                : (product != null && product.basePrice() != null)
+                        ? product.basePrice()
+                        : item.getUnitPrice();
 
         BigDecimal subtotal = currentUnitPrice != null
                 ? currentUnitPrice.multiply(BigDecimal.valueOf(item.getQuantity()))

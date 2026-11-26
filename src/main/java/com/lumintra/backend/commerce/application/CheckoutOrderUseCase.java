@@ -120,11 +120,13 @@ public class CheckoutOrderUseCase {
         List<OrderItemEntity> orderItems = new ArrayList<>(selectedItems.size());
         for (CartItemEntity cartItem : selectedItems) {
             ProductSnapshot product = productsById.get(cartItem.getProductId());
+            BigDecimal unitPrice = inspection.effectiveUnitPricesByProductId()
+                    .getOrDefault(product.productId(), product.basePrice());
             orderItems.add(OrderItemEntity.create(
                     order,
                     product.productId(),
                     cartItem.getQuantity(),
-                    product.basePrice()
+                    unitPrice
             ));
         }
         orderItemRepository.saveAll(orderItems);
@@ -166,6 +168,7 @@ public class CheckoutOrderUseCase {
         Map<Long, Long> requiredLedStocksFromBundles = new HashMap<>();
         Map<Long, Long> requiredLedQuantitiesByProductId = new HashMap<>();
         Set<ProductType> distinctProductTypes = EnumSet.noneOf(ProductType.class);
+        Map<Long, BigDecimal> effectiveUnitPricesByProductId = new HashMap<>();
         BigDecimal subtotal = BigDecimal.ZERO;
 
         for (CartItemEntity cartItem : selectedItems) {
@@ -202,7 +205,10 @@ public class CheckoutOrderUseCase {
                 throw new ProductNotAvailableException("Unsupported product type in cart.");
             }
 
-            BigDecimal lineSubtotal = product.basePrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+            BigDecimal resolvedUnitPrice = productAvailabilityPort.resolveEffectiveUnitPrice(customerId, product);
+            BigDecimal unitPrice = resolvedUnitPrice != null ? resolvedUnitPrice : product.basePrice();
+            effectiveUnitPricesByProductId.put(product.productId(), unitPrice);
+            BigDecimal lineSubtotal = unitPrice.multiply(BigDecimal.valueOf(cartItem.getQuantity()));
             subtotal = subtotal.add(lineSubtotal);
         }
 
@@ -212,7 +218,8 @@ public class CheckoutOrderUseCase {
                 requiredLedStocksFromBundles,
                 requiredLedQuantitiesByProductId,
                 orderType,
-                subtotal.setScale(2, RoundingMode.HALF_UP)
+                subtotal.setScale(2, RoundingMode.HALF_UP),
+                effectiveUnitPricesByProductId
         );
     }
 
@@ -289,6 +296,7 @@ public class CheckoutOrderUseCase {
             Map<Long, Long> requiredLedStocksFromBundles,
             Map<Long, Long> requiredLedQuantitiesByProductId,
             OrderType orderType,
-            BigDecimal subtotal
+            BigDecimal subtotal,
+            Map<Long, BigDecimal> effectiveUnitPricesByProductId
     ) {}
 }

@@ -221,17 +221,44 @@ class GetProductDetailUseCaseTest {
         BundleItemEntity charItem = BundleItemEntity.createCharacterItem(bundle, 21L, 2);
         charItem.setBundleItemId(102L);
 
+        ProductEntity ledProduct = ProductEntity.of(
+                102L,
+                "Tấm LED Lumintra 64x32 Gọn Nhẹ",
+                ProductType.LED,
+                new BigDecimal("190000.00"),
+                "LED 64x32",
+                "https://cdn.lumintra.com/products/led-64x32.webp",
+                List.of(),
+                ProductStatus.PUBLISHED,
+                Set.of(),
+                createdAt
+        );
+        ProductEntity charProduct = ProductEntity.of(
+                104L,
+                "Cyber Dragon",
+                ProductType.CHARACTER,
+                new BigDecimal("59000.00"),
+                "Dragon",
+                "https://cdn.lumintra.com/characters/dragon.gif",
+                List.of(),
+                ProductStatus.PUBLISHED,
+                Set.of(),
+                createdAt
+        );
+
         when(productRepository.findWithTagsByProductIdAndStatusIn(12L, PUBLIC_STATUSES))
                 .thenReturn(Optional.of(product));
         when(bundleRepository.findByProductId(12L)).thenReturn(Optional.of(bundle));
         when(bundleItemRepository.findAllByBundle_BundleIdOrderByBundleItemIdAsc(3L))
                 .thenReturn(List.of(ledItem, charItem));
         when(ledModelLookupService.findByModelIds(Set.of(5L)))
-                .thenReturn(Map.of(5L, new LedModelSnapshot(5L, "Matrix 64x64", Map.of(), 15L)));
+                .thenReturn(Map.of(5L, new LedModelSnapshot(5L, "Matrix 64x32", Map.of("resolution", "64x32"), 15L, 102L)));
         when(characterLookupService.findDetailsByVersionIds(Set.of(21L)))
                 .thenReturn(Map.of(21L, new CharacterVersionSnapshot(
                         21L, 10L, "Cyber Dragon", "desc", 3,
-                        "https://cdn.lumintra.com/characters/dragon.gif", 16, 60)));
+                        "https://cdn.lumintra.com/characters/dragon.gif", 16, 60, 104L)));
+        when(productRepository.findAllById(Set.of(102L, 104L)))
+                .thenReturn(List.of(ledProduct, charProduct));
 
         ProductDetailResponse response = getProductDetailUseCase.execute(12L);
 
@@ -245,24 +272,32 @@ class GetProductDetailUseCaseTest {
 
         ProductDetailResponse.BundleItemDetail first = response.bundleDetails().items().get(0);
         assertThat(first.itemType()).isEqualTo(BundleItemType.LED);
+        assertThat(first.productId()).isEqualTo(102L);
         assertThat(first.modelId()).isEqualTo(5L);
-        assertThat(first.modelName()).isEqualTo("Matrix 64x64");
+        assertThat(first.modelName()).isEqualTo("Matrix 64x32");
         assertThat(first.stockQuantity()).isEqualTo(15L);
+        assertThat(first.specifications()).containsEntry("resolution", "64x32");
+        assertThat(first.thumbnailUrl()).isEqualTo("https://cdn.lumintra.com/products/led-64x32.webp");
+        assertThat(first.unitPrice()).isEqualByComparingTo("190000.00");
         assertThat(first.quantity()).isEqualTo(1);
         assertThat(first.versionId()).isNull();
 
         ProductDetailResponse.BundleItemDetail second = response.bundleDetails().items().get(1);
         assertThat(second.itemType()).isEqualTo(BundleItemType.CHARACTER);
+        assertThat(second.productId()).isEqualTo(104L);
         assertThat(second.versionId()).isEqualTo(21L);
         assertThat(second.characterId()).isEqualTo(10L);
         assertThat(second.characterName()).isEqualTo("Cyber Dragon");
         assertThat(second.versionNumber()).isEqualTo(3);
         assertThat(second.previewGifUrl()).isEqualTo("https://cdn.lumintra.com/characters/dragon.gif");
+        assertThat(second.thumbnailUrl()).isEqualTo("https://cdn.lumintra.com/characters/dragon.gif");
+        assertThat(second.unitPrice()).isEqualByComparingTo("59000.00");
         assertThat(second.quantity()).isEqualTo(2);
         assertThat(second.modelId()).isNull();
 
         verify(ledModelLookupService).findByModelIds(eq(Set.of(5L)));
         verify(characterLookupService).findDetailsByVersionIds(eq(Set.of(21L)));
+        verify(productRepository).findAllById(eq(Set.of(102L, 104L)));
     }
 
     @Test

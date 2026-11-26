@@ -44,6 +44,14 @@ public class UpdateSubscriptionUseCase {
         if (request.maxCommissionRevisions() != null) {
             detail.setMaxCommissionRevisions(Math.max(0, request.maxCommissionRevisions()));
         }
+        if (request.maxMobileProfiles() != null) {
+            detail.setMaxMobileProfiles(Math.max(1, request.maxMobileProfiles()));
+        }
+        detail.setPerksDescription(
+                buildPerksDescription(
+                        detail.isAllAccessCharacters(),
+                        detail.getMaxMobileProfiles(),
+                        detail.getMaxCommissionRevisions()));
         product.setProductName(request.planName());
         product.setBasePrice(request.basePrice());
         product.setDescription(request.description());
@@ -62,8 +70,26 @@ public class UpdateSubscriptionUseCase {
                 detail.getDurationDays(),
                 detail.isAllAccessCharacters(),
                 detail.getMaxCommissionRevisions(),
+                detail.getMaxMobileProfiles(),
                 product.getStatus(),
                 detail.getCreatedAt(),
                 product.getTags().stream().map(TagEntity::getTagId).sorted().toList());
+    }
+
+    private String buildPerksDescription(
+            boolean allAccessCharacters,
+            int maxMobileProfiles,
+            int maxCommissionRevisions) {
+        var parts = new java.util.ArrayList<String>();
+        if (allAccessCharacters) {
+            parts.add("Mở khóa toàn bộ thư viện nhân vật");
+        }
+        if (maxMobileProfiles > 3) {
+            parts.add("Tối đa " + maxMobileProfiles + " profile chữ trên ứng dụng Mobile");
+        }
+        if (maxCommissionRevisions > 0) {
+            parts.add(maxCommissionRevisions + " lượt chỉnh sửa miễn phí cho mỗi đơn thiết kế");
+        }
+        return parts.isEmpty() ? null : String.join(" · ", parts);
     }
 }
