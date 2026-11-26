@@ -112,7 +112,9 @@ public class LedModelEntity {
         int[] extractedDimensions = extractDimensions(resolvedSpec);
 
         LedModelEntity entity = new LedModelEntity();
-        entity.setModelId(modelId);
+        if (modelId != null) {
+            entity.setModelId(modelId);
+        }
         entity.setProductId(productId);
         entity.setModelName(modelName);
         entity.setWidthPx(resolveDimension(explicitWidthPx, extractedDimensions[0]));
