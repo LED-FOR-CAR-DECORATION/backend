@@ -29,6 +29,8 @@ public enum CommissionRevisionRequestStatus {
     IN_PROGRESS,
     /** A preview answering this revision was delivered to the customer. */
     COMPLETED,
+    /** Customer rejected the brief card because it did not match their request. */
+    REJECTED,
     /** Replaced by a newer brief card before the customer confirmed it. */
     SUPERSEDED;
 
