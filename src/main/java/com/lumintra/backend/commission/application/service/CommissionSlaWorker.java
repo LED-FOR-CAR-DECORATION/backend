@@ -1,0 +1,106 @@
+package com.lumintra.backend.commission.application.service;
+
+import com.lumintra.backend.commission.domain.model.CommissionCompletionSource;
+import com.lumintra.backend.commission.domain.model.CommissionRevisionEstimatePolicy;
+import com.lumintra.backend.commission.domain.model.CommissionStatus;
+import com.lumintra.backend.commission.domain.model.RevisionEstimateSource;
+import com.lumintra.backend.commission.infrastructure.persistence.entity.CommissionRequestEntity;
+import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionRequestRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Transactional units of the CMS-27 auto-approve and CMS-28 estimate and SLA job, called by
+ * {@code CommissionSlaScheduler}.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class CommissionSlaWorker {
+
+    /** Statuses in which the designer owes the next deliverable, so a passed {@code sla_due_at} is overdue. */
+    public static final Set<CommissionStatus> SLA_TRACKED_STATUSES = EnumSet.of(
+            CommissionStatus.IN_PROGRESS,
+            CommissionStatus.INTERNAL_REVIEW,
+            CommissionStatus.INTERNAL_REVISION_REQUIRED);
+
+    private final CommissionRequestRepository commissions;
+    private final CommissionRevisionEstimateService estimates;
+    private final CommissionCompletionService completions;
+
+    /** CMS-27 AC01: PREVIEW_DELIVERED commissions whose auto-complete deadline has passed, oldest first. */
+    @Transactional(readOnly = true)
+    public List<Long> findDueAutoCompletions(Instant now) {
+        return commissions.findIdsDueForAutoCompletion(now);
+    }
+
+    /**
+     * CMS-27 AC02/AC03: completes one commission whose customer did not respond before {@code auto_complete_at}.
+     * Runs in its own transaction under the commission row lock and re-checks status and deadline after
+     * locking, so a customer approving or requesting a revision at the same moment wins or loses cleanly.
+     *
+     * @return {@code true} when the commission was completed, {@code false} when it no longer qualifies
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean autoComplete(Long commissionId, Instant now) {
+        CommissionRequestEntity commission = commissions.findByIdForUpdate(commissionId).orElse(null);
+        if (commission == null
+                || commission.getStatus() != CommissionStatus.PREVIEW_DELIVERED
+                || commission.getAutoCompleteAt() == null
+                || commission.getAutoCompleteAt().isAfter(now)) {
+            return false;
+        }
+        Instant deadline = commission.getAutoCompleteAt();
+        completions.complete(commission, CommissionCompletionSource.AUTO_COMPLETED, now);
+        log.info("Commission auto-completed [commissionId={}] [autoCompleteAt={}]", commissionId, deadline);
+        return true;
+    }
+
+    /** AWAITING_ESTIMATE commissions whose 24h estimate window has closed, oldest first. */
+    @Transactional(readOnly = true)
+    public List<Long> findExpiredEstimateWindows(Instant now) {
+        return commissions.findIdsWithSlaDueAtOrBefore(CommissionStatus.AWAITING_ESTIMATE, now);
+    }
+
+    /**
+     * AC01: applies the default 24h estimate to one commission whose estimate window has closed, moving it
+     * from AWAITING_ESTIMATE to IN_PROGRESS. Runs in its own transaction under the commission row lock so a
+     * designer estimate submitted at the same moment wins or loses cleanly.
+     *
+     * @return {@code true} when the default estimate was applied, {@code false} when the commission no longer
+     *         needs it (the designer estimated meanwhile, or the deadline moved)
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean applyDefaultEstimate(Long commissionId, Instant now) {
+        CommissionRequestEntity commission = commissions.findByIdForUpdate(commissionId).orElse(null);
+        if (commission == null
+                || commission.getStatus() != CommissionStatus.AWAITING_ESTIMATE
+                || commission.getSlaDueAt() == null
+                || commission.getSlaDueAt().isAfter(now)) {
+            return false;
+        }
+        estimates.apply(commission, CommissionRevisionEstimatePolicy.DEFAULT_ESTIMATE_HOURS,
+                RevisionEstimateSource.SYSTEM_DEFAULT, now);
+        log.info("Default revision estimate applied [commissionId={}] [estimatedHours={}] [estimateWindowClosedAt={}]",
+                commissionId, CommissionRevisionEstimatePolicy.DEFAULT_ESTIMATE_HOURS, commission.getSlaDueAt());
+        return true;
+    }
+
+    /** AC02: flags {@code is_sla_overdue} on SLA-tracked commissions past {@code sla_due_at}. */
+    @Transactional
+    public int flagOverdue(Instant now) {
+        int flagged = commissions.flagSlaOverdue(SLA_TRACKED_STATUSES, now);
+        if (flagged > 0) {
+            log.info("Commission SLA overdue flagged [count={}] [evaluatedAt={}]", flagged, now);
+        }
+        return flagged;
+    }
+}

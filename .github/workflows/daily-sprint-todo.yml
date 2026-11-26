@@ -1,0 +1,46 @@
+name: Daily Sprint Tasks - Auto Move to Todo
+
+on:
+  schedule:
+    # 00:00 UTC = 07:00 AM Vietnam Time (ICT, UTC+7)
+    - cron: '0 0 * * *'
+    # 17:00 UTC = 00:00 AM Vietnam Time midnight (ICT, UTC+7)
+    - cron: '0 17 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (simulate without moving tasks)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  move-to-todo:
+    name: Move Today's Tasks to Todo
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      repository-projects: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Sprint Todo Automation
+        env:
+          # Uses PROJECT_TOKEN if set, otherwise falls back to GITHUB_TOKEN
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN || secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          PROJECT_ID: 'PVT_kwDOEzauPs4Bn1lX'
+          STATUS_FIELD_ID: 'PVTSSF_lADOEzauPs4Bn1lXzhmYX3Y'
+          STATUS_TODO_ID: 'e653486d'
+          BACKLOG_NAME: 'Backlog'
+          TIMEZONE_OFFSET_HOURS: '7'
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          python .github/scripts/move_today_tasks_to_todo.py
