@@ -30,6 +30,7 @@ import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.iam.domain.service.EmployeeLookupService;
 import com.lumintra.backend.iam.domain.service.InternalEmployeeAccessService;
 import com.lumintra.backend.shared.response.ApiResponse;
+import com.lumintra.backend.shared.response.PaginationMeta;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -41,6 +42,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -52,6 +54,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -83,11 +86,25 @@ public class CommissionManagementController {
     @GetMapping("/designers")
     @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
     @Operation(summary = "List active designers for Commission assignment")
-    public ResponseEntity<ApiResponse<List<DesignerOption>>> listDesigners() {
-        var designers = employeeLookupService.findActiveDesigners().stream()
+    public ResponseEntity<ApiResponse<List<DesignerOption>>> listDesigners(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        if (page == null && size == null && (search == null || search.isBlank())) {
+            var designers = employeeLookupService.findActiveDesigners().stream()
+                    .map(profile -> new DesignerOption(profile.employeeId(), profile.fullName()))
+                    .toList();
+            return ResponseEntity.ok(ApiResponse.success(designers));
+        }
+
+        int resolvedPage = page == null ? 0 : Math.max(0, page);
+        int resolvedSize = size == null ? 5 : Math.min(Math.max(1, size), 50);
+        var designerPage = employeeLookupService.findActiveDesigners(search, PageRequest.of(resolvedPage, resolvedSize));
+        var designers = designerPage.getContent().stream()
                 .map(profile -> new DesignerOption(profile.employeeId(), profile.fullName()))
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success(designers));
+        return ResponseEntity.ok(ApiResponse.success(designers, PaginationMeta.from(designerPage)));
     }
 
     public record DesignerOption(Long designerId, String fullName) {}

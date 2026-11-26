@@ -72,4 +72,17 @@ public interface EmployeeRepository
             order by e.fullName, e.employeeId
             """)
     List<EmployeeProfileSnapshot> findActiveDesigners();
+
+    @Query("""
+            select new com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot(e.employeeId, e.fullName, e.account.email)
+            from EmployeeEntity e
+            where e.role.roleName = 'DESIGNER'
+              and e.account.status = com.lumintra.backend.iam.domain.model.AccountStatus.ACTIVE
+              and (:search is null or :search = ''
+                   or lower(e.fullName) like lower(concat('%', :search, '%'))
+                   or lower(e.account.email) like lower(concat('%', :search, '%'))
+                   or cast(e.employeeId as string) like concat('%', :search, '%'))
+            order by e.fullName asc, e.employeeId asc
+            """)
+    Page<EmployeeProfileSnapshot> findActiveDesigners(@Param("search") String search, Pageable pageable);
 }
