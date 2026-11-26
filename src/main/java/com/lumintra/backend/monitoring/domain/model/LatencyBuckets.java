@@ -24,6 +24,34 @@ public final class LatencyBuckets {
         return Arrays.copyOf(UPPER_BOUNDS_MS, UPPER_BOUNDS_MS.length);
     }
 
+    /**
+     * Estimates a latency percentile from per-slot counts (BR-GEN-26): the upper bound of the slot
+     * holding the percentile's rank, capped at the observed max. The overflow slot reports the max.
+     *
+     * @param slotCounts per-slot counts laid out like {@link #SLOT_COUNT}
+     * @param percentile between 0 (exclusive) and 1 (inclusive), e.g. 0.95
+     * @param maxMs      largest observed duration in the same requests
+     * @return the estimate in ms, or {@code null} when there are no requests
+     */
+    public static Double percentileMs(long[] slotCounts, double percentile, double maxMs) {
+        long total = 0;
+        for (long count : slotCounts) {
+            total += count;
+        }
+        if (total == 0) {
+            return null;
+        }
+        long rank = Math.max(1, (long) Math.ceil(percentile * total));
+        long cumulative = 0;
+        for (int i = 0; i < slotCounts.length; i++) {
+            cumulative += slotCounts[i];
+            if (cumulative >= rank) {
+                return i < UPPER_BOUNDS_MS.length ? Math.min(UPPER_BOUNDS_MS[i], maxMs) : maxMs;
+            }
+        }
+        return maxMs;
+    }
+
     /** Index of the slot that a request of the given duration falls into. */
     public static int slotFor(long durationNanos) {
         double durationMs = durationNanos / 1_000_000.0;
