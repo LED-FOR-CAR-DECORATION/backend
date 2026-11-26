@@ -90,6 +90,29 @@ public class ProductMapper {
             Map<Long, LedModelSnapshot> bundleLedModels,
             Map<Long, CharacterVersionSnapshot> bundleCharacterVersions,
             SubscriptionDetailEntity subscriptionDetail) {
+        return toProductDetailResponse(
+                entity,
+                ledModel,
+                characterVersion,
+                bundle,
+                bundleItems,
+                bundleLedModels,
+                bundleCharacterVersions,
+                Collections.emptyMap(),
+                subscriptionDetail
+        );
+    }
+
+    public ProductDetailResponse toProductDetailResponse(
+            ProductEntity entity,
+            LedModelSnapshot ledModel,
+            CharacterVersionSnapshot characterVersion,
+            BundleEntity bundle,
+            List<BundleItemEntity> bundleItems,
+            Map<Long, LedModelSnapshot> bundleLedModels,
+            Map<Long, CharacterVersionSnapshot> bundleCharacterVersions,
+            Map<Long, ProductEntity> bundleComponentProducts,
+            SubscriptionDetailEntity subscriptionDetail) {
         if (entity == null) {
             return null;
         }
@@ -109,7 +132,7 @@ public class ProductMapper {
                 .ledDetails(type == ProductType.LED ? toLedDetail(ledModel) : null)
                 .characterDetails(type == ProductType.CHARACTER ? toCharacterDetail(characterVersion) : null)
                 .bundleDetails(type == ProductType.BUNDLE
-                        ? toBundleDetail(bundle, bundleItems, bundleLedModels, bundleCharacterVersions)
+                        ? toBundleDetail(bundle, bundleItems, bundleLedModels, bundleCharacterVersions, bundleComponentProducts)
                         : null)
                 .subscriptionDetails(type == ProductType.SUBSCRIPTION
                         ? toSubscriptionDetail(subscriptionDetail)
@@ -166,7 +189,8 @@ public class ProductMapper {
             BundleEntity bundle,
             List<BundleItemEntity> bundleItems,
             Map<Long, LedModelSnapshot> bundleLedModels,
-            Map<Long, CharacterVersionSnapshot> bundleCharacterVersions) {
+            Map<Long, CharacterVersionSnapshot> bundleCharacterVersions,
+            Map<Long, ProductEntity> bundleComponentProducts) {
         if (bundle == null) {
             return null;
         }
@@ -174,11 +198,13 @@ public class ProductMapper {
         Map<Long, LedModelSnapshot> safeLedModels = bundleLedModels != null ? bundleLedModels : Collections.emptyMap();
         Map<Long, CharacterVersionSnapshot> safeCharacters =
                 bundleCharacterVersions != null ? bundleCharacterVersions : Collections.emptyMap();
+        Map<Long, ProductEntity> safeProducts =
+                bundleComponentProducts != null ? bundleComponentProducts : Collections.emptyMap();
 
         List<ProductDetailResponse.BundleItemDetail> items = bundleItems == null
                 ? Collections.emptyList()
                 : bundleItems.stream()
-                        .map(item -> toBundleItemDetail(item, safeLedModels, safeCharacters))
+                        .map(item -> toBundleItemDetail(item, safeLedModels, safeCharacters, safeProducts))
                         .toList();
 
         return ProductDetailResponse.BundleDetail.builder()
@@ -193,17 +219,29 @@ public class ProductMapper {
                 .build();
     }
 
-    private ProductDetailResponse.BundleItemDetail toBundleItemDetail(
+    public ProductDetailResponse.BundleItemDetail toBundleItemDetail(
             BundleItemEntity item,
             Map<Long, LedModelSnapshot> bundleLedModels,
-            Map<Long, CharacterVersionSnapshot> bundleCharacterVersions) {
+            Map<Long, CharacterVersionSnapshot> bundleCharacterVersions,
+            Map<Long, ProductEntity> bundleComponentProducts) {
+        Map<Long, ProductEntity> safeProducts =
+                bundleComponentProducts != null ? bundleComponentProducts : Collections.emptyMap();
         if (item.getItemType() == BundleItemType.LED) {
             LedModelSnapshot led = item.getModelId() != null ? bundleLedModels.get(item.getModelId()) : null;
+            Long componentProductId = led != null ? led.productId() : null;
+            ProductEntity componentProduct = componentProductId != null ? safeProducts.get(componentProductId) : null;
+            Map<String, Object> specs = (led != null && led.spec() != null && !led.spec().isEmpty())
+                    ? new LinkedHashMap<>(led.spec())
+                    : null;
             return ProductDetailResponse.BundleItemDetail.builder()
                     .itemType(BundleItemType.LED)
+                    .productId(componentProductId)
                     .modelId(item.getModelId())
                     .modelName(led != null ? led.modelName() : null)
                     .stockQuantity(led != null ? led.stockQuantity() : null)
+                    .specifications(specs)
+                    .thumbnailUrl(componentProduct != null ? componentProduct.getThumbnailUrl() : null)
+                    .unitPrice(componentProduct != null ? componentProduct.getBasePrice() : null)
                     .quantity(item.getQuantity())
                     .build();
         }
@@ -211,13 +249,22 @@ public class ProductMapper {
         CharacterVersionSnapshot character = item.getVersionId() != null
                 ? bundleCharacterVersions.get(item.getVersionId())
                 : null;
+        Long componentProductId = character != null ? character.productId() : null;
+        ProductEntity componentProduct = componentProductId != null ? safeProducts.get(componentProductId) : null;
+        String previewGifUrl = character != null ? character.previewGifUrl() : null;
+        String thumbnailUrl = componentProduct != null && componentProduct.getThumbnailUrl() != null
+                ? componentProduct.getThumbnailUrl()
+                : previewGifUrl;
         return ProductDetailResponse.BundleItemDetail.builder()
                 .itemType(BundleItemType.CHARACTER)
+                .productId(componentProductId)
                 .versionId(item.getVersionId())
                 .characterId(character != null ? character.characterId() : null)
                 .characterName(character != null ? character.characterName() : null)
                 .versionNumber(character != null ? character.versionNumber() : null)
-                .previewGifUrl(character != null ? character.previewGifUrl() : null)
+                .previewGifUrl(previewGifUrl)
+                .thumbnailUrl(thumbnailUrl)
+                .unitPrice(componentProduct != null ? componentProduct.getBasePrice() : null)
                 .quantity(item.getQuantity())
                 .build();
     }

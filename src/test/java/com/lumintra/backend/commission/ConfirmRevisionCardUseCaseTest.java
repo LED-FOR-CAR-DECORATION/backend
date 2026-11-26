@@ -102,19 +102,21 @@ class ConfirmRevisionCardUseCaseTest {
     }
 
     @Test
-    void consumesSharedSubscriptionCreditWhenCommissionQuotaExhausted() throws Exception {
+    void usesTierSubscriptionAllowanceWhenHigherThanCommissionMaxRevisions() throws Exception {
         availableCard();
         when(messages.save(card)).thenReturn(card);
         commission.setRevisionsUsed(2);
-        when(subscriptionBonusLookupService.consumeOneExtraCommissionRevision(501L)).thenReturn(true);
+        when(subscriptionBonusLookupService.findMaxFreeCommissionRevisions(501L)).thenReturn(5);
 
         var response = useCase.execute(105L, 501L, 402L);
         assertThat(response.status()).isEqualTo(CommissionStatus.AWAITING_ESTIMATE);
         assertThat(response.revisionsUsed()).isEqualTo(3);
+        assertThat(commission.getMaxRevisions()).isEqualTo(5);
         assertThat(response.paymentSession()).isNull();
         assertThat(json.readTree(card.getMetadataJson()).path("usesFreeQuota").asBoolean()).isTrue();
-        assertThat(json.readTree(card.getMetadataJson()).path("usesSubscriptionCredit").asBoolean()).isTrue();
-        verify(subscriptionBonusLookupService).consumeOneExtraCommissionRevision(501L);
+        assertThat(json.readTree(card.getMetadataJson()).path("usesSubscriptionCredit").asBoolean()).isFalse();
+        assertThat(json.readTree(card.getMetadataJson()).path("maxRevisions").asInt()).isEqualTo(5);
+        verify(subscriptionBonusLookupService).findMaxFreeCommissionRevisions(501L);
         verifyNoInteractions(payments);
     }
 

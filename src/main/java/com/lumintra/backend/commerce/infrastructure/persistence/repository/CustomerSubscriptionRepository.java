@@ -21,6 +21,8 @@ public interface CustomerSubscriptionRepository extends JpaRepository<CustomerSu
 
     List<CustomerSubscriptionEntity> findByCustomerIdAndStatusOrderByActivatedAtDesc(Long customerId, String status);
 
+    List<CustomerSubscriptionEntity> findByCustomerIdOrderByActivatedAtDesc(Long customerId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select s from CustomerSubscriptionEntity s

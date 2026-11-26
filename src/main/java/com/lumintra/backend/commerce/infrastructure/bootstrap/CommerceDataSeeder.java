@@ -116,10 +116,16 @@ public class CommerceDataSeeder implements ApplicationRunner {
     }
 
     private ProductSeedContext resolveProducts() {
-        List<ProductSnapshot> allProducts = productLookupService.findAllSnapshots();
+        List<ProductSnapshot> allProducts = productLookupService.findAllSnapshots().stream()
+                .sorted(java.util.Comparator.comparing(
+                        ProductSnapshot::productId,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                .toList();
 
-        ProductSnapshot physical = findPreferredProduct(allProducts, ProductType.LED);
-        ProductSnapshot secondaryPhysical = findSecondaryLedProduct(allProducts, physical);
+        ProductSnapshot physical = findLedProductByToken(allProducts, null, "64x64")
+                .orElseGet(() -> findPreferredProduct(allProducts, ProductType.LED));
+        ProductSnapshot secondaryPhysical = findLedProductByToken(allProducts, physical != null ? physical.productId() : null, "64x32")
+                .orElseGet(() -> findSecondaryLedProduct(allProducts, physical));
         ProductSnapshot digital = findPreferredProduct(allProducts, ProductType.CHARACTER);
         ProductSnapshot subscription = findPreferredProduct(allProducts, ProductType.SUBSCRIPTION);
 
@@ -158,6 +164,18 @@ public class CommerceDataSeeder implements ApplicationRunner {
             return matches;
         }
         return isValidSeedProduct(fallback) ? List.of(fallback) : List.of();
+    }
+
+    private java.util.Optional<ProductSnapshot> findLedProductByToken(
+            List<ProductSnapshot> allProducts, Long excludedProductId, String token) {
+        return allProducts.stream()
+                .filter(p -> p.productType() == ProductType.LED
+                        && p.status() == ProductStatus.PUBLISHED
+                        && isValidSeedProduct(p)
+                        && (excludedProductId == null || !excludedProductId.equals(p.productId()))
+                        && p.productName() != null
+                        && p.productName().toLowerCase(java.util.Locale.ROOT).contains(token))
+                .findFirst();
     }
 
     private ProductSnapshot findSecondaryLedProduct(List<ProductSnapshot> allProducts, ProductSnapshot primaryPhysical) {
@@ -223,7 +241,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 OrderType.PHYSICAL,
                 OrderStatus.PENDING_PAYMENT,
                 products.physicalPrice(),
-                now.plus(7, ChronoUnit.DAYS),
+                now.plus(15, ChronoUnit.MINUTES),
                 products.physicalId(),
                 1,
                 products.physicalPrice(),
@@ -334,11 +352,11 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 customerId,
                 OrderType.PHYSICAL,
                 OrderStatus.DELIVERED,
-                products.physicalPrice(),
+                products.secondaryPhysicalPrice(),
                 now.minus(3, ChronoUnit.DAYS),
-                products.physicalId(),
+                products.secondaryPhysicalId(),
                 1,
-                products.physicalPrice(),
+                products.secondaryPhysicalPrice(),
                 new ShippingSeed(
                         "Hoàng Thị E",
                         "0944444444",
@@ -509,7 +527,7 @@ public class CommerceDataSeeder implements ApplicationRunner {
                 OrderType.PHYSICAL,
                 OrderStatus.PENDING_PAYMENT,
                 WEBHOOK_TEST_ORDER_AMOUNT,
-                now.plus(7, ChronoUnit.DAYS),
+                now.plus(15, ChronoUnit.MINUTES),
                 products.physicalId(),
                 1,
                 WEBHOOK_TEST_ORDER_AMOUNT,

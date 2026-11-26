@@ -3,6 +3,7 @@ package com.lumintra.backend.commerce;
 import com.lumintra.backend.commerce.api.controller.CustomerOwnedCharacterController;
 import com.lumintra.backend.commerce.api.response.CustomerActiveSubscriptionResponse;
 import com.lumintra.backend.commerce.api.response.CustomerOwnedCharacterResponse;
+import com.lumintra.backend.commerce.api.response.CustomerSubscriptionBenefitsResponse;
 import com.lumintra.backend.commerce.application.CustomerSubscriptionEntitlementService;
 import com.lumintra.backend.commerce.application.ListCustomerOwnedCharactersUseCase;
 import com.lumintra.backend.iam.domain.service.TokenBlacklistService;
@@ -160,5 +161,41 @@ class CustomerOwnedCharacterControllerTest {
                 .andExpect(jsonPath("$.data.allAccessCharacters").value(true));
 
         verify(customerSubscriptionEntitlementService).findActiveSubscription(42L);
+    }
+
+    @Test
+    @DisplayName("GET /api/customer/subscriptions/benefits: returns aggregated benefits summary for customer")
+    void getSubscriptionBenefits_whenAuthenticatedCustomer_returnsSummary() throws Exception {
+        Instant activatedAt = Instant.parse("2026-11-24T06:00:00Z");
+        CustomerActiveSubscriptionResponse activeSub = new CustomerActiveSubscriptionResponse(
+                10L, 16L, 42L, "VIP_LIFETIME", "Gói VIP Mở Khóa Toàn Bộ Lumintra",
+                true, null, true, 0, 0, 3, activatedAt, null, new BigDecimal("999999.00")
+        );
+        CustomerSubscriptionBenefitsResponse benefits = new CustomerSubscriptionBenefitsResponse(
+                true,
+                true,
+                3,
+                3,
+                1,
+                1,
+                new BigDecimal("999999.00"),
+                List.of(activeSub),
+                List.of()
+        );
+        when(customerSubscriptionEntitlementService.getCustomerSubscriptionBenefits(42L))
+                .thenReturn(benefits);
+
+        mockMvc.perform(get("/api/customer/subscriptions/benefits")
+                        .with(SecurityMockMvcRequestPostProcessors.user("42").roles("CUSTOMER"))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.hasActiveSubscription").value(true))
+                .andExpect(jsonPath("$.data.allAccessCharacters").value(true))
+                .andExpect(jsonPath("$.data.maxMobileProfiles").value(3))
+                .andExpect(jsonPath("$.data.maxCommissionRevisions").value(1))
+                .andExpect(jsonPath("$.data.upgradeCreditAvailable").value(999999.0))
+                .andExpect(jsonPath("$.data.activeSubscriptions", hasSize(1)));
+
+        verify(customerSubscriptionEntitlementService).getCustomerSubscriptionBenefits(42L);
     }
 }

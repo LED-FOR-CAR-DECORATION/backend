@@ -129,15 +129,30 @@ public class IamDataSeeder implements ApplicationRunner {
         seedCustomerAccount(SEED_CUSTOMER_2_EMAIL, extraCustomerPassword, "Nguyễn Minh Anh", "0902345678");
         seedCustomerAccount(SEED_CUSTOMER_3_EMAIL, extraCustomerPassword, "Trần Quốc Bảo", "0903456789");
         seedCustomerAccount(SEED_CUSTOMER_4_EMAIL, extraCustomerPassword, "Lê Thảo Vy", "0904567890");
-        seedEmployeeAccount(managerEmail, managerPassword, "MANAGER", "Quản lý mẫu");
-        seedEmployeeAccount(staffEmail, staffPassword, "STAFF", "Nhân viên mẫu");
-        seedEmployeeAccount(designerEmail, designerPassword, "DESIGNER", "Nhà thiết kế mẫu");
+        seedEmployeeAccount(managerEmail, managerPassword, "MANAGER", "Quản lý");
+        seedEmployeeAccount(staffEmail, staffPassword, "STAFF", "Nhân viên");
+        seedEmployeeAccount(designerEmail, designerPassword, "DESIGNER", "Nhà thiết kế");
     }
+
+    private static final java.util.Set<String> LEGACY_SYSTEM_ACCOUNT_NAMES = java.util.Set.of(
+            "Quản lý mẫu",
+            "Nhân viên mẫu",
+            "Nhà thiết kế mẫu"
+    );
 
     private void seedEmployeeAccount(String email, String password, String roleName, String fullName) {
         if (email == null || email.isBlank() || password == null || password.isBlank()) return;
 
-        userAccountRepository.findByEmail(email).orElseGet(() -> {
+        userAccountRepository.findByEmail(email).ifPresentOrElse(existing -> {
+            employeeRepository.findByAccount_AccountId(existing.getAccountId()).ifPresent(employee -> {
+                if (employee.getFullName() == null
+                        || employee.getFullName().isBlank()
+                        || LEGACY_SYSTEM_ACCOUNT_NAMES.contains(employee.getFullName())) {
+                    employee.setFullName(fullName);
+                    employeeRepository.save(employee);
+                }
+            });
+        }, () -> {
             RoleEntity role = roleRepository.findByRoleName(roleName)
                     .orElseThrow(() -> new IllegalStateException("Role not found: " + roleName));
 
@@ -157,7 +172,6 @@ public class IamDataSeeder implements ApplicationRunner {
             employeeRepository.save(employee);
 
             log.info("Seeding test employee account [email={}] [role={}]", email, roleName);
-            return savedAccount;
         });
     }
 

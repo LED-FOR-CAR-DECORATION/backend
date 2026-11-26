@@ -74,16 +74,17 @@ class PostRevisionCardUseCaseTest {
     }
 
     @Test
-    void usesSharedSubscriptionCreditWhenCommissionFreeQuotaExhausted() throws Exception {
+    void usesTierSubscriptionAllowanceWhenHigherThanCommissionMaxRevisions() throws Exception {
         var commission = commission(2);
         commission.setCustomerId(501L);
-        when(subscriptionBonusLookupService.findExtraCommissionRevisions(501L)).thenReturn(4);
+        when(subscriptionBonusLookupService.findMaxFreeCommissionRevisions(501L)).thenReturn(5);
         when(messages.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = useCase.execute(105L, 3L, new PostRevisionCardRequest("Use shared pool"));
+        var response = useCase.execute(105L, 3L, new PostRevisionCardRequest("Use tier allowance"));
         var metadata = json.readTree(response.metadataJson());
         assertThat(metadata.get("usesFreeQuota").asBoolean()).isTrue();
-        assertThat(metadata.get("usesSubscriptionCredit").asBoolean()).isTrue();
+        assertThat(metadata.get("usesSubscriptionCredit").asBoolean()).isFalse();
+        assertThat(metadata.get("maxRevisions").asInt()).isEqualTo(5);
         assertThat(metadata.get("revisionFee").decimalValue()).isEqualByComparingTo("0");
     }
 

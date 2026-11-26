@@ -157,36 +157,41 @@ public class OrderPaymentEventListener {
     }
 
     private void provisionSubscription(Long customerId, OrderItemEntity item) {
-        SubscriptionDetailSnapshot detail =
-                subscriptionLookupService.findByProductIds(Set.of(item.getProductId())).get(item.getProductId());
-        boolean isAllAccess = detail != null && detail.allAccessCharacters();
-        int creditsPerUnit = detail != null ? Math.max(0, detail.maxCommissionRevisions()) : 0;
-        int quantity = Math.max(1, item.getQuantity());
-        int totalCredits = creditsPerUnit * quantity;
-        boolean isRepeatableCreditPack = !isAllAccess && totalCredits > 0;
-
-        if (isRepeatableCreditPack) {
-            if (item.getOrderItemId() == null
-                    || !customerSubscriptionRepository.existsByOrderItemId(item.getOrderItemId())) {
-                customerSubscriptionRepository.save(CustomerSubscriptionEntity.createActive(
-                        customerId, item.getProductId(), item.getOrderItemId(), totalCredits
-                ));
-                log.info("Provisioned commission revision credit pack [customerId={}] [productId={}] [orderItemId={}] [credits={}]",
-                        customerId, item.getProductId(), item.getOrderItemId(), totalCredits);
-            } else {
-                log.info("Commission revision credit pack already provisioned for orderItem [orderItemId={}]",
-                        item.getOrderItemId());
-            }
+        if (item.getOrderItemId() != null
+                && customerSubscriptionRepository.existsByOrderItemId(item.getOrderItemId())) {
+            log.info("Subscription already provisioned for orderItem [orderItemId={}]", item.getOrderItemId());
             return;
         }
 
-        if (!customerSubscriptionRepository.existsByCustomerIdAndProductIdAndStatus(
-                customerId, item.getProductId(), SUBSCRIPTION_STATUS_ACTIVE)) {
-            customerSubscriptionRepository.save(CustomerSubscriptionEntity.createActive(
-                    customerId, item.getProductId(), item.getOrderItemId(), totalCredits
-            ));
-            log.info("Provisioned subscription to customer [customerId={}] [productId={}] [orderItemId={}]",
-                    customerId, item.getProductId(), item.getOrderItemId());
+        SubscriptionDetailSnapshot detail =
+                subscriptionLookupService.findByProductIds(Set.of(item.getProductId())).get(item.getProductId());
+        boolean isLifetime = detail == null || detail.isLifetime();
+        int maxRevisions = detail != null ? Math.max(0, detail.maxCommissionRevisions()) : 0;
+
+        boolean hasActiveNonExpiredSameProduct = customerSubscriptionRepository
+                .findByCustomerIdAndStatusOrderByActivatedAtDesc(customerId, SUBSCRIPTION_STATUS_ACTIVE)
+                .stream()
+                .filter(existing -> Objects.equals(existing.getProductId(), item.getProductId()))
+                .anyMatch(existing -> {
+                    if (isLifetime) {
+                        return true;
+                    }
+                    Integer durationDays = detail.durationDays();
+                    Instant activatedAt = existing.getActivatedAt();
+                    if (durationDays == null || durationDays <= 0 || activatedAt == null) {
+                        return true;
+                    }
+                    return Instant.now().isBefore(activatedAt.plus(durationDays, java.time.temporal.ChronoUnit.DAYS));
+                });
+
+        if (!hasActiveNonExpiredSameProduct) {
+            CustomerSubscriptionEntity subscription = CustomerSubscriptionEntity.createActive(
+                    customerId, item.getProductId(), item.getOrderItemId(), maxRevisions
+            );
+            subscription.setLifetime(isLifetime);
+            customerSubscriptionRepository.save(subscription);
+            log.info("Provisioned subscription to customer [customerId={}] [productId={}] [orderItemId={}] [isLifetime={}]",
+                    customerId, item.getProductId(), item.getOrderItemId(), isLifetime);
         } else {
             log.info("Active subscription for product already exists for customer [customerId={}] [productId={}]",
                     customerId, item.getProductId());

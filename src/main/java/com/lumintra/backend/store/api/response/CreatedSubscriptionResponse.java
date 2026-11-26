@@ -19,6 +19,7 @@ public record CreatedSubscriptionResponse(
         Integer durationDays,
         boolean allAccessCharacters,
         int maxCommissionRevisions,
+        int maxMobileProfiles,
         ProductStatus status,
         Instant createdAt,
         List<Long> tagIds) {}

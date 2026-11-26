@@ -172,9 +172,9 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
                 4,
                 null,
                 List.of(
-                        CommissionPriceOptionEntity.create("PARALLAX_EFFECT", "Hiệu ứng chiều sâu Parallax",
+                        CommissionPriceOptionEntity.create("PARALLAX_EFFECT", "Hiệu ứng chiều sâu nhiều lớp",
                                 ModifierType.BASE_PERCENT, new BigDecimal("25.00"), false, 1),
-                        CommissionPriceOptionEntity.create("SOURCE_FILE_ASEPRITE", "Tệp gốc thiết kế (.aseprite)",
+                        CommissionPriceOptionEntity.create("SOURCE_FILE_ASEPRITE", "Tệp nguồn thiết kế gốc",
                                 ModifierType.FLAT_ADD, new BigDecimal("30000.00"), false, 2),
                         CommissionPriceOptionEntity.create("COMMERCIAL_LICENSE", "Bản quyền thương mại",
                                 ModifierType.SUBTOTAL_PERCENT, new BigDecimal("20.00"), false, 3)
@@ -185,7 +185,7 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         CommissionPriceConfigEntity extraVariants = CommissionPriceConfigEntity.createCustom(
                 RULE_EXTRA_VARIANTS,
                 "Biến thể màu sắc bổ sung",
-                "Số lượng biến thể màu / thời tiết thêm cho cùng một tác phẩm pixel art.",
+                "Số lượng biến thể màu sắc hoặc thời tiết thêm cho cùng một tác phẩm pixel.",
                 SelectionType.QUANTITY,
                 UiType.NUMBER,
                 false,
@@ -203,8 +203,8 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
 
         CommissionPriceConfigEntity paletteNotes = CommissionPriceConfigEntity.createCustom(
                 RULE_PALETTE_NOTES,
-                "Ghi chú bảng màu & phong cách",
-                "Nhập mã màu hex, tâm trạng hoặc chi tiết sáng tạo cho họa sĩ (không ảnh hưởng giá).",
+                "Ghi chú bảng màu và phong cách",
+                "Nhập mã màu, tâm trạng hoặc chi tiết sáng tạo cho họa sĩ (không ảnh hưởng giá).",
                 SelectionType.TEXT_INPUT,
                 UiType.TEXT,
                 false,
@@ -220,8 +220,8 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         if (animatedGifOption != null && animatedGifOption.getOptionId() != null) {
             CommissionPriceConfigEntity gifProfile = CommissionPriceConfigEntity.createCustom(
                     RULE_GIF_EXPORT_PROFILE,
-                    "Cấu hình xuất GIF",
-                    "Chọn tốc độ khung hình mục tiêu khi xuất tệp ảnh động GIF cho ma trận LED.",
+                    "Cấu hình xuất ảnh động",
+                    "Chọn tốc độ khung hình mục tiêu khi xuất tệp ảnh động cho tấm LED.",
                     SelectionType.SINGLE_SELECT,
                     UiType.DROPDOWN,
                     false,
@@ -231,7 +231,7 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
                     7,
                     animatedGifOption.getOptionId(),
                     List.of(
-                            CommissionPriceOptionEntity.create("STANDARD_30FPS", "GIF tiêu chuẩn 30 FPS",
+                            CommissionPriceOptionEntity.create("STANDARD_30FPS", "Ảnh động tiêu chuẩn 30 FPS",
                                     ModifierType.FLAT_ADD, new BigDecimal("0.00"), true, 1),
                             CommissionPriceOptionEntity.create("HIGH_LOOP_SMOOTH", "Lặp vô tận siêu mượt",
                                     ModifierType.FLAT_ADD, new BigDecimal("15000.00"), false, 2)
@@ -268,8 +268,8 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         // 1. PENDING_REVIEW (Approve candidate) — full multi-primitive + 3-modifier breakdown
         CommissionRequestEntity pendingForApprove = saveCommission(
                 customerId,
-                "[MẪU] Shiba Inu Cyberpunk lặp vòng",
-                "Chú chó Shiba phong cách cyberpunk neon chớp mắt dưới cơn mưa hologram dùng cho màn hình kính sau ô tô.",
+                "[MẪU] Chó Shiba Neon Lặp Vòng",
+                "Chú chó Shiba phong cách ánh sáng neon chớp mắt dưới cơn mưa ánh sáng dùng cho tấm LED kính sau ô tô.",
                 "32x64",
                 CommissionStatus.PENDING_REVIEW,
                 staffEmployeeId,
@@ -281,19 +281,19 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
                         ctx.single("FRAME_RANGE", "6-15"),
                         ctx.multi(RULE_ADDON_EXTRAS, List.of("PARALLAX_EFFECT", "COMMERCIAL_LICENSE")),
                         ctx.quantity(RULE_EXTRA_VARIANTS, 1),
-                        ctx.text(RULE_PALETTE_NOTES, "#00FFCC xanh ngọc neon, #FF00AA hồng cánh sen rực")
+                        ctx.text(RULE_PALETTE_NOTES, "#00FFCC xanh ngọc sáng, #FF00AA hồng cánh sen rực")
                 )
         );
         attachReferences(pendingForApprove.getCommissionId(), List.of(
-                new AttachmentSeed(CDN_SEED_PREFIX + "shiba-pose-ref.png", "Mẫu góc nghiêng đầu và dáng đeo kính của Shiba"),
-                new AttachmentSeed(CDN_SEED_PREFIX + "cyber-palette.png", "Bảng màu tâm trạng xanh ngọc / hồng neon")
+                new AttachmentSeed(CDN_SEED_PREFIX + "shiba-pose-ref.png", "Mẫu góc nghiêng đầu và dáng đeo kính của chó Shiba"),
+                new AttachmentSeed(CDN_SEED_PREFIX + "cyber-palette.png", "Bảng màu tâm trạng xanh ngọc và hồng rực")
         ));
 
         // 2. PENDING_REVIEW (Reject candidate) — separate ticket so staff can test both /approve and /reject
         CommissionRequestEntity pendingForReject = saveCommission(
                 customerId,
-                "[MẪU] Biểu tượng xe RX-7 Drift",
-                "Tranh pixel dáng đuôi xe thể thao động cơ rotary với dải đèn hậu phát sáng.",
+                "[MẪU] Biểu Tượng Xe Thể Thao RX-7",
+                "Tranh pixel dáng đuôi xe thể thao với dải đèn hậu phát sáng rực rỡ.",
                 "64x64",
                 CommissionStatus.PENDING_REVIEW,
                 staffEmployeeId,
@@ -312,7 +312,7 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         // 3. PENDING_PAYMENT — creates a real PaymentSessionPort transaction for payment polling & webhook tests
         CommissionRequestEntity pendingPayment = saveCommission(
                 customerId,
-                "[MẪU] Hoa anh đào đêm trăng",
+                "[MẪU] Hoa Anh Đào Đêm Trăng",
                 "Cánh hoa anh đào rơi nhẹ trên nền núi đêm tối giản.",
                 "32x32",
                 CommissionStatus.PENDING_PAYMENT,
@@ -345,8 +345,8 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         // 4. PAID — ready for POST /api/management/commissions/{id}/assign + active chat room
         CommissionRequestEntity paidUnassigned = saveCommission(
                 customerId,
-                "[MẪU] Đường chân trời Synthwave",
-                "Đường chân trời lưới phong cách retro thập niên 80 với các dải hoàng hôn nhấp nháy.",
+                "[MẪU] Đường Chân Trời Hoàng Hôn Cổ Điển",
+                "Đường chân trời lưới phong cách cổ điển thập niên 80 với các dải hoàng hôn nhấp nháy.",
                 "32x64",
                 CommissionStatus.PAID,
                 staffEmployeeId,
@@ -366,8 +366,8 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         // 5. IN_PROGRESS — active designer assignment + rich Customer/Staff/Image chat history
         CommissionRequestEntity inProgress = saveCommission(
                 customerId,
-                "[MẪU] Mặt nạ Oni ngọn lửa neon",
-                "Mặt nạ Oni phát sáng với tia mắt xanh ngọc/đỏ thẫm chuyển động và hiệu ứng ngọn lửa nhẹ.",
+                "[MẪU] Mặt Nạ Oni Ngọn Lửa Rực Sáng",
+                "Mặt nạ Oni phát sáng với tia mắt xanh ngọc và đỏ thẫm chuyển động cùng hiệu ứng ngọn lửa nhẹ.",
                 "64x64",
                 CommissionStatus.IN_PROGRESS,
                 staffEmployeeId,
@@ -378,7 +378,7 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
                         ctx.single("MATRIX_SIZE", "64x64"),
                         ctx.single("FRAME_RANGE", "16-30"),
                         ctx.quantity(RULE_EXTRA_VARIANTS, 2),
-                        ctx.text(RULE_PALETTE_NOTES, "Đỏ thẫm #E11D48 + Tím điện #7C3AED")
+                        ctx.text(RULE_PALETTE_NOTES, "Đỏ thẫm #E11D48 và Tím điện #7C3AED")
                 )
         );
         inProgress.setSlaDueAt(now.plus(48, ChronoUnit.HOURS));
@@ -395,13 +395,13 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
                     CommissionMessageType.TEXT, "Đã ghi nhận! Họa sĩ pixel bên mình đang dựng khung hình chuyển động 64x64 rồi ạ.", null, null);
         }
         addChatMessage(inProgress.getCommissionId(), customerId, CommissionMessageSenderRole.CUSTOMER,
-                CommissionMessageType.IMAGE, "Mình gửi kèm bảng dải màu mã hex chính xác.", CDN_SEED_PREFIX + "oni-swatch.png", null);
+                CommissionMessageType.IMAGE, "Mình gửi kèm bảng dải màu chính xác.", CDN_SEED_PREFIX + "oni-swatch.png", null);
 
         // 6. INTERNAL_REVIEW — contains PENDING_STAFF_REVIEW draft (hidden from customer GET /{id}, visible in management)
         CommissionRequestEntity internalReview = saveCommission(
                 customerId,
-                "[MẪU] Bóng ma Arcade 8-bit",
-                "Bóng ma phong cách máy game 8-bit cổ điển kèm hiệu ứng vệt nhiễu kỹ thuật số.",
+                "[MẪU] Bóng Ma Trò Chơi Cổ Điển",
+                "Bóng ma phong cách máy trò chơi cổ điển kèm hiệu ứng vệt nhiễu kỹ thuật số.",
                 "32x64",
                 CommissionStatus.INTERNAL_REVIEW,
                 staffEmployeeId,
@@ -430,8 +430,8 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         // 7. INTERNAL_REVISION_REQUIRED — designer queue visibility + internal STAFF_REJECTED draft note
         CommissionRequestEntity internalRevision = saveCommission(
                 customerId,
-                "[MẪU] Lõi Mecha Pixel",
-                "Biểu tượng lõi năng lượng mecha tương lai nhỏ gọn với các điểm ảnh LED độ tương phản cao.",
+                "[MẪU] Lõi Năng Lượng Mecha",
+                "Biểu tượng lõi năng lượng Mecha tương lai nhỏ gọn với độ tương phản cao trên tấm LED.",
                 "32x32",
                 CommissionStatus.INTERNAL_REVISION_REQUIRED,
                 staffEmployeeId,
@@ -453,7 +453,7 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
                     "Bản nháp nội bộ đầu tiên gửi kiểm tra chất lượng.",
                     CommissionSubmissionStatus.STAFF_REJECTED,
                     staffEmployeeId,
-                    "Viền ngoài hơi mờ trên trình mô phỏng LED; cần tăng độ sáng thêm 20% và làm dày nét viền.",
+                    "Viền ngoài hơi mờ trên trình mô phỏng tấm LED; cần tăng độ sáng thêm 20% và làm dày nét viền.",
                     now.minus(2, ChronoUnit.HOURS),
                     null);
         }
@@ -461,8 +461,8 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         // 8. PREVIEW_DELIVERED — customer sees v2 STAFF_APPROVED + DELIVERABLE_CARD; management sees both v1 & v2
         CommissionRequestEntity previewDelivered = saveCommission(
                 customerId,
-                "[MẪU] Đồng hồ áp suất Turbo",
-                "Cặp đồng hồ đo áp suất turbo chuyển động quét kim đồng bộ theo tua máy.",
+                "[MẪU] Đồng Hồ Đo Tua Máy Xe",
+                "Cặp đồng hồ đo tua máy xe thể thao chuyển động quét kim mượt mà.",
                 "64x64",
                 CommissionStatus.PREVIEW_DELIVERED,
                 staffEmployeeId,
@@ -483,10 +483,10 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         if (designerEmployeeId != null) {
             saveSubmission(previewDelivered.getCommissionId(), designerEmployeeId, 1,
                     CDN_SEED_PREFIX + "turbo-gauges-v1.gif",
-                    "Bản nháp v1 gồm 10 khung hình.",
+                    "Bản nháp phiên bản 1 gồm 10 khung hình.",
                     CommissionSubmissionStatus.STAFF_REJECTED,
                     staffEmployeeId,
-                    "Kim đồng hồ bị khựng giữa khung hình 6 và 7; cần nội suy chuyển động mượt hơn.",
+                    "Kim đồng hồ bị khựng giữa khung hình 6 và 7; cần làm mượt chuyển động hơn.",
                     now.minus(1, ChronoUnit.DAYS),
                     null);
             CommissionSubmissionEntity approvedV2 = saveSubmission(previewDelivered.getCommissionId(), designerEmployeeId, 2,
@@ -502,7 +502,7 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
                     staffEmployeeId != null ? staffEmployeeId : designerEmployeeId,
                     CommissionMessageSenderRole.STAFF,
                     CommissionMessageType.DELIVERABLE_CARD,
-                    "Bản xem trước v2 đã vượt qua kiểm duyệt chất lượng và sẵn sàng chờ bạn phê duyệt.",
+                    "Bản xem trước phiên bản 2 đã vượt qua kiểm duyệt chất lượng và sẵn sàng chờ bạn phê duyệt.",
                     approvedV2.getImageUrl(),
                     deliverableMetadataJson(approvedV2)
             );
@@ -511,8 +511,8 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         // 9. COMPLETED — final approved submission linked via approvedSubmissionId, closed chat
         CommissionRequestEntity completed = saveCommission(
                 customerId,
-                "[MẪU] Cáo Hologram đồng hành",
-                "Hoạt ảnh chờ chú cáo hologram tối giản trang trí kính bên xe.",
+                "[MẪU] Cáo Ánh Sáng Đồng Hành",
+                "Hoạt ảnh chờ chú cáo ánh sáng tối giản trang trí kính bên xe.",
                 "32x64",
                 CommissionStatus.COMPLETED,
                 staffEmployeeId,
@@ -528,7 +528,7 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         if (designerEmployeeId != null) {
             CommissionSubmissionEntity accepted = saveSubmission(completed.getCommissionId(), designerEmployeeId, 1,
                     CDN_SEED_PREFIX + "hologram-fox-final.png",
-                    "Bản hoàn thiện cuối cùng nhân vật cáo pixel hologram 32x64.",
+                    "Bản hoàn thiện cuối cùng nhân vật cáo ánh sáng 32x64.",
                     CommissionSubmissionStatus.CUSTOMER_ACCEPTED,
                     staffEmployeeId,
                     "Đã duyệt để bàn giao cho khách hàng.",
@@ -550,7 +550,7 @@ public class CommissionFlowDataSeeder implements ApplicationRunner {
         // 10. CANCELLED — rejected during initial intake with rejectionReason populated
         CommissionRequestEntity cancelled = saveCommission(
                 customerId,
-                "[MẪU] Sao chép logo hãng xe",
+                "[MẪU] Sao Chép Logo Hãng Xe",
                 "Yêu cầu vẽ lại y hệt logo thương hiệu của hãng xe thương mại.",
                 "32x32",
                 CommissionStatus.CANCELLED,

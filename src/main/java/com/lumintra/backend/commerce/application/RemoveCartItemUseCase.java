@@ -17,7 +17,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -69,9 +71,14 @@ public class RemoveCartItemUseCase {
                         )
                 ));
 
+        Map<Long, BigDecimal> effectiveUnitPricesByProductId = new HashMap<>();
+        productsById.forEach((productId, prod) -> effectiveUnitPricesByProductId.put(
+                productId, cartItemAvailabilityService.resolveEffectiveUnitPrice(customerId, prod)));
+
         log.info("Cart item removed [customerId={}] [cartId={}] [cartItemId={}] [productId={}] [remainingCount={}]",
                 customerId, savedCart.getCartId(), itemId, removedProductId, remainingItems.size());
 
-        return cartMapper.toCartResponse(savedCart, remainingItems, productsById, availabilityByItemId);
+        return cartMapper.toCartResponse(
+                savedCart, remainingItems, productsById, availabilityByItemId, effectiveUnitPricesByProductId);
     }
 }

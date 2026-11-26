@@ -21,7 +21,9 @@ import com.lumintra.backend.device.infrastructure.persistence.LedModelCreationSe
 import com.lumintra.backend.device.infrastructure.persistence.LedModelLookupServiceImpl;
 import com.lumintra.backend.device.infrastructure.persistence.repository.LedModelRepository;
 import com.lumintra.backend.iam.domain.model.CustomerProfileSnapshot;
+import com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot;
 import com.lumintra.backend.iam.domain.service.CustomerLookupService;
+import com.lumintra.backend.iam.domain.service.EmployeeLookupService;
 import com.lumintra.backend.store.infrastructure.bootstrap.StoreDataSeeder;
 import com.lumintra.backend.store.infrastructure.caching.StoreCacheEvictor;
 import com.lumintra.backend.store.infrastructure.persistence.ProductLookupServiceImpl;
@@ -125,6 +127,9 @@ class StoreAndCommerceSeederIntegrationTest {
     @MockitoBean
     private CustomerLookupService customerLookupService;
 
+    @MockitoBean
+    private EmployeeLookupService employeeLookupService;
+
     @Test
     @DisplayName("N: StoreDataSeeder feeds real persisted products, models, and character versions into CommerceDataSeeder idempotently")
     void storeThenCommerceSeeder_populatesLinkedCatalogAndCommerceDataIdempotently() {
@@ -132,6 +137,8 @@ class StoreAndCommerceSeederIntegrationTest {
                 42L, "Nguyen Van A", "0901234567", "customer123@gmail.com");
         given(customerLookupService.findProfileByEmail("customer123@gmail.com"))
                 .willReturn(Optional.of(customer));
+        given(employeeLookupService.findActiveDesigners())
+                .willReturn(List.of(new EmployeeProfileSnapshot(77L, "Nhà thiết kế", "designer@lumintra.com")));
 
         DefaultApplicationArguments args = new DefaultApplicationArguments();
         storeDataSeeder.run(args);
@@ -139,13 +146,15 @@ class StoreAndCommerceSeederIntegrationTest {
 
         // Verify store catalog counts
         assertThat(tagRepository.count()).isEqualTo(12);
-        assertThat(productRepository.count()).isEqualTo(17);
+        assertThat(productRepository.count()).isEqualTo(19);
         assertThat(ledModelRepository.count()).isEqualTo(3);
         assertThat(characterRepository.count()).isEqualTo(10);
+        assertThat(characterRepository.findAll())
+                .allSatisfy(character -> assertThat(character.getCreatorEmployeeId()).isEqualTo(77L));
         assertThat(characterVersionRepository.count()).isEqualTo(10);
         assertThat(bundleRepository.count()).isEqualTo(2);
         assertThat(bundleItemRepository.count()).isEqualTo(6);
-        assertThat(subscriptionDetailRepository.count()).isEqualTo(2);
+        assertThat(subscriptionDetailRepository.count()).isEqualTo(4);
 
         ProductEntity ledPro = productRepository.findFirstByProductName(StoreDataSeeder.PRODUCT_LED_PRO).orElseThrow();
         ProductEntity ledCompact = productRepository.findFirstByProductName(StoreDataSeeder.PRODUCT_LED_COMPACT).orElseThrow();
@@ -212,12 +221,12 @@ class StoreAndCommerceSeederIntegrationTest {
         commerceDataSeeder.run(args);
 
         assertThat(tagRepository.count()).isEqualTo(12);
-        assertThat(productRepository.count()).isEqualTo(17);
+        assertThat(productRepository.count()).isEqualTo(19);
         assertThat(ledModelRepository.count()).isEqualTo(3);
         assertThat(characterVersionRepository.count()).isEqualTo(10);
         assertThat(bundleRepository.count()).isEqualTo(2);
         assertThat(bundleItemRepository.count()).isEqualTo(6);
-        assertThat(subscriptionDetailRepository.count()).isEqualTo(2);
+        assertThat(subscriptionDetailRepository.count()).isEqualTo(4);
         assertThat(cartRepository.count()).isZero();
         assertThat(cartItemRepository.count()).isZero();
         assertThat(orderRepository.count()).isEqualTo(37);

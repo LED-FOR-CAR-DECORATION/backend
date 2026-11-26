@@ -58,12 +58,13 @@ public class CreateSubscriptionUseCase {
                                 new HashSet<>(selectedTags)));
         int bonusRevisions =
                 request.maxCommissionRevisions() == null ? 0 : request.maxCommissionRevisions();
+        int maxMobileProfiles =
+                request.maxMobileProfiles() == null ? 3 : request.maxMobileProfiles();
         String perksDescription =
                 buildPerksDescription(
                         request.allAccessCharacters(),
-                        bonusRevisions,
-                        request.lifetime(),
-                        request.durationDays());
+                        maxMobileProfiles,
+                        bonusRevisions);
         var detail =
                 SubscriptionDetailEntity.create(
                         product.getProductId(),
@@ -73,7 +74,7 @@ public class CreateSubscriptionUseCase {
                         request.durationDays(),
                         request.allAccessCharacters(),
                         bonusRevisions,
-                        3,
+                        maxMobileProfiles,
                         Map.of(),
                         perksDescription);
         try {
@@ -100,6 +101,7 @@ public class CreateSubscriptionUseCase {
                 detail.getDurationDays(),
                 detail.isAllAccessCharacters(),
                 detail.getMaxCommissionRevisions(),
+                detail.getMaxMobileProfiles(),
                 product.getStatus(),
                 detail.getCreatedAt(),
                 ids);
@@ -107,22 +109,18 @@ public class CreateSubscriptionUseCase {
 
     private String buildPerksDescription(
             boolean allAccessCharacters,
-            int maxCommissionRevisions,
-            boolean isLifetime,
-            Integer durationDays) {
-        if (!allAccessCharacters && maxCommissionRevisions > 0) {
-            return "+" + maxCommissionRevisions + " lượt chỉnh sửa thiết kế miễn phí";
-        }
-        if (allAccessCharacters && maxCommissionRevisions <= 0) {
-            return "Mở khóa toàn bộ thư viện nhân vật";
-        }
+            int maxMobileProfiles,
+            int maxCommissionRevisions) {
         var parts = new java.util.ArrayList<String>();
         if (allAccessCharacters) {
             parts.add("Mở khóa toàn bộ thư viện nhân vật");
         }
-        if (maxCommissionRevisions > 0) {
-            parts.add("+" + maxCommissionRevisions + " lượt chỉnh sửa thiết kế miễn phí");
+        if (maxMobileProfiles > 3) {
+            parts.add("Tối đa " + maxMobileProfiles + " profile chữ trên ứng dụng Mobile");
         }
-        return parts.isEmpty() ? null : String.join(", ", parts);
+        if (maxCommissionRevisions > 0) {
+            parts.add(maxCommissionRevisions + " lượt chỉnh sửa miễn phí cho mỗi đơn thiết kế");
+        }
+        return parts.isEmpty() ? null : String.join(" · ", parts);
     }
 }

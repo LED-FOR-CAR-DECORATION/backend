@@ -145,7 +145,8 @@ public class CharacterLookupServiceImpl implements CharacterLookupService {
                 version.getVersionNumber(),
                 version.getPreviewGifUrl(),
                 version.getFrameCount(),
-                version.getFrameDelayMs()
+                version.getFrameDelayMs(),
+                version.getProductId()
         );
     }
 }

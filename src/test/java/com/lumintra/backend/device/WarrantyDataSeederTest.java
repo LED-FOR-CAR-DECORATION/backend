@@ -66,12 +66,18 @@ class WarrantyDataSeederTest {
     void run_cleanDatabaseWithBoundDevices_seedsAllWarrantyTickets() {
         given(warrantyTicketRepository.count()).willReturn(0L);
 
-        mockBoundDevice(10L, DeviceDataSeeder.SEED_SERIAL_BOUND, 1L, 1001L);
-        mockBoundDevice(11L, DeviceDataSeeder.SEED_SERIAL_CUST3_COMPLETED, 3L, 1002L);
-        mockBoundDevice(12L, DeviceDataSeeder.SEED_SERIAL_CUST4_REJECTED, 4L, 1003L);
-        mockBoundDevice(13L, DeviceDataSeeder.SEED_SERIAL_CUST2_APPROVED, 2L, 1004L);
-        mockBoundDevice(14L, DeviceDataSeeder.SEED_SERIAL_CUST2_PENDING, 2L, 1005L);
-        mockBoundDevice(15L, DeviceDataSeeder.SEED_SERIAL_CUST4_PENDING, 4L, 1006L);
+        mockBoundDevice(10L, DeviceDataSeeder.SEED_SERIAL_BOUND, 1L,
+                "Tấm LED Lumintra 64x64 Cao Cấp", 1L, 1001L);
+        mockBoundDevice(11L, DeviceDataSeeder.SEED_SERIAL_CUST3_COMPLETED, 1L,
+                "Tấm LED Lumintra 64x64 Cao Cấp", 3L, 1002L);
+        mockBoundDevice(12L, DeviceDataSeeder.SEED_SERIAL_CUST4_REJECTED, 2L,
+                "Tấm LED Lumintra 64x32 Gọn Nhẹ", 4L, 1003L);
+        mockBoundDevice(13L, DeviceDataSeeder.SEED_SERIAL_CUST2_APPROVED, 2L,
+                "Tấm LED Lumintra 64x32 Gọn Nhẹ", 2L, 1004L);
+        mockBoundDevice(14L, DeviceDataSeeder.SEED_SERIAL_CUST2_PENDING, 1L,
+                "Tấm LED Lumintra 64x64 Cao Cấp", 2L, 1005L);
+        mockBoundDevice(15L, DeviceDataSeeder.SEED_SERIAL_CUST4_PENDING, 1L,
+                "Tấm LED Lumintra 64x64 Cao Cấp", 4L, 1006L);
 
         AtomicLong ticketIds = new AtomicLong(1L);
         given(warrantyTicketRepository.save(any(WarrantyTicketEntity.class))).willAnswer(inv -> {
@@ -100,10 +106,13 @@ class WarrantyDataSeederTest {
                 .containsExactly(1001L, 1002L, 1003L, 1004L, 1005L, 1006L);
         assertThat(savedTickets)
                 .allSatisfy(ticket -> {
-                    assertThat(ticket.getIssueDescription()).contains("Lumintra Matrix 64x64 Pro");
+                    String expectedModelName = ticket.getDeviceSerialNumber().startsWith("LMT-64X32-")
+                            ? "Tấm LED Lumintra 64x32 Gọn Nhẹ"
+                            : "Tấm LED Lumintra 64x64 Cao Cấp";
+                    assertThat(ticket.getIssueDescription()).contains(expectedModelName);
                     assertThat(ticket.getEvidenceMediaUrls()).isNotEmpty();
                     if (ticket.getStatus() != WarrantyTicketStatus.PENDING) {
-                        assertThat(ticket.getResolutionNotes()).isNotBlank();
+                        assertThat(ticket.getResolutionNotes()).contains(expectedModelName);
                     }
                 });
     }
@@ -130,23 +139,29 @@ class WarrantyDataSeederTest {
         verify(warrantyTicketRepository, never()).save(any());
     }
 
-    private void mockBoundDevice(Long instanceId, String serial, Long customerId, Long orderItemId) {
+    private void mockBoundDevice(
+            Long instanceId,
+            String serial,
+            Long modelId,
+            String modelName,
+            Long customerId,
+            Long orderItemId) {
         Instant now = Instant.now();
         LedInstanceEntity entity = LedInstanceEntity.createWithState(
-                1L,
+                modelId,
                 serial,
                 "AA:BB:CC:11:22:" + instanceId,
                 customerId,
-                "Device " + serial,
+                modelName,
                 LedInstanceStatus.BOUND,
                 now.minus(30, ChronoUnit.DAYS),
                 now.minus(10, ChronoUnit.DAYS),
                 now.plus(170, ChronoUnit.DAYS)
         );
         ReflectionTestUtils.setField(entity, "instanceId", instanceId);
-        LedModelEntity model = LedModelEntity.createForProduct(101L, "Lumintra Matrix 64x64 Pro", java.util.Map.of(), 50L);
-        ReflectionTestUtils.setField(model, "modelId", 1L);
-        given(ledModelRepository.findById(1L)).willReturn(Optional.of(model));
+        LedModelEntity model = LedModelEntity.createForProduct(100L + modelId, modelName, java.util.Map.of(), 50L);
+        ReflectionTestUtils.setField(model, "modelId", modelId);
+        given(ledModelRepository.findById(modelId)).willReturn(Optional.of(model));
         given(ledInstanceRepository.findBySerialNumber(serial)).willReturn(Optional.of(entity));
         given(orderFulfillmentLookupService.findFulfillmentByInstanceId(instanceId))
                 .willReturn(Optional.of(new InstanceFulfillmentSnapshot(

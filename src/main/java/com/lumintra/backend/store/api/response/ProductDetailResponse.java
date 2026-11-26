@@ -151,6 +151,10 @@ public record ProductDetailResponse(
             BundleItemType itemType,
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Store product identifier of the included component", example = "2", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            Long productId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Included LED model identifier (for LED items)", example = "5", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
             Long modelId,
 
@@ -161,6 +165,10 @@ public record ProductDetailResponse(
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Current available hardware stock of the LED model (for LED items)", example = "12", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
             Long stockQuantity,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Technical specifications map of the LED model (for LED items)", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            Map<String, Object> specifications,
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Included character version identifier (for CHARACTER items)", example = "21", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
@@ -181,6 +189,14 @@ public record ProductDetailResponse(
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Animated preview GIF URL of the character (for CHARACTER items)", example = "https://cdn.lumintra.com/characters/dragon-preview.gif", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
             String previewGifUrl,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Cover thumbnail URL of the included component product", example = "https://cdn.lumintra.shop/store/products/led/Led_64_32.webp", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            String thumbnailUrl,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Individual selling price of the included component product in VND", example = "190000.00", nullable = true, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            BigDecimal unitPrice,
 
             @Schema(description = "Quantity of this item included per bundle unit", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
             int quantity

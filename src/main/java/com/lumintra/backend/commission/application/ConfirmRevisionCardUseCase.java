@@ -90,11 +90,15 @@ public class ConfirmRevisionCardUseCase {
         if (!revision.isPending()) {
             throw conflict("Revision card has already been processed.");
         }
-        boolean usesCommissionQuota = commission.getRevisionsUsed() < commission.getMaxRevisions();
-        boolean usesSubscriptionCredit =
-                !usesCommissionQuota
-                        && subscriptionBonusLookupService.consumeOneExtraCommissionRevision(customerId);
-        boolean free = usesCommissionQuota || usesSubscriptionCredit;
+        int subscriptionMaxRevisions =
+                Math.max(
+                        0,
+                        subscriptionBonusLookupService.findMaxFreeCommissionRevisions(customerId));
+        int effectiveMaxRevisions = Math.max(commission.getMaxRevisions(), subscriptionMaxRevisions);
+        if (effectiveMaxRevisions > commission.getMaxRevisions()) {
+            commission.setMaxRevisions(effectiveMaxRevisions);
+        }
+        boolean free = commission.getRevisionsUsed() < effectiveMaxRevisions;
         var fee =
                 free
                         ? BigDecimal.ZERO.setScale(2)
@@ -104,10 +108,11 @@ public class ConfirmRevisionCardUseCase {
                                 .setScale(2, RoundingMode.HALF_UP);
         metadata.put("status", "CONFIRMED");
         metadata.put("usesFreeQuota", free);
-        metadata.put("usesSubscriptionCredit", usesSubscriptionCredit);
+        metadata.put("usesSubscriptionCredit", false);
         metadata.put("revisionFee", fee);
         metadata.put("feePercentage", free ? 0 : 10);
         metadata.put("revisionsUsed", free ? revisionNumber : commission.getRevisionsUsed());
+        metadata.put("maxRevisions", effectiveMaxRevisions);
         String confirmedMetadata;
         try {
             confirmedMetadata = json.writeValueAsString(metadata);

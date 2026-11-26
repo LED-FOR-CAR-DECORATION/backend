@@ -10,11 +10,13 @@ import com.lumintra.backend.commerce.infrastructure.persistence.repository.Owned
 import com.lumintra.backend.device.domain.service.LedStockLookupService;
 import com.lumintra.backend.store.domain.model.BundleItemType;
 import com.lumintra.backend.store.domain.model.BundleSnapshot;
+import com.lumintra.backend.store.domain.model.ProductSnapshot;
 import com.lumintra.backend.store.domain.model.ProductType;
 import com.lumintra.backend.store.domain.service.BundleLookupService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -135,5 +137,16 @@ public class DefaultProductAvailabilityAdapter implements ProductAvailabilityPor
         }
 
         return BundleCheckoutInspection.valid(containsPhysicalLed, Map.copyOf(requiredStockByModelId));
+    }
+
+    @Override
+    public BigDecimal resolveEffectiveUnitPrice(Long customerId, ProductSnapshot product) {
+        if (product == null) {
+            return BigDecimal.ZERO;
+        }
+        if (product.productType() == ProductType.SUBSCRIPTION) {
+            return customerSubscriptionEntitlementService.resolveEffectiveSubscriptionPrice(customerId, product);
+        }
+        return product.basePrice();
     }
 }
