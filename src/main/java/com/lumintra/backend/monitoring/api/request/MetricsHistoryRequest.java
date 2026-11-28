@@ -24,8 +24,8 @@ public record MetricsHistoryRequest(
         OffsetDateTime to,
 
         @Schema(description = "Period size of each point. 1d periods follow calendar days in Asia/Ho_Chi_Minh.",
-                allowableValues = {"1m", "5m", "1h", "1d"}, defaultValue = "1h")
-        @Pattern(regexp = "^(1m|5m|1h|1d)$", message = "interval must be one of 1m, 5m, 1h, 1d")
+                allowableValues = {"1m", "5m", "15m", "1h", "1d"}, defaultValue = "1h")
+        @Pattern(regexp = "^(1m|5m|15m|1h|1d)$", message = "interval must be one of 1m, 5m, 15m, 1h, 1d")
         String interval,
 
         @Schema(description = "Only include this HTTP method", example = "GET")

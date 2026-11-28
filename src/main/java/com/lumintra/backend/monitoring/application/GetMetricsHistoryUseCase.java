@@ -46,7 +46,7 @@ public class GetMetricsHistoryUseCase {
     public MetricsHistoryResponse executeAt(MetricsHistoryRequest request, Instant now) {
         Instant evaluatedAt = now != null ? now : Instant.now();
         MetricsInterval interval = MetricsInterval.fromCode(request.interval())
-                .orElseThrow(() -> new InvalidMetricsRangeException("interval must be one of 1m, 5m, 1h, 1d"));
+                .orElseThrow(() -> new InvalidMetricsRangeException("interval must be one of 1m, 5m, 15m, 1h, 1d"));
 
         Instant from = request.from().toInstant();
         Instant to = request.to().toInstant();

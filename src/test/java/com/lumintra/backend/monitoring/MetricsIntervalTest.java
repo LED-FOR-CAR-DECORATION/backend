@@ -20,6 +20,8 @@ class MetricsIntervalTest {
             "1m, 2026-11-27T10:17:42Z, 2026-11-27T10:17:00Z",
             "5m, 2026-11-27T10:17:42Z, 2026-11-27T10:15:00Z",
             "5m, 2026-11-27T10:15:00Z, 2026-11-27T10:15:00Z",
+            "15m, 2026-11-27T10:29:59Z, 2026-11-27T10:15:00Z",
+            "15m, 2026-11-27T10:30:00Z, 2026-11-27T10:30:00Z",
             "1h, 2026-11-27T10:59:59Z, 2026-11-27T10:00:00Z",
             // 2026-11-27 23:59 in Vietnam is still the 27th there
             "1d, 2026-11-27T16:59:00Z, 2026-11-26T17:00:00Z",
@@ -43,9 +45,10 @@ class MetricsIntervalTest {
     }
 
     @Test
-    @DisplayName("UTCID03 [B]: AC02 only 1m, 5m, 1h and 1d are recognised")
+    @DisplayName("UTCID03 [B]: AC02 only 1m, 5m, 15m, 1h and 1d are recognised")
     void fromCode_unknown_isEmpty() {
         assertThat(MetricsInterval.fromCode("1h")).contains(MetricsInterval.ONE_HOUR);
+        assertThat(MetricsInterval.fromCode("15m")).contains(MetricsInterval.FIFTEEN_MINUTES);
         assertThat(MetricsInterval.fromCode("2h")).isEmpty();
         assertThat(MetricsInterval.fromCode(null)).isEmpty();
     }

@@ -103,7 +103,7 @@ public class SystemMetricsController {
     @Operation(
             summary = "Get metrics history",
             description = """
-                    Returns API performance over a range of up to 30 days, grouped into 1m, 5m, 1h or 1d periods \
+                    Returns API performance over a range of up to 30 days, grouped into 1m, 5m, 15m, 1h or 1d periods \
                     (1d follows calendar days in Asia/Ho_Chi_Minh), for the whole system or one method/route. \
                     Figures add up the stored per-minute summaries of every backend instance. Periods without \
                     traffic are included with zero counts. The current, unfinished minute is never included. \
