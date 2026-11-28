@@ -106,11 +106,11 @@ public class CommissionCompletionService {
 
     private static String completionText(CommissionCompletionSource source, CommissionSubmissionEntity submission) {
         if (source == CommissionCompletionSource.AUTO_COMPLETED) {
-            return "No response within 7 days — preview version " + submission.getVersionNumber()
-                    + " was accepted automatically. The commission is now completed.";
+            return "Không có phản hồi trong vòng 7 ngày — bản xem trước phiên bản " + submission.getVersionNumber()
+                    + " đã được tự động chấp nhận. Yêu cầu thiết kế hiện đã hoàn tất.";
         }
-        return "Customer approved preview version " + submission.getVersionNumber()
-                + ". The commission is now completed.";
+        return "Khách hàng đã phê duyệt bản xem trước phiên bản " + submission.getVersionNumber()
+                + ". Yêu cầu thiết kế hiện đã hoàn tất.";
     }
 
     /**

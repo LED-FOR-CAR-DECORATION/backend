@@ -151,10 +151,10 @@ public class ReassignCommissionUseCase {
 
     private static String chatText(boolean staffChanged, boolean designerChanged) {
         if (staffChanged && designerChanged) {
-            return "This commission has been reassigned to a new staff member and designer.";
+            return "Yêu cầu thiết kế này đã được phân công lại cho nhân viên hỗ trợ và nhà thiết kế mới.";
         }
         return designerChanged
-                ? "This commission has been reassigned to a new designer."
-                : "This commission has been reassigned to a new staff member.";
+                ? "Yêu cầu thiết kế này đã được phân công lại cho nhà thiết kế mới."
+                : "Yêu cầu thiết kế này đã được phân công lại cho nhân viên hỗ trợ mới.";
     }
 }

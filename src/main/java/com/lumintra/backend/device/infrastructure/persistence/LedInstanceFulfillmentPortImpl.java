@@ -23,10 +23,10 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class LedInstanceFulfillmentPortImpl implements LedInstanceFulfillmentPort {
 
-    private static final Logger log = LoggerFactory.getLogger(LedInstanceFulfillmentPortImpl.class);
+        private static final Logger log = LoggerFactory.getLogger(LedInstanceFulfillmentPortImpl.class);
 
-    private final LedInstanceRepository ledInstanceRepository;
-    private final LedModelRepository ledModelRepository;
+        private final LedInstanceRepository ledInstanceRepository;
+        private final LedModelRepository ledModelRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -125,8 +125,7 @@ public class LedInstanceFulfillmentPortImpl implements LedInstanceFulfillmentPor
                 instanceId,
                 LedInstanceStatus.IN_TRANSIT,
                 LedInstanceStatus.IN_STOCK,
-                Instant.now()
-        );
+                Instant.now());
         log.info("Released LED instance back to IN_STOCK [instanceId={}] [updatedRows={}]", instanceId, rows);
     }
 }

@@ -25,6 +25,10 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>,
 
     @EntityGraph(attributePaths = "tags")
     Optional<ProductEntity> findWithTagsByProductIdAndStatusIn(Long productId, Collection<ProductStatus> statuses);
+
+    @EntityGraph(attributePaths = "tags")
+    Optional<ProductEntity> findWithTagsByProductId(Long productId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select product from ProductEntity product where product.productId = :id")
     Optional<ProductEntity> findForManagementUpdate(@Param("id") long id);

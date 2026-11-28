@@ -2,12 +2,16 @@ package com.lumintra.backend.commission.api.controller;
 
 import com.lumintra.backend.commission.api.request.AssignCommissionRequest;
 import com.lumintra.backend.commission.api.request.DesignerCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.request.ReviewCommissionSubmissionRequest;
+import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
+import com.lumintra.backend.commission.api.request.SubmitCommissionDraftRequest;
 import com.lumintra.backend.commission.api.request.RejectCommissionDraftRequest;
 import com.lumintra.backend.commission.api.request.RejectCommissionRequest;
 import com.lumintra.backend.commission.api.request.StaffCommissionQueueFilterRequest;
 import com.lumintra.backend.commission.api.request.UploadCommissionDraftRequest;
 import com.lumintra.backend.commission.api.response.ApproveCommissionResponse;
 import com.lumintra.backend.commission.api.response.AssignCommissionResponse;
+import com.lumintra.backend.commission.api.response.CommissionSubmissionResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse;
 import com.lumintra.backend.commission.api.response.DesignerCommissionQueueResponse.DesignerCommissionQueueItem;
 import com.lumintra.backend.commission.api.response.ManagementCommissionDetailResponse;
@@ -22,6 +26,8 @@ import com.lumintra.backend.commission.application.AssignCommissionToDesignerUse
 import com.lumintra.backend.commission.application.GetDesignerCommissionQueueUseCase;
 import com.lumintra.backend.commission.application.GetManagementCommissionDetailUseCase;
 import com.lumintra.backend.commission.application.GetStaffCommissionQueueUseCase;
+import com.lumintra.backend.commission.application.ReviewCommissionSubmissionUseCase;
+import com.lumintra.backend.commission.application.SubmitCommissionDraftUseCase;
 import com.lumintra.backend.commission.application.PostDeliverableCardUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionDraftUseCase;
 import com.lumintra.backend.commission.application.RejectCommissionRequestUseCase;
@@ -76,6 +82,8 @@ public class CommissionManagementController {
     private final ApproveCommissionRequestUseCase approveCommissionRequestUseCase;
     private final AssignCommissionToDesignerUseCase assignCommissionToDesignerUseCase;
     private final GetDesignerCommissionQueueUseCase getDesignerCommissionQueueUseCase;
+    private final SubmitCommissionDraftUseCase submitCommissionDraftUseCase;
+    private final ReviewCommissionSubmissionUseCase reviewCommissionSubmissionUseCase;
     private final RejectCommissionRequestUseCase rejectCommissionRequestUseCase;
     private final UploadCommissionDraftUseCase uploadCommissionDraftUseCase;
     private final RejectCommissionDraftUseCase rejectCommissionDraftUseCase;

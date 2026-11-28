@@ -97,7 +97,7 @@ class ManagedStoreProductControllerTest {
                                 List.of(),
                                 null,
                                 null));
-        for (String role : List.of("MANAGER", "ADMIN")) {
+        for (String role : List.of("MANAGER", "ADMIN", "DESIGNER")) {
             mvc.perform(
                             post(PATH)
                                     .with(user("1").roles(role))

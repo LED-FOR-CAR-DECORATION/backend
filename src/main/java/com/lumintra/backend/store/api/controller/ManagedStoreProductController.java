@@ -58,7 +58,7 @@ public class ManagedStoreProductController {
     }
 
     @PostMapping("/api/management/admin/store/products")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'DESIGNER')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Create an unpublished store product")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -73,7 +73,7 @@ public class ManagedStoreProductController {
             description = "Authentication required")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "403",
-            description = "ADMIN or MANAGER required")
+            description = "ADMIN, MANAGER or DESIGNER required")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "404",
             description = "Tag or character version missing",

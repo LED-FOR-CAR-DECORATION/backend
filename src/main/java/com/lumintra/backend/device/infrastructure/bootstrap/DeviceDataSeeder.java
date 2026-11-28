@@ -110,6 +110,7 @@ public class DeviceDataSeeder implements ApplicationRunner {
         Instant manufacturedAt = now.minus(30, ChronoUnit.DAYS);
 
         int seededCount = 0;
+
         seededCount += seedIfAbsent(LedInstanceEntity.createInStock(
                 primaryModel.getModelId(),
                 SEED_SERIAL_IN_STOCK_1,

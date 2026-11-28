@@ -56,8 +56,8 @@ public class AddCartItemUseCase {
         CartEntity cart = cartRepository.findByCustomerId(customerId)
                 .orElseGet(() -> cartRepository.save(CartEntity.create(customerId)));
 
-        Optional<CartItemEntity> existingItemOpt =
-                cartItemRepository.findByCart_CartIdAndProductId(cart.getCartId(), product.productId());
+        Optional<CartItemEntity> existingItemOpt = cartItemRepository.findByCart_CartIdAndProductId(cart.getCartId(),
+                product.productId());
 
         if (product.productType() == ProductType.CHARACTER || product.productType() == ProductType.SUBSCRIPTION) {
             handleDigitalProduct(customerId, cart, product, request.quantity(), existingItemOpt);
@@ -72,7 +72,8 @@ public class AddCartItemUseCase {
         cart.touch();
         CartEntity savedCart = cartRepository.save(cart);
 
-        List<CartItemEntity> allItems = cartItemRepository.findAllByCart_CartIdOrderByAddedAtDesc(savedCart.getCartId());
+        List<CartItemEntity> allItems = cartItemRepository
+                .findAllByCart_CartIdOrderByAddedAtDesc(savedCart.getCartId());
         Map<Long, ProductSnapshot> productsById = productLookupService.findSnapshotsByIds(
                 allItems.stream().map(CartItemEntity::getProductId).collect(Collectors.toSet()));
 
@@ -82,9 +83,7 @@ public class AddCartItemUseCase {
                         item -> cartItemAvailabilityService.evaluate(
                                 customerId,
                                 productsById.get(item.getProductId()),
-                                item.getQuantity()
-                        )
-                ));
+                                item.getQuantity())));
 
         Map<Long, BigDecimal> effectiveUnitPricesByProductId = new HashMap<>();
         productsById.forEach((productId, prod) -> effectiveUnitPricesByProductId.put(
@@ -108,7 +107,7 @@ public class AddCartItemUseCase {
         }
 
         if (requestedQuantity > 1 || existingItemOpt.isPresent()) {
-            throw new DigitalItemQuantityLimitException("Digital products cannot exceed a quantity of 1 in the cart.");
+            throw new DigitalItemQuantityLimitException("Bạn chỉ có thể mua tối đa 1 Character mỗi tài khoảng");
         }
 
         BigDecimal effectivePrice = cartItemAvailabilityService.resolveEffectiveUnitPrice(customerId, product);

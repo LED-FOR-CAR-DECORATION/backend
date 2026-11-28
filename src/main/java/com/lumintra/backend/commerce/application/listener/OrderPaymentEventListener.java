@@ -28,6 +28,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -87,7 +88,20 @@ public class OrderPaymentEventListener {
             return;
         }
 
-        OrderStatus targetStatus = order.resolvePaymentSuccessTargetStatus();
+        List<OrderItemEntity> items = orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(orderId);
+        Map<Long, ProductSnapshot> productMap = Map.of();
+        Map<Long, BundleSnapshot> bundlesByProductId = Map.of();
+
+        if (!items.isEmpty()) {
+            Set<Long> productIds = items.stream()
+                    .map(OrderItemEntity::getProductId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            productMap = productLookupService.findSnapshotsByIds(productIds);
+            bundlesByProductId = preloadBundleSnapshots(items, productMap);
+        }
+
+        OrderStatus targetStatus = resolveTargetStatus(order, items, productMap, bundlesByProductId);
         Instant now = Instant.now();
         int updated = orderRepository.updateStatusIfCurrent(orderId, OrderStatus.PENDING_PAYMENT, targetStatus, now);
         if (updated == 0) {
@@ -99,27 +113,81 @@ public class OrderPaymentEventListener {
         log.info("Order marked paid: [orderId={}] [previousStatus={}] [newStatus={}] [orderType={}]",
                 orderId, OrderStatus.PENDING_PAYMENT, targetStatus, order.getOrderType());
 
-        provisionDigitalEntitlements(order);
+        provisionDigitalEntitlements(order, items, productMap, bundlesByProductId);
     }
 
-    private void provisionDigitalEntitlements(OrderEntity order) {
+    private Map<Long, BundleSnapshot> preloadBundleSnapshots(
+            List<OrderItemEntity> items,
+            Map<Long, ProductSnapshot> productMap) {
+        Map<Long, BundleSnapshot> result = new HashMap<>();
+        for (OrderItemEntity item : items) {
+            ProductSnapshot product = productMap.get(item.getProductId());
+            if (product != null && product.productType() == ProductType.BUNDLE
+                    && !result.containsKey(item.getProductId())) {
+                bundleLookupService.findByProductId(item.getProductId())
+                        .ifPresent(bundle -> result.put(item.getProductId(), bundle));
+            }
+        }
+        return result;
+    }
+
+    private OrderStatus resolveTargetStatus(
+            OrderEntity order,
+            List<OrderItemEntity> items,
+            Map<Long, ProductSnapshot> productMap,
+            Map<Long, BundleSnapshot> bundlesByProductId) {
+        if (items.isEmpty()) {
+            return order.resolvePaymentSuccessTargetStatus();
+        }
+
+        boolean hasPhysicalGoods = false;
+        boolean hasDigitalGoods = false;
+
+        for (OrderItemEntity item : items) {
+            ProductSnapshot product = productMap.get(item.getProductId());
+            if (product == null || product.productType() == null) {
+                continue;
+            }
+            switch (product.productType()) {
+                case LED -> hasPhysicalGoods = true;
+                case CHARACTER, SUBSCRIPTION -> hasDigitalGoods = true;
+                case BUNDLE -> {
+                    BundleSnapshot bundle = bundlesByProductId.get(item.getProductId());
+                    if (bundle == null || bundle.items() == null || bundle.items().isEmpty()) {
+                        hasPhysicalGoods = true;
+                    } else {
+                        for (BundleSnapshot.BundleItemSnapshot bundleItem : bundle.items()) {
+                            if (bundleItem.itemType() == BundleItemType.LED) {
+                                hasPhysicalGoods = true;
+                            } else if (bundleItem.itemType() == BundleItemType.CHARACTER) {
+                                hasDigitalGoods = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!hasPhysicalGoods && !hasDigitalGoods) {
+            return order.resolvePaymentSuccessTargetStatus();
+        }
+        return OrderEntity.resolvePaymentSuccessTargetStatus(hasPhysicalGoods, hasDigitalGoods);
+    }
+
+    private void provisionDigitalEntitlements(
+            OrderEntity order,
+            List<OrderItemEntity> items,
+            Map<Long, ProductSnapshot> productMap,
+            Map<Long, BundleSnapshot> bundlesByProductId) {
         Long customerId = order.getCustomerId();
         if (customerId == null) {
             log.warn("Cannot provision digital entitlements: customerId is null [orderId={}]", order.getOrderId());
             return;
         }
 
-        List<OrderItemEntity> items = orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(order.getOrderId());
         if (items.isEmpty()) {
             return;
         }
-
-        Set<Long> productIds = items.stream()
-                .map(OrderItemEntity::getProductId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-
-        Map<Long, ProductSnapshot> productMap = productLookupService.findSnapshotsByIds(productIds);
 
         for (OrderItemEntity item : items) {
             ProductSnapshot product = productMap.get(item.getProductId());
@@ -130,7 +198,7 @@ public class OrderPaymentEventListener {
             switch (product.productType()) {
                 case CHARACTER -> provisionCharacter(customerId, item);
                 case SUBSCRIPTION -> provisionSubscription(customerId, item);
-                case BUNDLE -> provisionBundle(customerId, item);
+                case BUNDLE -> provisionBundle(customerId, item, bundlesByProductId.get(item.getProductId()));
                 case LED -> {
                     // Physical hardware LED item, no digital entitlement
                 }
@@ -198,13 +266,15 @@ public class OrderPaymentEventListener {
         }
     }
 
-    private void provisionBundle(Long customerId, OrderItemEntity item) {
-        Optional<BundleSnapshot> bundleOpt = bundleLookupService.findByProductId(item.getProductId());
-        if (bundleOpt.isEmpty() || bundleOpt.get().items() == null) {
+    private void provisionBundle(Long customerId, OrderItemEntity item, BundleSnapshot preloadedBundle) {
+        BundleSnapshot bundle = preloadedBundle != null
+                ? preloadedBundle
+                : bundleLookupService.findByProductId(item.getProductId()).orElse(null);
+        if (bundle == null || bundle.items() == null) {
             return;
         }
 
-        for (BundleSnapshot.BundleItemSnapshot bundleItem : bundleOpt.get().items()) {
+        for (BundleSnapshot.BundleItemSnapshot bundleItem : bundle.items()) {
             if (bundleItem.itemType() == BundleItemType.CHARACTER && bundleItem.versionId() != null) {
                 Long versionId = bundleItem.versionId();
                 if (!ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(customerId, versionId)) {
