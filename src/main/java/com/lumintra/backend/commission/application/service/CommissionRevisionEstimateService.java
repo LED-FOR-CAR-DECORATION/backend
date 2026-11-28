@@ -82,7 +82,7 @@ public class CommissionRevisionEstimateService {
                 null,
                 CommissionMessageSenderRole.SYSTEM,
                 CommissionMessageType.SYSTEM,
-                "Revision #" + savedRevision.getRevisionNumber() + " is now in progress. Expected delivery by "
+                "Yêu cầu chỉnh sửa #" + savedRevision.getRevisionNumber() + " đang được thực hiện. Dự kiến bàn giao trước "
                         + DISPLAY_FORMAT.format(customerDueAt) + ".",
                 null,
                 metadata(savedRevision)));

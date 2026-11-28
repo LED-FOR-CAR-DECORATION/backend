@@ -109,7 +109,7 @@ class InputRevisionEstimateUseCaseTest {
         var message = captor.getValue();
         assertThat(message.getSenderRole()).isEqualTo(CommissionMessageSenderRole.SYSTEM);
         assertThat(message.getMessageType()).isEqualTo(CommissionMessageType.SYSTEM);
-        assertThat(message.getContent()).startsWith("Revision #2 is now in progress. Expected delivery by ");
+        assertThat(message.getContent()).startsWith("Yêu cầu chỉnh sửa #2 đang được thực hiện. Dự kiến bàn giao trước ");
         var metadata = json.readTree(message.getMetadataJson());
         assertThat(metadata.path("event").asText()).isEqualTo("REVISION_ESTIMATED");
         assertThat(metadata.path("estimatedDeliveryAt").asText())

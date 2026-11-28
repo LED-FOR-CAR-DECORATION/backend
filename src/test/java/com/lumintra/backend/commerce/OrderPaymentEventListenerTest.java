@@ -389,4 +389,123 @@ class OrderPaymentEventListenerTest {
         assertThat(subCaptor.getValue().getRemainingCommissionRevisions()).isEqualTo(3);
         assertThat(subCaptor.getValue().getOrderItemId()).isEqualTo(218L);
     }
+
+    @Test
+    @DisplayName("OPL-08 [N]: Character-only BUNDLE order transitions directly to COMPLETED without packing")
+    void onPaymentSucceeded_characterOnlyBundleOrder_transitionsToCompleted() {
+        Long orderId = 106L;
+        Long customerId = 42L;
+
+        OrderEntity order = OrderEntity.of(
+                orderId, customerId, null,
+                new BigDecimal("129000.00"), BigDecimal.ZERO, new BigDecimal("129000.00"),
+                OrderType.BUNDLE, OrderStatus.PENDING_PAYMENT, Instant.now().plusSeconds(900)
+        );
+
+        OrderItemEntity bundleItem = OrderItemEntity.create(order, 15L, 1, new BigDecimal("129000.00"));
+        bundleItem.setOrderItemId(215L);
+
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(orderId)).thenReturn(List.of(bundleItem));
+        when(productLookupService.findSnapshotsByIds(Set.of(15L))).thenReturn(Map.of(
+                15L, new ProductSnapshot(15L, "Combo Bộ Ba Nhân Vật Anime", ProductType.BUNDLE, null, new BigDecimal("129000.00"), ProductStatus.PUBLISHED)
+        ));
+        when(bundleLookupService.findByProductId(15L)).thenReturn(Optional.of(new BundleSnapshot(
+                2L, 15L, "Combo Bộ Ba Nhân Vật Anime", new BigDecimal("129000.00"), "PUBLISHED", null, null,
+                List.of(
+                        new BundleSnapshot.BundleItemSnapshot(1L, BundleItemType.CHARACTER, null, 501L, 1),
+                        new BundleSnapshot.BundleItemSnapshot(2L, BundleItemType.CHARACTER, null, 502L, 1),
+                        new BundleSnapshot.BundleItemSnapshot(3L, BundleItemType.CHARACTER, null, 503L, 1)
+                )
+        )));
+        when(orderRepository.updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PENDING_PAYMENT), eq(OrderStatus.COMPLETED), any(Instant.class)))
+                .thenReturn(1);
+        when(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(eq(customerId), any())).thenReturn(false);
+
+        listener.onPaymentSucceeded(new PaymentSucceededEvent(
+                8L, "LMTORD106", PaymentTargetType.ORDER, orderId, customerId,
+                new BigDecimal("129000.00"), 9999L, "REF123", Instant.now()
+        ));
+
+        verify(orderRepository).updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PENDING_PAYMENT), eq(OrderStatus.COMPLETED), any(Instant.class));
+        verify(ownedCharacterRepository, times(3)).save(any(OwnedCharacterEntity.class));
+    }
+
+    @Test
+    @DisplayName("OPL-09 [N]: Hybrid LED+Character BUNDLE order transitions to PARTIALLY_FULFILLED")
+    void onPaymentSucceeded_hybridBundleOrder_transitionsToPartiallyFulfilled() {
+        Long orderId = 107L;
+        Long customerId = 42L;
+
+        OrderEntity order = OrderEntity.of(
+                orderId, customerId, 10L,
+                new BigDecimal("599000.00"), BigDecimal.ZERO, new BigDecimal("599000.00"),
+                OrderType.BUNDLE, OrderStatus.PENDING_PAYMENT, Instant.now().plusSeconds(900)
+        );
+
+        OrderItemEntity bundleItem = OrderItemEntity.create(order, 16L, 1, new BigDecimal("599000.00"));
+        bundleItem.setOrderItemId(216L);
+
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(orderId)).thenReturn(List.of(bundleItem));
+        when(productLookupService.findSnapshotsByIds(Set.of(16L))).thenReturn(Map.of(
+                16L, new ProductSnapshot(16L, "Starter Neon Combo", ProductType.BUNDLE, null, new BigDecimal("599000.00"), ProductStatus.PUBLISHED)
+        ));
+        when(bundleLookupService.findByProductId(16L)).thenReturn(Optional.of(new BundleSnapshot(
+                1L, 16L, "Starter Neon Combo", new BigDecimal("599000.00"), "PUBLISHED", null, null,
+                List.of(
+                        new BundleSnapshot.BundleItemSnapshot(1L, BundleItemType.LED, 1L, null, 1),
+                        new BundleSnapshot.BundleItemSnapshot(2L, BundleItemType.CHARACTER, null, 501L, 1)
+                )
+        )));
+        when(orderRepository.updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PENDING_PAYMENT), eq(OrderStatus.PARTIALLY_FULFILLED), any(Instant.class)))
+                .thenReturn(1);
+        when(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(customerId, 501L)).thenReturn(false);
+
+        listener.onPaymentSucceeded(new PaymentSucceededEvent(
+                9L, "LMTORD107", PaymentTargetType.ORDER, orderId, customerId,
+                new BigDecimal("599000.00"), 9999L, "REF123", Instant.now()
+        ));
+
+        verify(orderRepository).updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PENDING_PAYMENT), eq(OrderStatus.PARTIALLY_FULFILLED), any(Instant.class));
+        verify(ownedCharacterRepository).save(any(OwnedCharacterEntity.class));
+    }
+
+    @Test
+    @DisplayName("OPL-10 [N]: SUBSCRIPTION order transitions directly to COMPLETED without packing")
+    void onPaymentSucceeded_subscriptionOrderType_transitionsToCompleted() {
+        Long orderId = 108L;
+        Long customerId = 42L;
+
+        OrderEntity order = OrderEntity.of(
+                orderId, customerId, null,
+                new BigDecimal("299000.00"), BigDecimal.ZERO, new BigDecimal("299000.00"),
+                OrderType.SUBSCRIPTION, OrderStatus.PENDING_PAYMENT, Instant.now().plusSeconds(900)
+        );
+
+        OrderItemEntity subItem = OrderItemEntity.create(order, 19L, 1, new BigDecimal("299000.00"));
+        subItem.setOrderItemId(219L);
+
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(orderId)).thenReturn(List.of(subItem));
+        when(productLookupService.findSnapshotsByIds(Set.of(19L))).thenReturn(Map.of(
+                19L, new ProductSnapshot(19L, "Lumintra VIP Pass", ProductType.SUBSCRIPTION, null, new BigDecimal("299000.00"), ProductStatus.PUBLISHED)
+        ));
+        when(orderRepository.updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PENDING_PAYMENT), eq(OrderStatus.COMPLETED), any(Instant.class)))
+                .thenReturn(1);
+        when(subscriptionLookupService.findByProductIds(Set.of(19L))).thenReturn(Map.of(
+                19L, new SubscriptionDetailSnapshot(19L, "VIP_LIFETIME", "Lumintra VIP Pass", true, null, true, 5, 10)
+        ));
+        when(customerSubscriptionRepository.existsByOrderItemId(219L)).thenReturn(false);
+        when(customerSubscriptionRepository.findByCustomerIdAndStatusOrderByActivatedAtDesc(customerId, "ACTIVE"))
+                .thenReturn(List.of());
+
+        listener.onPaymentSucceeded(new PaymentSucceededEvent(
+                10L, "LMTORD108", PaymentTargetType.ORDER, orderId, customerId,
+                new BigDecimal("299000.00"), 9999L, "REF123", Instant.now()
+        ));
+
+        verify(orderRepository).updateStatusIfCurrent(eq(orderId), eq(OrderStatus.PENDING_PAYMENT), eq(OrderStatus.COMPLETED), any(Instant.class));
+        verify(customerSubscriptionRepository).save(any(CustomerSubscriptionEntity.class));
+    }
 }

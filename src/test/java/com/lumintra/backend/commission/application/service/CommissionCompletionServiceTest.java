@@ -122,7 +122,7 @@ class CommissionCompletionServiceTest {
         assertThat(preview.getStatus()).isEqualTo(CommissionSubmissionStatus.CUSTOMER_ACCEPTED);
         assertThat(result.completedAt()).isEqualTo(NOW);
         assertThat(result.systemMessage().content()).isEqualTo(
-                "No response within 7 days — preview version 2 was accepted automatically. The commission is now completed.");
+                "Không có phản hồi trong vòng 7 ngày — bản xem trước phiên bản 2 đã được tự động chấp nhận. Yêu cầu thiết kế hiện đã hoàn tất.");
 
         ArgumentCaptor<CommissionCompletedEvent> event = ArgumentCaptor.forClass(CommissionCompletedEvent.class);
         verify(events).publishEvent(event.capture());
@@ -177,7 +177,7 @@ class CommissionCompletionServiceTest {
                 service.complete(commission, CommissionCompletionSource.CUSTOMER_APPROVED, NOW);
 
         assertThat(result.systemMessage().content())
-                .isEqualTo("Customer approved preview version 2. The commission is now completed.");
+                .isEqualTo("Khách hàng đã phê duyệt bản xem trước phiên bản 2. Yêu cầu thiết kế hiện đã hoàn tất.");
         verifyNoInteractions(revisions);
         verify(messages, never()).findFirstByCommissionIdAndMessageTypeOrderByMessageIdDesc(any(), any());
     }

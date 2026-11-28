@@ -17,12 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
-import com.lumintra.backend.store.api.response.CreatedBundleResponse;
-import com.lumintra.backend.store.application.GetBundleDetailUseCase;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import jakarta.validation.constraints.Positive;
 
 import java.util.List;
 
@@ -30,7 +26,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ManagedBundleController {
     private final ManagedBundleRepository bundles;
-    private final GetBundleDetailUseCase getBundleDetailUseCase;
 
     @GetMapping("/api/management/admin/store/bundles")
     @PreAuthorize("hasRole('MANAGER')")
@@ -47,13 +42,5 @@ public class ManagedBundleController {
         var results =
                 bundles.list(status == null ? null : status.name(), PageRequest.of(page, size));
         return ApiResponse.success(results.getContent(), PaginationMeta.from(results));
-    }
-
-    @GetMapping("/api/management/admin/store/bundles/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
-    @SecurityRequirement(name = "bearerAuth")
-    @Operation(summary = "Get store bundle detail by ID")
-    public ApiResponse<CreatedBundleResponse> getDetail(@PathVariable("id") @Positive long id) {
-        return ApiResponse.success(getBundleDetailUseCase.execute(id));
     }
 }

@@ -105,7 +105,7 @@ class ReassignCommissionUseCaseTest {
         assertThat(response.assignedDesignerId()).isEqualTo(6L);
         assertThat(response.isSlaOverdue()).isFalse();
         assertThat(response.updatedAt()).isNotNull();
-        assertThat(postedChatText()).isEqualTo("This commission has been reassigned to a new designer.");
+        assertThat(postedChatText()).isEqualTo("Yêu cầu thiết kế này đã được phân công lại cho nhà thiết kế mới.");
     }
 
     @Test
@@ -156,7 +156,7 @@ class ReassignCommissionUseCaseTest {
         assertThat(entity.getAssignedStaffId()).isEqualTo(4L);
         assertThat(entity.getAssignedDesignerId()).isEqualTo(5L);
         assertThat(entity.getSlaDueAt()).isEqualTo(OLD_DEADLINE);
-        assertThat(postedChatText()).isEqualTo("This commission has been reassigned to a new staff member.");
+        assertThat(postedChatText()).isEqualTo("Yêu cầu thiết kế này đã được phân công lại cho nhân viên hỗ trợ mới.");
     }
 
     @Test
@@ -190,7 +190,7 @@ class ReassignCommissionUseCaseTest {
 
         assertThat(entity.getAssignedStaffId()).isEqualTo(4L);
         assertThat(entity.getAssignedDesignerId()).isEqualTo(6L);
-        assertThat(postedChatText()).isEqualTo("This commission has been reassigned to a new staff member and designer.");
+        assertThat(postedChatText()).isEqualTo("Yêu cầu thiết kế này đã được phân công lại cho nhân viên hỗ trợ và nhà thiết kế mới.");
     }
 
     // ---------------------------------------------------------------- rejections

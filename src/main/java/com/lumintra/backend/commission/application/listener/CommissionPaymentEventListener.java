@@ -79,11 +79,11 @@ public class CommissionPaymentEventListener {
                 commissionId, event.paymentId());
 
         // AC03: Insert a SYSTEM message into COMMISSION_MESSAGE
-        String amountDisplay = event.amount() != null
-                ? event.amount().stripTrailingZeros().toPlainString() + " VND"
-                : "the required deposit";
-        String messageContent = "Thanh toán thành công. Đã nhận" + amountDisplay
-                + " đầu. Quá trình trao đổi yêu cầu thiết kế, sử dụng chatbox đã được mở.";
+        String messageContent = event.amount() != null
+                ? "Đã xác nhận thanh toán. Đã nhận khoản cọc ban đầu "
+                        + event.amount().stripTrailingZeros().toPlainString()
+                        + " VNĐ. Quy trình thiết kế và phòng trò chuyện hiện đã được mở khóa."
+                : "Đã xác nhận thanh toán. Đã nhận khoản cọc theo yêu cầu. Quy trình thiết kế và phòng trò chuyện hiện đã được mở khóa.";
 
         CommissionMessageEntity systemMessage = CommissionMessageEntity.createSystemMessage(commissionId,
                 messageContent);

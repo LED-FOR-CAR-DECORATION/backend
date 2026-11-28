@@ -183,13 +183,20 @@ public class OrderEntity {
     }
 
     public OrderStatus resolvePaymentSuccessTargetStatus() {
-        if (this.orderType == OrderType.DIGITAL) {
+        if (this.orderType == OrderType.DIGITAL || this.orderType == OrderType.SUBSCRIPTION) {
             return OrderStatus.COMPLETED;
         }
         if (this.orderType == OrderType.MIXED) {
             return OrderStatus.PARTIALLY_FULFILLED;
         }
         return OrderStatus.PROCESSING;
+    }
+
+    public static OrderStatus resolvePaymentSuccessTargetStatus(boolean hasPhysicalGoods, boolean hasDigitalGoods) {
+        if (!hasPhysicalGoods) {
+            return OrderStatus.COMPLETED;
+        }
+        return hasDigitalGoods ? OrderStatus.PARTIALLY_FULFILLED : OrderStatus.PROCESSING;
     }
 
     public boolean canMarkPaid() {

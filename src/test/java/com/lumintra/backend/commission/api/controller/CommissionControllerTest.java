@@ -667,7 +667,7 @@ class CommissionControllerTest {
                         .commissionId(105L)
                         .senderRole(CommissionMessageSenderRole.SYSTEM)
                         .messageType(CommissionMessageType.SYSTEM)
-                        .content("Customer approved preview version 2. The commission is now completed.")
+                        .content("Khách hàng đã phê duyệt bản xem trước phiên bản 2. Yêu cầu thiết kế hiện đã hoàn tất.")
                         .createdAt(Instant.parse("2026-11-18T10:00:00Z"))
                         .build())
                 .build();

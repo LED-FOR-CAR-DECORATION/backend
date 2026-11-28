@@ -91,8 +91,8 @@ class CommissionPaymentEventListenerTest {
         assertThat(capturedMessage.getSenderId()).isNull();
         assertThat(capturedMessage.getSenderRole()).isEqualTo(CommissionMessageSenderRole.SYSTEM);
         assertThat(capturedMessage.getMessageType()).isEqualTo(CommissionMessageType.SYSTEM);
-        assertThat(capturedMessage.getContent()).contains("500000 VND");
-        assertThat(capturedMessage.getContent()).contains("unlocked");
+        assertThat(capturedMessage.getContent()).contains("500000 VNĐ");
+        assertThat(capturedMessage.getContent()).contains("đã được mở khóa");
     }
 
     @Test
@@ -233,7 +233,7 @@ class CommissionPaymentEventListenerTest {
         verify(commissionMessageRepository).save(messageCaptor.capture());
 
         CommissionMessageEntity capturedMessage = messageCaptor.getValue();
-        assertThat(capturedMessage.getContent()).contains("the required deposit");
-        assertThat(capturedMessage.getContent()).contains("unlocked");
+        assertThat(capturedMessage.getContent()).contains("khoản cọc theo yêu cầu");
+        assertThat(capturedMessage.getContent()).contains("đã được mở khóa");
     }
 }
