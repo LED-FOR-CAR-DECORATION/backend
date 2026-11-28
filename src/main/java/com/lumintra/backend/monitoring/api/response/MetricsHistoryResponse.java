@@ -11,7 +11,7 @@ public record MetricsHistoryResponse(
         OffsetDateTime from,
         @Schema(description = "End of the range (exclusive); never later than the start of the current minute", example = "2026-11-28T00:00:00+07:00")
         OffsetDateTime to,
-        @Schema(allowableValues = {"1m", "5m", "1h", "1d"}, example = "1h")
+        @Schema(allowableValues = {"1m", "5m", "15m", "1h", "1d"}, example = "1h")
         String interval,
         Filter filter,
         @Schema(description = "Figures over the whole range")

@@ -14,6 +14,7 @@ import java.util.Optional;
 public enum MetricsInterval {
     ONE_MINUTE("1m", Duration.ofMinutes(1)),
     FIVE_MINUTES("5m", Duration.ofMinutes(5)),
+    FIFTEEN_MINUTES("15m", Duration.ofMinutes(15)),
     ONE_HOUR("1h", Duration.ofHours(1)),
     ONE_DAY("1d", Duration.ofDays(1));
 
