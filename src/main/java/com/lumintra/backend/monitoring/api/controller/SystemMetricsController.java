@@ -1,8 +1,11 @@
 package com.lumintra.backend.monitoring.api.controller;
 
 import com.lumintra.backend.monitoring.api.request.LiveSystemMetricsRequest;
+import com.lumintra.backend.monitoring.api.request.MetricsHistoryRequest;
 import com.lumintra.backend.monitoring.api.response.LiveSystemMetricsResponse;
+import com.lumintra.backend.monitoring.api.response.MetricsHistoryResponse;
 import com.lumintra.backend.monitoring.application.GetLiveSystemMetricsUseCase;
+import com.lumintra.backend.monitoring.application.GetMetricsHistoryUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
 import com.lumintra.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SystemMetricsController {
 
     private final GetLiveSystemMetricsUseCase getLiveSystemMetricsUseCase;
+    private final GetMetricsHistoryUseCase getMetricsHistoryUseCase;
 
     @Operation(
             summary = "Get live system metrics",
@@ -94,5 +98,64 @@ public class SystemMetricsController {
     public ResponseEntity<ApiResponse<LiveSystemMetricsResponse>> getLiveMetrics(
             @Valid @ModelAttribute LiveSystemMetricsRequest request) {
         return ResponseEntity.ok(ApiResponse.success(getLiveSystemMetricsUseCase.execute(request)));
+    }
+
+    @Operation(
+            summary = "Get metrics history",
+            description = """
+                    Returns API performance over a range of up to 30 days, grouped into 1m, 5m, 1h or 1d periods \
+                    (1d follows calendar days in Asia/Ho_Chi_Minh), for the whole system or one method/route. \
+                    Figures add up the stored per-minute summaries of every backend instance. Periods without \
+                    traffic are included with zero counts. The current, unfinished minute is never included. \
+                    Percentiles are estimated from fixed latency buckets (BR-GEN-26)."""
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Metrics history retrieved successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Bad Request: missing or malformed parameters (VALIDATION_FAILED), or a range that is "
+                            + "reversed, older than 30 days, in the future or would produce more than 1,500 points (INVALID_METRICS_RANGE)",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Too many points",
+                                    value = """
+                                            {
+                                              "code": "INVALID_METRICS_RANGE",
+                                              "message": "The range would produce more than 1500 points; use a larger interval or a shorter range",
+                                              "status": 400,
+                                              "timestamp": "2026-11-28T03:00:00Z",
+                                              "traceId": "trace-12345"
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Unauthorized: missing, expired, or invalid JWT authentication token",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "Forbidden: caller is not an ADMIN (BR-GEN-22)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))
+            )
+    })
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/history")
+    public ResponseEntity<ApiResponse<MetricsHistoryResponse>> getMetricsHistory(
+            @Valid @ModelAttribute MetricsHistoryRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(getMetricsHistoryUseCase.execute(request)));
     }
 }
