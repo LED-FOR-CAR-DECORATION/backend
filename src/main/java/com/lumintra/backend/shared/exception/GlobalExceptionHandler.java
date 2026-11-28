@@ -11,6 +11,7 @@ import com.lumintra.backend.shared.exception.iam.*;
 import com.lumintra.backend.shared.exception.media.InvalidMediaRequestException;
 import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
 import com.lumintra.backend.shared.exception.media.StorageServiceException;
+import com.lumintra.backend.shared.exception.monitoring.InvalidMetricsRangeException;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotCancellableException;
 import com.lumintra.backend.shared.exception.store.InvalidPriceRangeException;
@@ -53,6 +54,12 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final Tracer tracer;
+
+    // Monitoring exception
+    @ExceptionHandler(InvalidMetricsRangeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMetricsRange(InvalidMetricsRangeException ex) {
+        return buildErrorResponse("INVALID_METRICS_RANGE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
 
     // Store exception
     @ExceptionHandler(InvalidPriceRangeException.class)

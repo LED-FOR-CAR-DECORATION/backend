@@ -12,12 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.lang.management.ManagementFactory;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -25,14 +21,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import static com.lumintra.backend.monitoring.application.MetricsFormat.round;
+import static com.lumintra.backend.monitoring.application.MetricsFormat.roundOrZero;
+import static com.lumintra.backend.monitoring.application.MetricsFormat.toDisplayTime;
+
 /**
  * MON-02: builds the live metrics view from the in-memory snapshots of MON-01 (no database queries)
  * plus the current component health.
  */
 @Service
 public class GetLiveSystemMetricsUseCase {
-
-    private static final ZoneId DISPLAY_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final MetricSnapshotBuffer buffer;
     private final MonitoringInstanceId instanceId;
@@ -107,7 +105,7 @@ public class GetLiveSystemMetricsUseCase {
                         Math.max(0, Duration.between(instanceStartedAt, generatedAt).toSeconds())),
                 new LiveSystemMetricsResponse.Overview(
                         overall.requestCount(),
-                        round(requestsPerMinute, 1),
+                        roundOrZero(requestsPerMinute, 1),
                         round(overall.avgLatencyMs(), 1),
                         round(overall.percentileLatencyMs(0.50), 1),
                         round(overall.percentileLatencyMs(0.95), 1),
@@ -167,22 +165,6 @@ public class GetLiveSystemMetricsUseCase {
                 new LiveSystemMetricsResponse.RedisStatus(status.redis().status()),
                 new LiveSystemMetricsResponse.JvmStatus(
                         round(jvm.heapUsedMb(), 1), round(jvm.heapMaxMb(), 1), jvm.threadsLive(), round(jvm.cpuUsage(), 4)));
-    }
-
-    private static OffsetDateTime toDisplayTime(Instant instant) {
-        return instant.atZone(DISPLAY_ZONE).toOffsetDateTime();
-    }
-
-    private static Double round(Double value, int decimals) {
-        if (value == null || value.isNaN() || value.isInfinite()) {
-            return null;
-        }
-        return BigDecimal.valueOf(value).setScale(decimals, RoundingMode.HALF_UP).doubleValue();
-    }
-
-    private static double round(double value, int decimals) {
-        Double rounded = round(Double.valueOf(value), decimals);
-        return rounded == null ? 0.0 : rounded;
     }
 
     private record EndpointTotals(String method, String uri, ApiMetricsAccumulator accumulator) {

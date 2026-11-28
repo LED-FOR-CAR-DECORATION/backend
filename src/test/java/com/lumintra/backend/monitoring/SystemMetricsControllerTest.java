@@ -6,6 +6,7 @@ import com.lumintra.backend.monitoring.api.controller.SystemMetricsController;
 import com.lumintra.backend.monitoring.api.request.LiveSystemMetricsRequest;
 import com.lumintra.backend.monitoring.api.response.LiveSystemMetricsResponse;
 import com.lumintra.backend.monitoring.application.GetLiveSystemMetricsUseCase;
+import com.lumintra.backend.monitoring.application.GetMetricsHistoryUseCase;
 import com.lumintra.backend.shared.exception.GlobalExceptionHandler;
 import com.lumintra.backend.shared.security.JwtAuthenticationFilter;
 import com.lumintra.backend.shared.security.SecurityConfig;
@@ -46,6 +47,9 @@ class SystemMetricsControllerTest {
 
     @MockitoBean
     private GetLiveSystemMetricsUseCase useCase;
+
+    @MockitoBean
+    private GetMetricsHistoryUseCase metricsHistoryUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
