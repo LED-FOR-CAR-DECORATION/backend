@@ -28,6 +28,9 @@ public record UploadCommissionDraftResponse(
         @Schema(description = "Optional designer note accompanying the draft", example = "First animated draft following the cyberpunk neon palette.")
         String designerNote,
 
+        @Schema(description = "Optional linked COMMISSION character version ID", example = "25", nullable = true)
+        Long characterVersionId,
+
         @Schema(description = "Lifecycle status of the draft submission", example = "PENDING_STAFF_REVIEW", requiredMode = Schema.RequiredMode.REQUIRED)
         CommissionSubmissionStatus submissionStatus,
 

@@ -103,6 +103,9 @@ class SubmitCommissionUseCaseTest {
         commissionRequestMapper = new CommissionRequestMapper();
         objectMapper = new ObjectMapper();
         paymentSessions = org.mockito.Mockito.mock(com.lumintra.backend.payment.domain.service.PaymentSessionPort.class);
+        var subscriptionBonusLookupService =
+                org.mockito.Mockito.mock(
+                        com.lumintra.backend.commerce.domain.service.CustomerSubscriptionBonusLookupService.class);
         useCase = new SubmitCommissionUseCase(
                 tierRepository,
                 configRepository,
@@ -113,7 +116,8 @@ class SubmitCommissionUseCaseTest {
                 pricingInvariantValidator,
                 commissionRequestMapper,
                 objectMapper,
-                new ApproveCommissionRequestUseCase(commissionRequestRepository, paymentSessions)
+                new ApproveCommissionRequestUseCase(commissionRequestRepository, paymentSessions),
+                subscriptionBonusLookupService
         );
 
         formatTypeConfig = CommissionPriceConfigEntity.builder()

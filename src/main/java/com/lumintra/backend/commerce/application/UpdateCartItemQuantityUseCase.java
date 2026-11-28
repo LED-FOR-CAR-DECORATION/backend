@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -81,10 +83,15 @@ public class UpdateCartItemQuantityUseCase {
                         )
                 ));
 
+        Map<Long, BigDecimal> effectiveUnitPricesByProductId = new HashMap<>();
+        productsById.forEach((productId, prod) -> effectiveUnitPricesByProductId.put(
+                productId, cartItemAvailabilityService.resolveEffectiveUnitPrice(customerId, prod)));
+
         log.info("Cart item quantity updated [customerId={}] [cartId={}] [cartItemId={}] [productId={}] [quantity={}]",
                 customerId, savedCart.getCartId(), cartItem.getCartItemId(), product.productId(), requestedQuantity);
 
-        return cartMapper.toCartResponse(savedCart, allItems, productsById, availabilityByItemId);
+        return cartMapper.toCartResponse(
+                savedCart, allItems, productsById, availabilityByItemId, effectiveUnitPricesByProductId);
     }
 
     private void validateAndAuthorizeQuantity(Long customerId, ProductSnapshot product, int requestedQuantity) {

@@ -4,6 +4,8 @@ import com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot;
 import com.lumintra.backend.iam.domain.service.EmployeeLookupService;
 import com.lumintra.backend.iam.infrastructure.persistence.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,5 +87,12 @@ public class EmployeeLookupServiceImpl implements EmployeeLookupService {
     @Transactional(readOnly = true)
     public List<EmployeeProfileSnapshot> findActiveDesigners() {
         return employeeRepository.findActiveDesigners();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EmployeeProfileSnapshot> findActiveDesigners(String search, Pageable pageable) {
+        String normalizedSearch = (search == null || search.isBlank()) ? null : search.trim();
+        return employeeRepository.findActiveDesigners(normalizedSearch, pageable);
     }
 }

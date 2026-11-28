@@ -78,10 +78,12 @@ class DefaultProductAvailabilityAdapterTest {
     void isDigitalProductOwned_checksCharacterAndSubscription() {
         when(characterLookupService.findVersionIdByProductId(30L)).thenReturn(Optional.of(300L));
         when(ownedCharacterRepository.existsByCustomerIdAndVersionIdAndIsRevokedFalse(42L, 300L)).thenReturn(true);
-        when(customerSubscriptionRepository.existsByCustomerIdAndStatus(42L, "ACTIVE")).thenReturn(true);
+        when(customerSubscriptionEntitlementService.isSubscriptionProductAlreadyOwned(42L, 31L)).thenReturn(true);
+        when(customerSubscriptionEntitlementService.isSubscriptionProductAlreadyOwned(42L, 32L)).thenReturn(false);
 
         assertThat(adapter.isDigitalProductOwned(42L, 30L, ProductType.CHARACTER)).isTrue();
         assertThat(adapter.isDigitalProductOwned(42L, 31L, ProductType.SUBSCRIPTION)).isTrue();
+        assertThat(adapter.isDigitalProductOwned(42L, 32L, ProductType.SUBSCRIPTION)).isFalse();
     }
 
     @Test

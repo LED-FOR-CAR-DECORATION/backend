@@ -139,7 +139,10 @@ class CommissionFlowSeederIntegrationTest {
         assertThat(tierRepository.findAllByIsActiveTrueOrderByDisplayOrderAsc())
                 .hasSize(1)
                 .first()
-                .satisfies(tier -> assertThat(tier.getTierCode()).isEqualTo("CUSTOM"));
+                .satisfies(tier -> {
+                    assertThat(tier.getTierCode()).isEqualTo("CUSTOM");
+                    assertThat(tier.getMaxRevisions()).isEqualTo(1);
+                });
 
         List<CommissionRequestEntity> commissions = commissionRequestRepository.findAll();
         assertThat(commissions).hasSize(10);

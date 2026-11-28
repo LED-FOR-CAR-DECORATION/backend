@@ -7,11 +7,21 @@ import com.lumintra.backend.store.domain.model.ProductType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+
 @Service
 @RequiredArgsConstructor
 public class CartItemAvailabilityService {
 
     private final ProductAvailabilityPort productAvailabilityPort;
+
+    public BigDecimal resolveEffectiveUnitPrice(Long customerId, ProductSnapshot product) {
+        if (product == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal resolved = productAvailabilityPort.resolveEffectiveUnitPrice(customerId, product);
+        return resolved != null ? resolved : product.basePrice();
+    }
 
     public AvailabilityCheckResult evaluate(Long customerId, ProductSnapshot product, int requestedQuantity) {
         if (product == null) {

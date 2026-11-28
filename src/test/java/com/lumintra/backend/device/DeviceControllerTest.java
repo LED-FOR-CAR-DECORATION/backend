@@ -71,6 +71,7 @@ class DeviceControllerTest {
 
     @MockitoBean
     private com.lumintra.backend.device.application.CreateOtaSessionUseCase createOtaSessionUseCase;
+    @MockitoBean private com.lumintra.backend.device.application.ReportInstalledFirmwareUseCase reportInstalledFirmwareUseCase;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;

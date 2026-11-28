@@ -5,6 +5,8 @@ import com.lumintra.backend.character.domain.service.CharacterLookupService;
 import com.lumintra.backend.device.domain.model.LedModelSnapshot;
 import com.lumintra.backend.device.domain.service.LedModelCreationService;
 import com.lumintra.backend.device.domain.service.LedModelLookupService;
+import com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot;
+import com.lumintra.backend.iam.domain.service.EmployeeLookupService;
 import com.lumintra.backend.store.domain.model.BundleItemType;
 import com.lumintra.backend.store.domain.model.ProductStatus;
 import com.lumintra.backend.store.domain.model.ProductType;
@@ -84,6 +86,9 @@ class StoreDataSeederTest {
     private CharacterLookupService characterLookupService;
 
     @Mock
+    private EmployeeLookupService employeeLookupService;
+
+    @Mock
     private StoreCacheEvictor storeCacheEvictor;
 
     @Mock
@@ -127,10 +132,13 @@ class StoreDataSeederTest {
         given(ledModelCreationService.createForProduct(anyLong(), anyString(), anyMap(), anyLong()))
                 .willAnswer(inv -> inv.getArgument(0));
 
+        given(employeeLookupService.findActiveDesigners()).willReturn(
+                List.of(new EmployeeProfileSnapshot(77L, "Nhà thiết kế", "designer@lumintra.com")));
+
         AtomicLong versionIds = new AtomicLong(501L);
         given(characterLookupService.findVersionIdByProductId(anyLong())).willReturn(Optional.empty());
         given(characterCreationService.createForProduct(
-                anyLong(), anyString(), anyString(), anyInt(),
+                anyLong(), any(), anyString(), anyString(), anyInt(),
                 anyString(), anyString(), any(), any(), any()))
                 .willAnswer(inv -> versionIds.getAndIncrement());
 
@@ -149,7 +157,7 @@ class StoreDataSeederTest {
 
         verify(tagRepository, times(12)).save(any(TagEntity.class));
 
-        verify(productRepository, times(17)).save(productCaptor.capture());
+        verify(productRepository, times(19)).save(productCaptor.capture());
         List<ProductEntity> savedProducts = productCaptor.getAllValues();
         assertThat(savedProducts)
                 .extracting(ProductEntity::getProductName)
@@ -170,7 +178,9 @@ class StoreDataSeederTest {
                         StoreDataSeeder.PRODUCT_BUNDLE_STARTER,
                         StoreDataSeeder.PRODUCT_BUNDLE_ANIME_TRIO,
                         StoreDataSeeder.PRODUCT_SUB_VIP,
-                        StoreDataSeeder.PRODUCT_SUB_COMMISSION_PLUS
+                        StoreDataSeeder.PRODUCT_SUB_STANDARD_30D,
+                        StoreDataSeeder.PRODUCT_SUB_PRO_30D,
+                        StoreDataSeeder.PRODUCT_SUB_ULTIMATE_LIFETIME
                 );
         assertThat(savedProducts)
                 .extracting(ProductEntity::getProductType)
@@ -191,11 +201,15 @@ class StoreDataSeederTest {
                         ProductType.BUNDLE,
                         ProductType.BUNDLE,
                         ProductType.SUBSCRIPTION,
+                        ProductType.SUBSCRIPTION,
+                        ProductType.SUBSCRIPTION,
                         ProductType.SUBSCRIPTION
                 );
         assertThat(savedProducts)
                 .extracting(ProductEntity::getStatus)
                 .containsExactly(
+                        ProductStatus.PUBLISHED,
+                        ProductStatus.PUBLISHED,
                         ProductStatus.PUBLISHED,
                         ProductStatus.PUBLISHED,
                         ProductStatus.PUBLISHED,
@@ -220,11 +234,12 @@ class StoreDataSeederTest {
         verify(ledModelCreationService).createForProduct(eq(102L), eq(StoreDataSeeder.PRODUCT_LED_COMPACT), anyMap(), eq(10L));
         verify(ledModelCreationService).createForProduct(eq(103L), eq(StoreDataSeeder.PRODUCT_LED_MINI), anyMap(), eq(10L));
 
-        // Character versions linked sequentially to products 104L..113L using exact CDN URLs and frame metadata
+        // Character versions linked sequentially to products 104L..113L and assigned to sample designer
         for (int i = 0; i < StoreDataSeeder.CHARACTER_SEEDS.size(); i++) {
             StoreDataSeeder.CharacterSeedSpec spec = StoreDataSeeder.CHARACTER_SEEDS.get(i);
             verify(characterCreationService).createForProduct(
                     eq(104L + i),
+                    eq(77L),
                     eq(spec.productName()),
                     eq(spec.description()),
                     eq(1),
@@ -235,7 +250,7 @@ class StoreDataSeederTest {
                     eq(spec.byteSize()));
         }
 
-        // Bundles: Starter Neon Combo (114L: LED Mini 103L + Heo Hong 501L + Capybara 502L) and Anime Chibi Trio Combo (115L: Nezuko 505L, Maomao 509L, Sakura Miku 510L)
+        // Bundles: Starter Combo (114L: LED 64x32 Compact 102L + Heo Hong 501L + Capybara 502L) and Anime Chibi Trio Combo (115L: Nezuko 505L, Maomao 509L, Sakura Miku 510L)
         verify(bundleRepository, times(2)).save(bundleCaptor.capture());
         assertThat(bundleCaptor.getAllValues())
                 .extracting(BundleEntity::getProductId)
@@ -248,7 +263,7 @@ class StoreDataSeederTest {
                         BundleItemEntity::getVersionId,
                         BundleItemEntity::getQuantity)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(BundleItemType.LED, 103L, null, 1),
+                        org.assertj.core.groups.Tuple.tuple(BundleItemType.LED, 102L, null, 1),
                         org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 501L, 1),
                         org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 502L, 1),
                         org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 505L, 1),
@@ -256,14 +271,31 @@ class StoreDataSeederTest {
                         org.assertj.core.groups.Tuple.tuple(BundleItemType.CHARACTER, null, 510L, 1)
                 );
 
-        // Subscription details link VIP All-Access (116L) and Commission VIP (117L)
-        verify(subscriptionDetailRepository, times(2)).save(subscriptionCaptor.capture());
+        // Subscription details link the 4 seeded subscription plans (116L..119L)
+        verify(subscriptionDetailRepository, times(4)).save(subscriptionCaptor.capture());
         assertThat(subscriptionCaptor.getAllValues())
-                .extracting(SubscriptionDetailEntity::getProductId, SubscriptionDetailEntity::getPlanCode)
+                .extracting(
+                        SubscriptionDetailEntity::getProductId,
+                        SubscriptionDetailEntity::getPlanCode,
+                        SubscriptionDetailEntity::isLifetime,
+                        SubscriptionDetailEntity::getDurationDays,
+                        SubscriptionDetailEntity::isAllAccessCharacters,
+                        SubscriptionDetailEntity::getMaxCommissionRevisions,
+                        SubscriptionDetailEntity::getMaxMobileProfiles)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(116L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_VIP),
-                        org.assertj.core.groups.Tuple.tuple(117L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_COMMISSION_PLUS)
+                        org.assertj.core.groups.Tuple.tuple(
+                                116L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_VIP, true, null, true, 0, 3),
+                        org.assertj.core.groups.Tuple.tuple(
+                                117L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_STANDARD_30D, false, 30, false, 3, 5),
+                        org.assertj.core.groups.Tuple.tuple(
+                                118L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_PRO_30D, false, 30, false, 5, 10),
+                        org.assertj.core.groups.Tuple.tuple(
+                                119L, StoreDataSeeder.SUBSCRIPTION_PLAN_CODE_ULTIMATE_LIFETIME, true, null, true, 10, 20)
                 );
+        assertThat(savedProducts.get(15).getBasePrice()).isEqualByComparingTo("999999.00");
+        assertThat(savedProducts.get(16).getBasePrice()).isEqualByComparingTo("399999.00");
+        assertThat(savedProducts.get(17).getBasePrice()).isEqualByComparingTo("599999.00");
+        assertThat(savedProducts.get(18).getBasePrice()).isEqualByComparingTo("4999999.00");
 
         verify(storeCacheEvictor, times(1)).evictAllProducts();
     }
@@ -320,7 +352,9 @@ class StoreDataSeederTest {
         stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_STARTER, 114L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "169000.00");
         stubExistingProduct(StoreDataSeeder.PRODUCT_BUNDLE_ANIME_TRIO, 115L, ProductType.BUNDLE, ProductStatus.PUBLISHED, "129000.00");
         stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_VIP, 116L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "999999.00");
-        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_COMMISSION_PLUS, 117L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "79000.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_STANDARD_30D, 117L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "399999.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_PRO_30D, 118L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "599999.00");
+        stubExistingProduct(StoreDataSeeder.PRODUCT_SUB_ULTIMATE_LIFETIME, 119L, ProductType.SUBSCRIPTION, ProductStatus.PUBLISHED, "4999999.00");
 
         given(ledModelLookupService.findByProductId(101L))
                 .willReturn(Optional.of(new LedModelSnapshot(101L, StoreDataSeeder.PRODUCT_LED_PRO, Map.of(), 50L)));
@@ -346,6 +380,10 @@ class StoreDataSeederTest {
         given(subscriptionDetailRepository.findByProductId(116L))
                 .willReturn(Optional.of(mock(SubscriptionDetailEntity.class)));
         given(subscriptionDetailRepository.findByProductId(117L))
+                .willReturn(Optional.of(mock(SubscriptionDetailEntity.class)));
+        given(subscriptionDetailRepository.findByProductId(118L))
+                .willReturn(Optional.of(mock(SubscriptionDetailEntity.class)));
+        given(subscriptionDetailRepository.findByProductId(119L))
                 .willReturn(Optional.of(mock(SubscriptionDetailEntity.class)));
     }
 

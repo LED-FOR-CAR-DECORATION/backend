@@ -69,11 +69,11 @@ public class IamDataSeeder implements ApplicationRunner {
     }
 
     private RoleEntity seedSystemRoles() {
-        RoleEntity adminRole = seedRole("ADMIN", "Super Administrator", true);
-        seedRole("MANAGER", "System Manager", true);
-        seedRole("STAFF", "Standard Staff", true);
-        seedRole("DESIGNER", "Art Designer", true);
-        seedRole("CUSTOMER", "End User", true);
+        RoleEntity adminRole = seedRole("ADMIN", "Quản trị viên cấp cao", true);
+        seedRole("MANAGER", "Quản lý hệ thống", true);
+        seedRole("STAFF", "Nhân viên vận hành", true);
+        seedRole("DESIGNER", "Nhà thiết kế", true);
+        seedRole("CUSTOMER", "Khách hàng", true);
 
         return adminRole;
     }
@@ -112,7 +112,7 @@ public class IamDataSeeder implements ApplicationRunner {
             EmployeeEntity employee = new EmployeeEntity();
             employee.setAccount(savedAccount);
             employee.setRole(adminRole);
-            employee.setFullName("System Administrator");
+            employee.setFullName("Quản trị viên hệ thống");
             employee.setCreatedAt(Instant.now());
             employeeRepository.save(employee);
 
@@ -122,22 +122,37 @@ public class IamDataSeeder implements ApplicationRunner {
     }
 
     private void seedTestAccounts() {
-        seedCustomerAccount(customerEmail, customerPassword, "Test Customer", "0901234567");
+        seedCustomerAccount(customerEmail, customerPassword, "Khách hàng mẫu", "0901234567");
         String extraCustomerPassword = (customerPassword != null && !customerPassword.isBlank())
                 ? customerPassword
                 : DEFAULT_EXTRA_CUSTOMER_PASSWORD;
         seedCustomerAccount(SEED_CUSTOMER_2_EMAIL, extraCustomerPassword, "Nguyễn Minh Anh", "0902345678");
         seedCustomerAccount(SEED_CUSTOMER_3_EMAIL, extraCustomerPassword, "Trần Quốc Bảo", "0903456789");
         seedCustomerAccount(SEED_CUSTOMER_4_EMAIL, extraCustomerPassword, "Lê Thảo Vy", "0904567890");
-        seedEmployeeAccount(managerEmail, managerPassword, "MANAGER", "Test Manager");
-        seedEmployeeAccount(staffEmail, staffPassword, "STAFF", "Test Staff");
-        seedEmployeeAccount(designerEmail, designerPassword, "DESIGNER", "Test Designer");
+        seedEmployeeAccount(managerEmail, managerPassword, "MANAGER", "Quản lý");
+        seedEmployeeAccount(staffEmail, staffPassword, "STAFF", "Nhân viên");
+        seedEmployeeAccount(designerEmail, designerPassword, "DESIGNER", "Nhà thiết kế");
     }
+
+    private static final java.util.Set<String> LEGACY_SYSTEM_ACCOUNT_NAMES = java.util.Set.of(
+            "Quản lý mẫu",
+            "Nhân viên mẫu",
+            "Nhà thiết kế mẫu"
+    );
 
     private void seedEmployeeAccount(String email, String password, String roleName, String fullName) {
         if (email == null || email.isBlank() || password == null || password.isBlank()) return;
 
-        userAccountRepository.findByEmail(email).orElseGet(() -> {
+        userAccountRepository.findByEmail(email).ifPresentOrElse(existing -> {
+            employeeRepository.findByAccount_AccountId(existing.getAccountId()).ifPresent(employee -> {
+                if (employee.getFullName() == null
+                        || employee.getFullName().isBlank()
+                        || LEGACY_SYSTEM_ACCOUNT_NAMES.contains(employee.getFullName())) {
+                    employee.setFullName(fullName);
+                    employeeRepository.save(employee);
+                }
+            });
+        }, () -> {
             RoleEntity role = roleRepository.findByRoleName(roleName)
                     .orElseThrow(() -> new IllegalStateException("Role not found: " + roleName));
 
@@ -157,7 +172,6 @@ public class IamDataSeeder implements ApplicationRunner {
             employeeRepository.save(employee);
 
             log.info("Seeding test employee account [email={}] [role={}]", email, roleName);
-            return savedAccount;
         });
     }
 

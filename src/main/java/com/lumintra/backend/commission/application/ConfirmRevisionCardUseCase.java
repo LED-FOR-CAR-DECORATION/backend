@@ -3,6 +3,7 @@ package com.lumintra.backend.commission.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.lumintra.backend.commerce.domain.service.CustomerSubscriptionBonusLookupService;
 import com.lumintra.backend.commission.api.response.ConfirmRevisionCardResponse;
 import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
 import com.lumintra.backend.commission.domain.model.CommissionMessageType;
@@ -40,6 +41,7 @@ public class ConfirmRevisionCardUseCase {
     private final CommissionChatBroadcastPort broadcast;
     private final ObjectMapper json;
     private final CommissionRevisionRequestRecorder revisionRequests;
+    private final CustomerSubscriptionBonusLookupService subscriptionBonusLookupService;
 
     @Transactional
     public ConfirmRevisionCardResponse execute(Long id, Long customerId, Long messageId) {
@@ -88,7 +90,15 @@ public class ConfirmRevisionCardUseCase {
         if (!revision.isPending()) {
             throw conflict("Revision card has already been processed.");
         }
-        boolean free = commission.getRevisionsUsed() < commission.getMaxRevisions();
+        int subscriptionMaxRevisions =
+                Math.max(
+                        0,
+                        subscriptionBonusLookupService.findMaxFreeCommissionRevisions(customerId));
+        int effectiveMaxRevisions = Math.max(commission.getMaxRevisions(), subscriptionMaxRevisions);
+        if (effectiveMaxRevisions > commission.getMaxRevisions()) {
+            commission.setMaxRevisions(effectiveMaxRevisions);
+        }
+        boolean free = commission.getRevisionsUsed() < effectiveMaxRevisions;
         var fee =
                 free
                         ? BigDecimal.ZERO.setScale(2)
@@ -98,8 +108,11 @@ public class ConfirmRevisionCardUseCase {
                                 .setScale(2, RoundingMode.HALF_UP);
         metadata.put("status", "CONFIRMED");
         metadata.put("usesFreeQuota", free);
+        metadata.put("usesSubscriptionCredit", false);
         metadata.put("revisionFee", fee);
+        metadata.put("feePercentage", free ? 0 : 10);
         metadata.put("revisionsUsed", free ? revisionNumber : commission.getRevisionsUsed());
+        metadata.put("maxRevisions", effectiveMaxRevisions);
         String confirmedMetadata;
         try {
             confirmedMetadata = json.writeValueAsString(metadata);

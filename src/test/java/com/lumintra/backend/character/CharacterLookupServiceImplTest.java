@@ -1,9 +1,12 @@
 package com.lumintra.backend.character;
 
+import com.lumintra.backend.character.domain.model.CharacterType;
+import com.lumintra.backend.character.domain.model.CharacterVersionCommissionTarget;
 import com.lumintra.backend.character.domain.model.CharacterVersionSnapshot;
 import com.lumintra.backend.character.infrastructure.persistence.CharacterLookupServiceImpl;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterEntity;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterVersionEntity;
+import com.lumintra.backend.character.infrastructure.persistence.repository.CharacterRepository;
 import com.lumintra.backend.character.infrastructure.persistence.repository.CharacterVersionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +21,8 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -27,11 +32,14 @@ class CharacterLookupServiceImplTest {
     @Mock
     private CharacterVersionRepository characterVersionRepository;
 
+    @Mock
+    private CharacterRepository characterRepository;
+
     private CharacterLookupServiceImpl characterLookupService;
 
     @BeforeEach
     void setUp() {
-        characterLookupService = new CharacterLookupServiceImpl(characterVersionRepository);
+        characterLookupService = new CharacterLookupServiceImpl(characterVersionRepository, characterRepository);
     }
 
     @Test
@@ -97,5 +105,50 @@ class CharacterLookupServiceImplTest {
         assertThat(result).containsOnlyKeys(31L);
         assertThat(result.get(31L).characterName()).isEqualTo("Pixel Cat");
         assertThat(result.get(31L).versionNumber()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("findCommissionSubmissionTarget returns character ownership, type, and commissionId")
+    void findCommissionSubmissionTarget_returnsTargetSnapshot() {
+        assertThat(characterLookupService.findCommissionSubmissionTarget(null)).isEmpty();
+        verifyNoInteractions(characterVersionRepository);
+
+        CharacterEntity character = CharacterEntity.create(5L, "Commission Mecha", "Custom", CharacterType.COMMISSION, 105L);
+        character.setCharacterId(20L);
+        CharacterVersionEntity version = CharacterVersionEntity.create(
+                character, null, 2, "https://cdn.lumintra.com/mecha-v2.gif", null, true);
+        version.setVersionId(40L);
+
+        when(characterVersionRepository.findWithCharacterByVersionId(40L)).thenReturn(Optional.of(version));
+
+        Optional<CharacterVersionCommissionTarget> found = characterLookupService.findCommissionSubmissionTarget(40L);
+        assertThat(found).isPresent();
+        assertThat(found.get().versionId()).isEqualTo(40L);
+        assertThat(found.get().characterId()).isEqualTo(20L);
+        assertThat(found.get().creatorEmployeeId()).isEqualTo(5L);
+        assertThat(found.get().characterType()).isEqualTo(CharacterType.COMMISSION);
+        assertThat(found.get().commissionId()).isEqualTo(105L);
+    }
+
+    @Test
+    @DisplayName("bindCommissionIfUnbound binds only unbound COMMISSION character")
+    void bindCommissionIfUnbound_bindsOnlyWhenUnboundCommission() {
+        CharacterEntity unbound = CharacterEntity.create(5L, "Draft Commission", null, CharacterType.COMMISSION, null);
+        unbound.setCharacterId(70L);
+        when(characterRepository.findById(70L)).thenReturn(Optional.of(unbound));
+
+        characterLookupService.bindCommissionIfUnbound(70L, 105L);
+
+        assertThat(unbound.getCommissionId()).isEqualTo(105L);
+        verify(characterRepository).save(unbound);
+
+        CharacterEntity storeChar = CharacterEntity.create(5L, "Store Char", null);
+        storeChar.setCharacterId(71L);
+        when(characterRepository.findById(71L)).thenReturn(Optional.of(storeChar));
+
+        characterLookupService.bindCommissionIfUnbound(71L, 105L);
+
+        assertThat(storeChar.getCommissionId()).isNull();
+        verify(characterRepository, never()).save(storeChar);
     }
 }

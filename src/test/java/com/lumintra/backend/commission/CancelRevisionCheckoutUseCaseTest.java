@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lumintra.backend.commerce.domain.service.CustomerSubscriptionBonusLookupService;
 import com.lumintra.backend.commission.application.CancelRevisionCheckoutUseCase;
 import com.lumintra.backend.commission.application.service.CommissionRevisionRequestRecorder;
 import com.lumintra.backend.commission.application.service.RevisionCheckoutReverter;
@@ -52,7 +53,14 @@ class CancelRevisionCheckoutUseCaseTest {
                                 .build());
         var confirm =
                 new com.lumintra.backend.commission.application.ConfirmRevisionCardUseCase(
-                        commissions, messages, payments, mapper, broadcast, json, revisionRequests);
+                        commissions,
+                        messages,
+                        payments,
+                        mapper,
+                        broadcast,
+                        json,
+                        revisionRequests,
+                        subscriptionBonusLookupService);
         confirm.execute(105L, 501L, 402L);
         assertThat(commission.getExtraRevisionFee()).isEqualByComparingTo("70000");
         assertThat(commission.getActivePaymentCode()).isEqualTo("LMTREV105NEW");
@@ -100,6 +108,7 @@ class CancelRevisionCheckoutUseCaseTest {
     @Mock CommissionMessageRepository messages;
     @Mock PaymentSessionPort payments;
     @Mock CommissionChatBroadcastPort broadcast;
+    @Mock CustomerSubscriptionBonusLookupService subscriptionBonusLookupService;
     @Spy ObjectMapper json = new ObjectMapper();
     RevisionRequestFakes revisions = new RevisionRequestFakes();
     @Spy CommissionRevisionRequestRecorder revisionRequests = revisions.recorder;

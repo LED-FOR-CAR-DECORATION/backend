@@ -44,6 +44,10 @@ public class LedInstanceEntity {
     @Column(name = "current_firmware_id")
     private Long currentFirmwareId;
 
+    /** When {@code currentFirmwareId} last changed through an app report (DEV-10B). */
+    @Column(name = "firmware_updated_at")
+    private Instant firmwareUpdatedAt;
+
     @Column(name = "device_name", length = 255)
     private String deviceName;
 
@@ -70,6 +74,12 @@ public class LedInstanceEntity {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    /** DEV-10B: records the firmware the app reports as installed. Not verified against the physical device. */
+    public void recordInstalledFirmware(Long firmwareId, Instant at) {
+        this.currentFirmwareId = firmwareId;
+        this.firmwareUpdatedAt = at;
+    }
 
     public static LedInstanceEntity createInStock(
             Long modelId,

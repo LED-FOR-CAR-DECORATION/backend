@@ -56,6 +56,15 @@ public class CreateSubscriptionUseCase {
                                 request.galleryUrls() == null ? List.of() : request.galleryUrls(),
                                 ProductStatus.UNPUBLISHED,
                                 new HashSet<>(selectedTags)));
+        int bonusRevisions =
+                request.maxCommissionRevisions() == null ? 0 : request.maxCommissionRevisions();
+        int maxMobileProfiles =
+                request.maxMobileProfiles() == null ? 3 : request.maxMobileProfiles();
+        String perksDescription =
+                buildPerksDescription(
+                        request.allAccessCharacters(),
+                        maxMobileProfiles,
+                        bonusRevisions);
         var detail =
                 SubscriptionDetailEntity.create(
                         product.getProductId(),
@@ -64,10 +73,10 @@ public class CreateSubscriptionUseCase {
                         request.lifetime(),
                         request.durationDays(),
                         request.allAccessCharacters(),
-                        0,
-                        3,
+                        bonusRevisions,
+                        maxMobileProfiles,
                         Map.of(),
-                        null);
+                        perksDescription);
         try {
             subscriptions.saveAndFlush(detail);
         } catch (DataIntegrityViolationException ex) {
@@ -91,8 +100,27 @@ public class CreateSubscriptionUseCase {
                 detail.isLifetime(),
                 detail.getDurationDays(),
                 detail.isAllAccessCharacters(),
+                detail.getMaxCommissionRevisions(),
+                detail.getMaxMobileProfiles(),
                 product.getStatus(),
                 detail.getCreatedAt(),
                 ids);
+    }
+
+    private String buildPerksDescription(
+            boolean allAccessCharacters,
+            int maxMobileProfiles,
+            int maxCommissionRevisions) {
+        var parts = new java.util.ArrayList<String>();
+        if (allAccessCharacters) {
+            parts.add("Mở khóa toàn bộ thư viện nhân vật");
+        }
+        if (maxMobileProfiles > 3) {
+            parts.add("Tối đa " + maxMobileProfiles + " profile chữ trên ứng dụng Mobile");
+        }
+        if (maxCommissionRevisions > 0) {
+            parts.add(maxCommissionRevisions + " lượt chỉnh sửa miễn phí cho mỗi đơn thiết kế");
+        }
+        return parts.isEmpty() ? null : String.join(" · ", parts);
     }
 }

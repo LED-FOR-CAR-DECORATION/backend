@@ -7,6 +7,7 @@ public interface CharacterCreationService {
 
     long createForProduct(
             long productId,
+            Long creatorEmployeeId,
             String characterName,
             String description,
             int versionNumber,
@@ -15,4 +16,6 @@ public interface CharacterCreationService {
             Integer frameCount,
             Integer frameDelayMs,
             Integer byteSize);
+
+    boolean assignCreatorIfUnownedForProduct(long productId, Long creatorEmployeeId);
 }

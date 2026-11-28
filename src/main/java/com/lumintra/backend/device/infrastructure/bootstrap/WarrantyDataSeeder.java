@@ -54,29 +54,29 @@ public class WarrantyDataSeeder implements ApplicationRunner {
         seededCount += seedTicketIfDevicePresent(
                 DeviceDataSeeder.SEED_SERIAL_BOUND,
                 WarrantyTicketStatus.COMPLETED,
-                "Màn hình {modelName} bị chớp nháy nhẹ ở góc trên bên phải sau khi cập nhật firmware.",
-                List.of("https://placehold.co/800x600/0f172a/34d399/png?text=LED+Corner+Flicker"),
-                "Đã kiểm tra và nạp lại firmware hiệu chuẩn độ sáng cho mẫu {modelName}, test chạy ổn định 24h và bàn giao lại cho khách."
+                "Tấm LED {modelName} bị chớp nháy nhẹ ở góc trên bên phải sau khi cập nhật phần mềm điều khiển.",
+                List.of("https://placehold.co/800x600/0f172a/34d399/png?text=Tam+LED+Chop+Nhay"),
+                "Đã kiểm tra và nạp lại phần mềm hiệu chuẩn độ sáng cho mẫu {modelName}, kiểm tra chạy ổn định 24 giờ và bàn giao lại cho khách."
         );
 
         // 2. Customer 3 completed replacement/repair claim
         seededCount += seedTicketIfDevicePresent(
                 DeviceDataSeeder.SEED_SERIAL_CUST3_COMPLETED,
                 WarrantyTicketStatus.COMPLETED,
-                "Có 3 điểm ảnh chết màu xanh dương ở vùng trung tâm màn hình {modelName}.",
+                "Có 3 điểm ảnh chết màu xanh dương ở vùng trung tâm tấm LED {modelName}.",
                 List.of(
-                        "https://placehold.co/800x600/111827/60a5fa/png?text=Dead+Blue+Pixels",
-                        "https://placehold.co/800x600/1e293b/93c5fd/png?text=Matrix+Center+View"
+                        "https://placehold.co/800x600/111827/60a5fa/png?text=Diem+Anh+Chet",
+                        "https://placehold.co/800x600/1e293b/93c5fd/png?text=Vung+Trung+Tam+LED"
                 ),
-                "Đã thay thế tấm LED ma trận HUB75 chính hãng cho mẫu {modelName} và kiểm tra cân bằng màu RGB đạt chuẩn trước khi gửi trả khách."
+                "Đã thay thế tấm LED chính hãng cho mẫu {modelName} và kiểm tra cân bằng màu đạt chuẩn trước khi gửi trả khách."
         );
 
         // 3. Customer 4 rejected claim (water ingress / broken warranty seal)
         seededCount += seedTicketIfDevicePresent(
                 DeviceDataSeeder.SEED_SERIAL_CUST4_REJECTED,
                 WarrantyTicketStatus.REJECTED,
-                "Bảng {modelName} không lên nguồn sau khi vô tình đổ nước lên bộ điều khiển.",
-                List.of("https://placehold.co/800x600/1f2937/f87171/png?text=Water+Damage+Board"),
+                "Tấm LED {modelName} không lên nguồn sau khi vô tình đổ nước lên bộ điều khiển.",
+                List.of("https://placehold.co/800x600/1f2937/f87171/png?text=Thiet+Bi+Vao+Nuoc"),
                 "Từ chối bảo hành: Sau khi kiểm tra hình ảnh bằng chứng của mẫu {modelName}, phát hiện dấu hiệu nước xâm nhập bo mạch điều khiển và rách tem niêm phong bảo hành (không thuộc phạm vi bảo hành phần cứng tiêu chuẩn)."
         );
 
@@ -84,8 +84,8 @@ public class WarrantyDataSeeder implements ApplicationRunner {
         seededCount += seedTicketIfDevicePresent(
                 DeviceDataSeeder.SEED_SERIAL_CUST2_APPROVED,
                 WarrantyTicketStatus.APPROVED,
-                "Cổng nguồn 5V USB-C trên mạch điều khiển mẫu {modelName} bị lỏng, phải giữ dây mới lên màn hình.",
-                List.of("https://placehold.co/800x600/0f172a/38bdf8/png?text=USBC+Port+Loose"),
+                "Cổng nguồn 5V USB-C trên mạch điều khiển mẫu {modelName} bị lỏng, phải giữ dây mới sáng tấm LED.",
+                List.of("https://placehold.co/800x600/0f172a/38bdf8/png?text=Cong+Nguon+Bi+Long"),
                 "Đã duyệt tiếp nhận bảo hành cho mẫu {modelName}. Vui lòng mang hoặc gửi thiết bị về Trung tâm Bảo hành Lumintra (123 Lê Lợi, Q.1, TP.HCM) kèm mã phiếu."
         );
 
@@ -93,10 +93,10 @@ public class WarrantyDataSeeder implements ApplicationRunner {
         seededCount += seedTicketIfDevicePresent(
                 DeviceDataSeeder.SEED_SERIAL_CUST2_PENDING,
                 WarrantyTicketStatus.PENDING,
-                "Màn hình {modelName} bị sọc ngang ở hàng điểm ảnh số 4 và tự ngắt nguồn sau 10 phút hoạt động.",
+                "Tấm LED {modelName} bị sọc ngang ở hàng điểm ảnh số 4 và tự ngắt nguồn sau 10 phút hoạt động.",
                 List.of(
-                        "https://placehold.co/800x600/111827/fbbf24/png?text=LED+Horizontal+Line",
-                        "https://placehold.co/800x600/1f2937/fcd34d/png?text=Power+Drop+Issue"
+                        "https://placehold.co/800x600/111827/fbbf24/png?text=Soc+Ngang+Tam+LED",
+                        "https://placehold.co/800x600/1f2937/fcd34d/png?text=Loi+Tu+Ngat+Nguon"
                 ),
                 null
         );
@@ -106,7 +106,7 @@ public class WarrantyDataSeeder implements ApplicationRunner {
                 DeviceDataSeeder.SEED_SERIAL_CUST4_PENDING,
                 WarrantyTicketStatus.PENDING,
                 "Thiết bị {modelName} không kết nối được Bluetooth/Wi-Fi với ứng dụng Lumintra dù đèn báo nguồn mạch điều khiển vẫn sáng.",
-                List.of("https://placehold.co/800x600/0f172a/a78bfa/png?text=BLE+Connection+Error"),
+                List.of("https://placehold.co/800x600/0f172a/a78bfa/png?text=Loi+Ket+Noi+Khong+Day"),
                 null
         );
 

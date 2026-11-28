@@ -31,7 +31,9 @@ import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -72,6 +74,7 @@ public class GetProductDetailUseCase {
         List<BundleItemEntity> bundleItems = Collections.emptyList();
         Map<Long, LedModelSnapshot> bundleLedModels = Collections.emptyMap();
         Map<Long, CharacterVersionSnapshot> bundleCharacterVersions = Collections.emptyMap();
+        Map<Long, ProductEntity> bundleComponentProducts = Collections.emptyMap();
         SubscriptionDetailEntity subscriptionDetail = null;
 
         ProductType productType = product.getProductType();
@@ -101,6 +104,25 @@ public class GetProductDetailUseCase {
                 bundleCharacterVersions = versionIds.isEmpty()
                         ? Collections.emptyMap()
                         : characterLookupService.findDetailsByVersionIds(versionIds);
+
+                Set<Long> componentProductIds = new LinkedHashSet<>();
+                bundleLedModels.values().stream()
+                        .map(LedModelSnapshot::productId)
+                        .filter(Objects::nonNull)
+                        .forEach(componentProductIds::add);
+                bundleCharacterVersions.values().stream()
+                        .map(CharacterVersionSnapshot::productId)
+                        .filter(Objects::nonNull)
+                        .forEach(componentProductIds::add);
+
+                if (!componentProductIds.isEmpty()) {
+                    bundleComponentProducts = productRepository.findAllById(componentProductIds).stream()
+                            .collect(Collectors.toMap(
+                                    ProductEntity::getProductId,
+                                    Function.identity(),
+                                    (existing, replacement) -> existing
+                            ));
+                }
             }
         } else if (productType == ProductType.SUBSCRIPTION) {
             subscriptionDetail = subscriptionDetailRepository.findByProductId(product.getProductId()).orElse(null);
@@ -114,6 +136,7 @@ public class GetProductDetailUseCase {
                 bundleItems,
                 bundleLedModels,
                 bundleCharacterVersions,
+                bundleComponentProducts,
                 subscriptionDetail
         );
 

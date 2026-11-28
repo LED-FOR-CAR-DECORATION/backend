@@ -1,5 +1,8 @@
 package com.lumintra.backend.commission.application;
 
+import com.lumintra.backend.character.domain.model.CharacterType;
+import com.lumintra.backend.character.domain.model.CharacterVersionCommissionTarget;
+import com.lumintra.backend.character.domain.service.CharacterLookupService;
 import com.lumintra.backend.commission.api.request.UploadCommissionDraftRequest;
 import com.lumintra.backend.commission.api.response.UploadCommissionDraftResponse;
 import com.lumintra.backend.commission.domain.model.CommissionRevisionRequestStatus;
@@ -12,12 +15,15 @@ import com.lumintra.backend.commission.infrastructure.persistence.repository.Com
 import com.lumintra.backend.commission.infrastructure.persistence.repository.CommissionSubmissionRepository;
 import com.lumintra.backend.media.domain.model.MediaPurpose;
 import com.lumintra.backend.media.domain.service.PrivateMediaReferenceValidator;
+import com.lumintra.backend.shared.exception.character.CharacterVersionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionNotFoundException;
 import com.lumintra.backend.shared.exception.commission.CommissionOwnershipMismatchException;
+import com.lumintra.backend.shared.exception.commission.InvalidCharacterTypeForCommissionException;
 import com.lumintra.backend.shared.exception.commission.InvalidCommissionStatusTransitionException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +39,7 @@ public class UploadCommissionDraftUseCase {
     private final CommissionSubmissionRepository commissionSubmissionRepository;
     private final CommissionRevisionRequestRepository commissionRevisionRequestRepository;
     private final PrivateMediaReferenceValidator privateMediaReferenceValidator;
+    private final CharacterLookupService characterLookupService;
     private final CommissionRequestMapper commissionRequestMapper;
 
     @Transactional
@@ -68,21 +75,30 @@ public class UploadCommissionDraftUseCase {
             );
         }
 
+        CharacterVersionCommissionTarget target = validateCharacterVersionForCommission(
+                commissionId, request.characterVersionId(), callerDesignerId);
+
         // AC02: Must be a COMMISSION_DRAFT upload for this commission; the object key is persisted
         String draftObjectKey = privateMediaReferenceValidator.requireOwnedObjectKey(
                 request.imageUrl(), MediaPurpose.COMMISSION_DRAFT, commissionId);
+
+        if (target.commissionId() == null && target.characterId() != null) {
+            characterLookupService.bindCommissionIfUnbound(target.characterId(), commissionId);
+        }
 
         int nextVersionNumber = commissionSubmissionRepository
                 .findTopByCommissionIdOrderByVersionNumberDesc(commissionId)
                 .map(latest -> latest.getVersionNumber() + 1)
                 .orElse(1);
 
+        Long validatedVersionId = target.versionId();
         CommissionSubmissionEntity draft = CommissionSubmissionEntity.createDraft(
                 commissionId,
                 callerDesignerId,
                 nextVersionNumber,
                 draftObjectKey,
-                request.designerNote()
+                request.designerNote(),
+                validatedVersionId
         );
         commissionRevisionRequestRepository
                 .findFirstByCommissionIdAndStatusInOrderByRevisionRequestIdDesc(
@@ -94,9 +110,9 @@ public class UploadCommissionDraftUseCase {
         commission.setStatus(CommissionStatus.INTERNAL_REVIEW);
         CommissionRequestEntity savedCommission = commissionRequestRepository.save(commission);
 
-        log.info("Commission draft uploaded successfully [commissionId={}] [submissionId={}] [versionNumber={}] [commissionStatus={}]",
+        log.info("Commission draft uploaded successfully [commissionId={}] [submissionId={}] [versionNumber={}] [characterVersionId={}] [commissionStatus={}]",
                 savedCommission.getCommissionId(), savedDraft.getSubmissionId(),
-                savedDraft.getVersionNumber(), savedCommission.getStatus());
+                savedDraft.getVersionNumber(), validatedVersionId, savedCommission.getStatus());
 
         UploadCommissionDraftResponse response = commissionRequestMapper.toUploadDraftResponse(savedDraft, savedCommission);
         if (response.createdAt() == null) {
@@ -107,11 +123,38 @@ public class UploadCommissionDraftUseCase {
                     .versionNumber(response.versionNumber())
                     .imageUrl(response.imageUrl())
                     .designerNote(response.designerNote())
+                    .characterVersionId(response.characterVersionId())
                     .submissionStatus(response.submissionStatus())
                     .commissionStatus(response.commissionStatus())
                     .createdAt(Instant.now())
                     .build();
         }
         return response;
+    }
+
+    private CharacterVersionCommissionTarget validateCharacterVersionForCommission(
+            Long commissionId,
+            Long characterVersionId,
+            Long callerDesignerId) {
+        if (characterVersionId == null) {
+            throw new InvalidCharacterTypeForCommissionException(
+                    "Commission draft must be submitted from a COMMISSION character version.");
+        }
+        CharacterVersionCommissionTarget target = characterLookupService.findCommissionSubmissionTarget(characterVersionId)
+                .orElseThrow(() -> new CharacterVersionNotFoundException(characterVersionId));
+
+        if (target.creatorEmployeeId() == null || !target.creatorEmployeeId().equals(callerDesignerId)) {
+            throw new AccessDeniedException("Only the designer who owns this character can submit it to a commission.");
+        }
+        if (target.characterType() != CharacterType.COMMISSION) {
+            throw new InvalidCharacterTypeForCommissionException(
+                    "Only characters with type COMMISSION can be submitted to a commission.");
+        }
+        if (target.commissionId() != null && !target.commissionId().equals(commissionId)) {
+            throw new InvalidCharacterTypeForCommissionException(
+                    "Character is already bound to commission #" + target.commissionId()
+                            + " and cannot be submitted to commission #" + commissionId + ".");
+        }
+        return target;
     }
 }

@@ -14,6 +14,8 @@ public final class CharacterMapper {
                 entity.getCharacterId(),
                 entity.getCharacterName(),
                 entity.getDescription(),
+                entity.getCharacterType(),
+                entity.getCommissionId(),
                 entity.getCreatorEmployeeId(),
                 entity.getCreatedAt()
         );
@@ -24,6 +26,8 @@ public final class CharacterMapper {
                 entity.getCharacterId(),
                 entity.getCharacterName(),
                 entity.getDescription(),
+                entity.getCharacterType(),
+                entity.getCommissionId(),
                 entity.getUpdatedAt()
         );
     }

@@ -3,6 +3,8 @@ package com.lumintra.backend.media.domain.service;
 import com.lumintra.backend.media.domain.model.MediaPurpose;
 import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -16,6 +18,8 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class PrivateMediaReferenceValidator {
+
+    private static final Logger log = LoggerFactory.getLogger(PrivateMediaReferenceValidator.class);
 
     private final MediaReferenceParser mediaReferenceParser;
     private final MediaKeyGenerator mediaKeyGenerator;
@@ -37,17 +41,24 @@ public class PrivateMediaReferenceValidator {
         }
 
         String objectKey = mediaReferenceParser.extractObjectKey(reference)
-                .orElseThrow(() -> new InvalidMediaUrlException(
-                        "Submitted media reference is not a valid uploaded media object key."));
+                .orElseThrow(() -> {
+                    log.warn("Rejected invalid private media reference [purpose={}] [scopeId={}]", purpose, scopeId);
+                    return new InvalidMediaUrlException(
+                            "Submitted media reference is not a valid uploaded media object key.");
+                });
 
         String scope = String.valueOf(scopeId);
         String expectedFolder = mediaKeyGenerator.folderFor(purpose, scope, scopeId);
         if (!mediaKeyGenerator.isGeneratedKeyInFolder(objectKey, expectedFolder)) {
+            log.warn("Rejected private media outside expected scope [purpose={}] [scopeId={}] [objectKey={}] [expectedFolder={}]",
+                    purpose, scopeId, objectKey, expectedFolder);
             throw new InvalidMediaUrlException(
                     "Submitted media does not belong to this " + scopeLabel(purpose) + " or was not issued for " + purpose + ".");
         }
 
         if (!storageSignedUrlService.privateObjectExists(objectKey)) {
+            log.warn("Rejected private media reference whose object is missing from bucket [purpose={}] [scopeId={}] [objectKey={}]",
+                    purpose, scopeId, objectKey);
             throw new InvalidMediaUrlException("Submitted media has not been uploaded yet.");
         }
         return objectKey;

@@ -1,5 +1,6 @@
 package com.lumintra.backend.character.infrastructure.persistence;
 
+import com.lumintra.backend.character.domain.model.CharacterType;
 import com.lumintra.backend.character.domain.service.CharacterCreationService;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterEntity;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterVersionEntity;
@@ -21,6 +22,7 @@ public class CharacterCreationServiceImpl implements CharacterCreationService {
     @Transactional(propagation = Propagation.MANDATORY)
     public long createForProduct(
             long productId,
+            Long creatorEmployeeId,
             String characterName,
             String description,
             int versionNumber,
@@ -30,7 +32,7 @@ public class CharacterCreationServiceImpl implements CharacterCreationService {
             Integer frameDelayMs,
             Integer byteSize) {
         CharacterEntity character = characterRepository.save(
-                CharacterEntity.create(null, characterName, description));
+                CharacterEntity.create(creatorEmployeeId, characterName, description, CharacterType.STORE, null));
 
         CharacterVersionEntity version = CharacterVersionEntity.create(
                 character,
@@ -44,5 +46,22 @@ public class CharacterCreationServiceImpl implements CharacterCreationService {
         version.setByteSize(byteSize);
 
         return characterVersionRepository.save(version).getVersionId();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean assignCreatorIfUnownedForProduct(long productId, Long creatorEmployeeId) {
+        if (creatorEmployeeId == null) {
+            return false;
+        }
+        return characterVersionRepository.findWithCharacterFirstByProductIdOrderByVersionNumberDesc(productId)
+                .map(CharacterVersionEntity::getCharacter)
+                .filter(character -> character != null && character.getCreatorEmployeeId() == null)
+                .map(character -> {
+                    character.setCreatorEmployeeId(creatorEmployeeId);
+                    characterRepository.save(character);
+                    return true;
+                })
+                .orElse(false);
     }
 }

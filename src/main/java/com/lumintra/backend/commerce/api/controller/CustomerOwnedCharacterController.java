@@ -2,6 +2,7 @@ package com.lumintra.backend.commerce.api.controller;
 
 import com.lumintra.backend.commerce.api.response.CustomerActiveSubscriptionResponse;
 import com.lumintra.backend.commerce.api.response.CustomerOwnedCharacterResponse;
+import com.lumintra.backend.commerce.api.response.CustomerSubscriptionBenefitsResponse;
 import com.lumintra.backend.commerce.application.CustomerSubscriptionEntitlementService;
 import com.lumintra.backend.commerce.application.ListCustomerOwnedCharactersUseCase;
 import com.lumintra.backend.shared.exception.ErrorResponse;
@@ -118,6 +119,38 @@ public class CustomerOwnedCharacterController {
         CustomerActiveSubscriptionResponse activeSubscription =
                 customerSubscriptionEntitlementService.findActiveSubscription(customerId).orElse(null);
         return ResponseEntity.ok(ApiResponse.success(activeSubscription));
+    }
+
+    @Operation(
+            summary = "List all active customer subscriptions",
+            description = "Retrieves all currently active, non-expired subscription entitlements owned by the authenticated customer."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/api/customer/subscriptions/active/all")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<List<CustomerActiveSubscriptionResponse>>> listActiveSubscriptions(
+            Authentication authentication
+    ) {
+        Long customerId = extractCustomerId(authentication);
+        List<CustomerActiveSubscriptionResponse> activeSubscriptions =
+                customerSubscriptionEntitlementService.findActiveSubscriptions(customerId);
+        return ResponseEntity.ok(ApiResponse.success(activeSubscriptions));
+    }
+
+    @Operation(
+            summary = "Get aggregated customer subscription benefits",
+            description = "Retrieves the customer's combined effective entitlements (all-access characters, mobile text profile limit, free commission revisions per request, available upgrade credit), all active plans, and expired subscription history."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/api/customer/subscriptions/benefits")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<CustomerSubscriptionBenefitsResponse>> getSubscriptionBenefits(
+            Authentication authentication
+    ) {
+        Long customerId = extractCustomerId(authentication);
+        CustomerSubscriptionBenefitsResponse benefits =
+                customerSubscriptionEntitlementService.getCustomerSubscriptionBenefits(customerId);
+        return ResponseEntity.ok(ApiResponse.success(benefits));
     }
 
     private Long extractCustomerId(Authentication authentication) {

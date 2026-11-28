@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lumintra.backend.commerce.domain.service.CustomerSubscriptionBonusLookupService;
 import com.lumintra.backend.commission.api.request.PostRevisionCardRequest;
 import com.lumintra.backend.commission.domain.model.CommissionMessageType;
 import com.lumintra.backend.commission.domain.model.CommissionStatus;
@@ -28,6 +29,8 @@ class PostRevisionCardUseCaseTest {
     private final CommissionChatBroadcastPort broadcast = mock(CommissionChatBroadcastPort.class);
     private final ObjectMapper json = new ObjectMapper();
     private final RevisionRequestFakes revisions = new RevisionRequestFakes();
+    private final CustomerSubscriptionBonusLookupService subscriptionBonusLookupService =
+            mock(CustomerSubscriptionBonusLookupService.class);
     private final PostRevisionCardUseCase useCase =
             new PostRevisionCardUseCase(
                     commissions,
@@ -35,7 +38,8 @@ class PostRevisionCardUseCaseTest {
                     new CommissionMessageMapper(),
                     broadcast,
                     json,
-                    revisions.recorder);
+                    revisions.recorder,
+                    subscriptionBonusLookupService);
 
     @Test
     void createsFreeCardWithoutConsumingQuotaOrChangingStatus() throws Exception {
@@ -67,6 +71,21 @@ class PostRevisionCardUseCaseTest {
         assertThat(commission.getStatus()).isEqualTo(CommissionStatus.PREVIEW_DELIVERED);
         assertThat(commission.getRevisionsUsed()).isEqualTo(2);
         assertThat(commission.getTotalPrice()).isEqualByComparingTo("999");
+    }
+
+    @Test
+    void usesTierSubscriptionAllowanceWhenHigherThanCommissionMaxRevisions() throws Exception {
+        var commission = commission(2);
+        commission.setCustomerId(501L);
+        when(subscriptionBonusLookupService.findMaxFreeCommissionRevisions(501L)).thenReturn(5);
+        when(messages.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = useCase.execute(105L, 3L, new PostRevisionCardRequest("Use tier allowance"));
+        var metadata = json.readTree(response.metadataJson());
+        assertThat(metadata.get("usesFreeQuota").asBoolean()).isTrue();
+        assertThat(metadata.get("usesSubscriptionCredit").asBoolean()).isFalse();
+        assertThat(metadata.get("maxRevisions").asInt()).isEqualTo(5);
+        assertThat(metadata.get("revisionFee").decimalValue()).isEqualByComparingTo("0");
     }
 
     @Test

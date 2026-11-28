@@ -24,6 +24,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -83,10 +85,15 @@ public class AddCartItemUseCase {
                                 productsById.get(item.getProductId()),
                                 item.getQuantity())));
 
+        Map<Long, BigDecimal> effectiveUnitPricesByProductId = new HashMap<>();
+        productsById.forEach((productId, prod) -> effectiveUnitPricesByProductId.put(
+                productId, cartItemAvailabilityService.resolveEffectiveUnitPrice(customerId, prod)));
+
         log.info("Cart item added [customerId={}] [cartId={}] [productId={}] [requestedQuantity={}]",
                 customerId, savedCart.getCartId(), product.productId(), request.quantity());
 
-        return cartMapper.toCartResponse(savedCart, allItems, productsById, availabilityByItemId);
+        return cartMapper.toCartResponse(
+                savedCart, allItems, productsById, availabilityByItemId, effectiveUnitPricesByProductId);
     }
 
     private void handleDigitalProduct(
@@ -103,7 +110,8 @@ public class AddCartItemUseCase {
             throw new DigitalItemQuantityLimitException("Bạn chỉ có thể mua tối đa 1 Character mỗi tài khoảng");
         }
 
-        cartItemRepository.save(CartItemEntity.create(cart, product.productId(), 1, product.basePrice()));
+        BigDecimal effectivePrice = cartItemAvailabilityService.resolveEffectiveUnitPrice(customerId, product);
+        cartItemRepository.save(CartItemEntity.create(cart, product.productId(), 1, effectivePrice));
     }
 
     private void handleLedProduct(

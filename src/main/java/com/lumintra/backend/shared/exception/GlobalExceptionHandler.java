@@ -11,6 +11,7 @@ import com.lumintra.backend.shared.exception.iam.*;
 import com.lumintra.backend.shared.exception.media.InvalidMediaRequestException;
 import com.lumintra.backend.shared.exception.media.InvalidMediaUrlException;
 import com.lumintra.backend.shared.exception.media.StorageServiceException;
+import com.lumintra.backend.shared.exception.monitoring.InvalidMetricsRangeException;
 import com.lumintra.backend.shared.exception.payment.PaymentSessionNotFoundException;
 import com.lumintra.backend.shared.exception.store.BundleNotFoundException;
 import com.lumintra.backend.shared.exception.store.InvalidBundlePriceException;
@@ -55,6 +56,12 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final Tracer tracer;
 
+    // Monitoring exception
+    @ExceptionHandler(InvalidMetricsRangeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMetricsRange(InvalidMetricsRangeException ex) {
+        return buildErrorResponse("INVALID_METRICS_RANGE", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
     // Store exception
     @ExceptionHandler(InvalidPriceRangeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidPriceRangeException(InvalidPriceRangeException ex) {
@@ -63,10 +70,22 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(StoreProductReferenceException.class)
     public ResponseEntity<ErrorResponse> handleStoreProductReference(StoreProductReferenceException ex) {
-        var status = (ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
-                        || ex.getReason() == StoreProductReferenceException.Reason.LED_MODEL_ALREADY_LINKED)
-                ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND;
+        HttpStatus status;
+        if (ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_VERSION_ALREADY_LINKED
+                || ex.getReason() == StoreProductReferenceException.Reason.LED_MODEL_ALREADY_LINKED) {
+            status = HttpStatus.CONFLICT;
+        } else if (ex.getReason() == StoreProductReferenceException.Reason.CHARACTER_TYPE_NOT_ALLOWED_FOR_STORE) {
+            status = HttpStatus.BAD_REQUEST;
+        } else {
+            status = HttpStatus.NOT_FOUND;
+        }
         return buildErrorResponse(ex.getReason().name(), ex.getMessage(), status);
+    }
+
+    @ExceptionHandler(InvalidCharacterTypeForCommissionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCharacterTypeForCommission(
+            InvalidCharacterTypeForCommissionException ex) {
+        return buildErrorResponse("CHARACTER_TYPE_NOT_ALLOWED_FOR_COMMISSION", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(SubscriptionNotFoundException.class)
@@ -219,6 +238,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OtaSessionNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleOtaSessionNotFound(OtaSessionNotFoundException ex) {
         return buildErrorResponse("OTA_SESSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(FirmwareModelMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleFirmwareModelMismatch(FirmwareModelMismatchException ex) {
+        return buildErrorResponse("FIRMWARE_MODEL_MISMATCH", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(FirmwareNotActiveException.class)

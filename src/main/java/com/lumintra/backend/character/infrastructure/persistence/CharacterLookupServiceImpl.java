@@ -1,12 +1,16 @@
 package com.lumintra.backend.character.infrastructure.persistence;
 
+import com.lumintra.backend.character.domain.model.CharacterType;
+import com.lumintra.backend.character.domain.model.CharacterVersionCommissionTarget;
 import com.lumintra.backend.character.domain.model.CharacterVersionSnapshot;
 import com.lumintra.backend.character.domain.service.CharacterLookupService;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterEntity;
 import com.lumintra.backend.character.infrastructure.persistence.entity.CharacterVersionEntity;
+import com.lumintra.backend.character.infrastructure.persistence.repository.CharacterRepository;
 import com.lumintra.backend.character.infrastructure.persistence.repository.CharacterVersionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
@@ -23,6 +27,7 @@ import java.util.stream.Collectors;
 public class CharacterLookupServiceImpl implements CharacterLookupService {
 
     private final CharacterVersionRepository characterVersionRepository;
+    private final CharacterRepository characterRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -95,6 +100,41 @@ public class CharacterLookupServiceImpl implements CharacterLookupService {
                 ));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CharacterVersionCommissionTarget> findCommissionSubmissionTarget(Long versionId) {
+        if (versionId == null) {
+            return Optional.empty();
+        }
+        return characterVersionRepository.findWithCharacterByVersionId(versionId)
+                .map(version -> {
+                    CharacterEntity character = version.getCharacter();
+                    return new CharacterVersionCommissionTarget(
+                            version.getVersionId(),
+                            character != null ? character.getCharacterId() : null,
+                            character != null ? character.getCreatorEmployeeId() : null,
+                            character != null && character.getCharacterType() != null
+                                    ? character.getCharacterType()
+                                    : CharacterType.STORE,
+                            character != null ? character.getCommissionId() : null
+                    );
+                });
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void bindCommissionIfUnbound(Long characterId, Long commissionId) {
+        if (characterId == null || commissionId == null) {
+            return;
+        }
+        characterRepository.findById(characterId).ifPresent(character -> {
+            if (character.isCommissionCharacter() && character.getCommissionId() == null) {
+                character.assignCommissionIfUnbound(commissionId);
+                characterRepository.save(character);
+            }
+        });
+    }
+
     private CharacterVersionSnapshot toSnapshot(CharacterVersionEntity version) {
         CharacterEntity character = version.getCharacter();
         return new CharacterVersionSnapshot(
@@ -105,7 +145,8 @@ public class CharacterLookupServiceImpl implements CharacterLookupService {
                 version.getVersionNumber(),
                 version.getPreviewGifUrl(),
                 version.getFrameCount(),
-                version.getFrameDelayMs()
+                version.getFrameDelayMs(),
+                version.getProductId()
         );
     }
 }

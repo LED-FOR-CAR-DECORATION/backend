@@ -100,6 +100,11 @@ public class FirmwareOtaSessionEntity {
         return true;
     }
 
+    /** DEV-10B: the device reported this session's firmware as installed. */
+    public void complete() {
+        this.status = OtaSessionStatus.COMPLETED;
+    }
+
     public void revoke() {
         this.status = OtaSessionStatus.REVOKED;
     }

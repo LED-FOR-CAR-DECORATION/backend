@@ -159,10 +159,12 @@ class CommerceDataSeederTest {
         assertThat(orders).hasSize(13);
 
         // Check key orders:
-        // Order 1: PENDING_PAYMENT (active, expires in future)
+        // Order 1: PENDING_PAYMENT (active, expires in 15 minutes)
         assertThat(orders.get(0).getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
         assertThat(orders.get(0).getOrderType()).isEqualTo(OrderType.PHYSICAL);
-        assertThat(orders.get(0).getExpiresAt()).isAfter(Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS));
+        assertThat(orders.get(0).getExpiresAt())
+                .isAfter(Instant.now().plus(10, java.time.temporal.ChronoUnit.MINUTES))
+                .isBeforeOrEqualTo(Instant.now().plus(16, java.time.temporal.ChronoUnit.MINUTES));
 
         // Order 2: PROCESSING
         assertThat(orders.get(1).getStatus()).isEqualTo(OrderStatus.PROCESSING);
@@ -199,7 +201,9 @@ class CommerceDataSeederTest {
         assertThat(orders.get(10).getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
         assertThat(orders.get(10).getOrderType()).isEqualTo(OrderType.PHYSICAL);
         assertThat(orders.get(10).getTotalAmount()).isEqualByComparingTo("10000.00");
-        assertThat(orders.get(10).getExpiresAt()).isAfter(Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS));
+        assertThat(orders.get(10).getExpiresAt())
+                .isAfter(Instant.now().plus(10, java.time.temporal.ChronoUnit.MINUTES))
+                .isBeforeOrEqualTo(Instant.now().plus(16, java.time.temporal.ChronoUnit.MINUTES));
 
         // Verify deliveries: exactly 12 deliveries (order 9 has no delivery)
         verify(orderDeliveryRepository, times(12)).save(deliveryCaptor.capture());

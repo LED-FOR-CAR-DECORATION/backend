@@ -1,6 +1,8 @@
 package com.lumintra.backend.iam.domain.service;
 
 import com.lumintra.backend.iam.domain.model.EmployeeProfileSnapshot;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Collection;
 import java.util.Map;
@@ -22,4 +24,6 @@ public interface EmployeeLookupService {
     boolean isActiveStaff(Long employeeId);
 
     java.util.List<EmployeeProfileSnapshot> findActiveDesigners();
+
+    Page<EmployeeProfileSnapshot> findActiveDesigners(String search, Pageable pageable);
 }
